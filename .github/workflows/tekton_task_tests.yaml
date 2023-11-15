@@ -36,7 +36,7 @@ jobs:
 
           kubectl get pods --namespace tekton-pipelines
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Get changed dirs
         id: changed-dirs
         uses: tj-actions/changed-files@v35
