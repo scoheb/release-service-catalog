@@ -3,7 +3,7 @@
   "extends": [
     "config:base"
   ],
-  "dependencyDashboard": false,
+  "dependencyDashboard": true,
   "tekton": {
       "fileMatch": ["\\.yaml$", "\\.yml$"],
       "includePaths": [".tekton/**", "task/**", "pipeline/**"]
