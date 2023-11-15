@@ -6,6 +6,6 @@
   "dependencyDashboard": false,
   "tekton": {
       "fileMatch": ["\\.yaml$", "\\.yml$"],
-      "includePaths": [".tekton/**", "task/**", "pipelines/enterprise-contract*.yaml"]
-  },
+      "includePaths": [".tekton/**", "task/**", "pipeline/**"]
+  }
 }
