@@ -74,6 +74,7 @@ spec:
         build_tags=$(jq '.fbc.buildTags // []' ${DATA_FILE})
         add_arches=$(jq '.fbc.addArches // []' ${DATA_FILE})
         hotfix=$(jq -r '.fbc.hotfix // "false"' ${DATA_FILE})
+        staged_index=$(jq -r '.fbc.stagedIndex // "false"' ${DATA_FILE})
         build_timeout_seconds=$(jq -r --arg build_timeout_seconds ${default_build_timeout_seconds} \
             '.fbc.buildTimeoutSeconds // $build_timeout_seconds' ${DATA_FILE})
         target_index=$(jq -r '.fbc.targetIndex' ${DATA_FILE})
@@ -107,6 +108,7 @@ spec:
             -p buildTags=${build_tags} \
             -p addArches=${add_arches} \
             -p hotfix=${hotfix} \
+            -p stagedIndex=${staged_index} \
             -t $(params.requestTimeout) |tee $(workspaces.data.path)/ir-$(context.taskRun.uid)-output.log
 
         internalRequest=$(awk 'NR==1{ print $2 }' $(workspaces.data.path)/ir-$(context.taskRun.uid)-output.log | xargs)
