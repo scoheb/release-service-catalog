@@ -139,6 +139,10 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/check-data-keys/check-data-keys.yaml
+      params:
+        - name: systems
+          value:
+            - advisory
       workspaces:
         - name: data
           workspace: release-workspace
