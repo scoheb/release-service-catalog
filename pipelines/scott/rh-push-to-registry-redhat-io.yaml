@@ -407,6 +407,8 @@ spec:
       workspaces:
         - name: data
           workspace: release-workspace
+      runAfter:
+        - check-data-keys
   finally:
     - name: cleanup
       taskRef:
