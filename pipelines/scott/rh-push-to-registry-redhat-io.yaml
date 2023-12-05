@@ -390,12 +390,10 @@ spec:
           workspace: release-workspace
     - name: create-advisory-internal-request
       params:
-        - name: fileUpdatesPath
-          value: $(context.pipelineRun.uid)/data.json
-        - name: jsonKey
-          value: ".fileUpdates"
         - name: snapshotPath
-          value: "$(context.pipelineRun.uid)/snapshot_spec.json"
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
       taskRef:
         kind: Task
         params:
