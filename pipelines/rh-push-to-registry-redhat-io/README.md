@@ -35,6 +35,9 @@ Tekton pipeline to release content to registry.redhat.io registry.
 * taskGitRevision no longer has a default. It will be provided by the operator and will always have the same value as
   the git revision in the PipelineRef definition of the PipelineRun if using a git resolver. See RHTAPREL-790 for details
 
+## Changes in 1.8.0
+- Remove push-sbom-to-pyxis. It has been replaced by manifest-box.
+
 ## Changes in 1.7.0
 * taskGitUrl parameter is added. It is used to provide the git repo for the release-service-catalog tasks
 * taskGitRevision parameter is added. It is used to provide the revision to be used in the taskGitUrl repo

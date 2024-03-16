@@ -38,6 +38,9 @@ Tekton pipeline to release Snapshots to an external registry.
 ## Changes in 2.0.0
 - Pipeline renamed from `release` to `push-to-external-registry`
 
+## Changes in 1.3.0
+- Remove push-sbom-to-pyxis. It has been replaced by manifest-box.
+
 ## Changes in 1.2.0
 - taskGitUrl parameter is added. It is used to provide the git repo for the release-service-catalog tasks
 - taskGitRevision parameter is added. It is used to provide the revision to be used in the taskGitUrl repo

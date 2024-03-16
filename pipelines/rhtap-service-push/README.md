@@ -44,6 +44,9 @@
 - `send-slack-notification` task is only called if slack notification secret is set in data file
   - the taskrun would fail to start with an empty `secretName` parameter
 
+## Changes in 1.4.0
+- Remove push-sbom-to-pyxis. It has been replaced by manifest-box.
+
 ## Changes in 1.3.0
 - taskGitUrl parameter is added. It is used to provide the git repo for the release-service-catalog tasks
 - taskGitRevision parameter is added. It is used to provide the revision to be used in the taskGitUrl repo

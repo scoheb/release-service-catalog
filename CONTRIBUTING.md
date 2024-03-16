@@ -175,7 +175,7 @@ call Pyxis API). The way to do this is to create a file with mock shell function
 as the commands you want to mock) and inject this file to the beginning of each `script` field in
 the task step that needs mocking.
 
-For reference implementation, check [push-sbom-to-pyxis/tests/](/tasks/push-sbom-to-pyxis/tests/). Here's a break down of how it's done:
+For reference implementation, check [push-sbom-to-pyxis/tests/](https://github.com/redhat-appstudio/release-service-catalog/tree/fb4002711259c167c9815cc32a9ca9a6f5b065ca/tasks/push-sbom-to-pyxis/tests/). Here's a break down of how it's done:
 
 1. Create a `mocks.sh` file in the tests directory of your task, e.g.
     `tasks/push-sbom-to-pyxis/tests/mocks.sh`. This file will contain the mock function
