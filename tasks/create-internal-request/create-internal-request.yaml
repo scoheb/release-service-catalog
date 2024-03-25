@@ -55,7 +55,7 @@ spec:
   steps:
     - name: merge-internal-request-parameters
       image:
-        quay.io/redhat-appstudio/release-service-utils:447ea0580a2cdd48b4091e1df86fab5c3f86d01c
+        quay.io/scoheb/release-service-utils:bc81bfed6062a386e48a76b252c6f33b52c411b0
       script: |
           #!/usr/bin/env bash
           DATA_FILE="$(workspaces.data.path)/$(params.subdirectory)/$(params.dataPath)"
@@ -92,7 +92,7 @@ spec:
           echo $JSON_PARAMS > $(workspaces.data.path)/$(params.subdirectory)/prepared-json-params.txt
     - name: prepare-internal-request
       image:
-        quay.io/redhat-appstudio/release-service-utils:447ea0580a2cdd48b4091e1df86fab5c3f86d01c
+        quay.io/scoheb/release-service-utils:bc81bfed6062a386e48a76b252c6f33b52c411b0
       script: |
           #!/usr/bin/env bash
           #
@@ -167,7 +167,7 @@ spec:
           done
     - name: create-internal-request
       image:
-        quay.io/redhat-appstudio/release-service-utils:447ea0580a2cdd48b4091e1df86fab5c3f86d01c
+        quay.io/scoheb/release-service-utils:bc81bfed6062a386e48a76b252c6f33b52c411b0
       script: |
           #!/usr/bin/env sh
           PATH=/bin:/usr/bin:/usr/local/bin
@@ -178,7 +178,7 @@ spec:
           kubectl create -f ${IR}
     - name: watch-internal-request-status
       image:
-        quay.io/redhat-appstudio/release-service-utils:447ea0580a2cdd48b4091e1df86fab5c3f86d01c
+        quay.io/scoheb/release-service-utils:bc81bfed6062a386e48a76b252c6f33b52c411b0
       script: |
           #!/usr/bin/env sh
           PATH=/bin:/usr/bin:/usr/local/bin

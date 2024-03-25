@@ -45,7 +45,7 @@ spec:
   steps:
     - name: publish-index-image
       image: >-
-        quay.io/redhat-appstudio/release-service-utils:305541d8b8c2670dea4b50bd8c56858c365ca11e
+        quay.io/scoheb/release-service-utils:bc81bfed6062a386e48a76b252c6f33b52c411b0
       script: |
         #!/usr/bin/env sh
         set -e
