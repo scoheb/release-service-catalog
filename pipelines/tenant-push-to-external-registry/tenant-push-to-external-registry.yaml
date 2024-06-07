@@ -72,7 +72,7 @@ spec:
             ORIGIN_NAMESPACE=$(echo $(params.release) | cut -f1 -d/)
 
             RELEASE_NAME=$(echo $(params.release) | cut -f2 -d/)
-            RELEASEPLAN_NAME=$(echo $(params.releaseplan) | cut -f2 -d/)
+            RELEASEPLAN_NAME=$(echo $(params.releasePlan) | cut -f2 -d/)
             SNAPSHOT_NAME=$(echo $(params.snapshot) | cut -f2 -d/)
 
             CAN_I_READ_RELEASES=$(kubectl auth can-i get release/${RELEASE_NAME} -n ${ORIGIN_NAMESPACE})
@@ -114,7 +114,7 @@ spec:
         - name: release
           value: $(params.release)
         - name: releaseplan
-          value: $(params.releaseplan)
+          value: $(params.releasePlan)
         - name: releaseplanadmission
           value: ""
         - name: snapshot
