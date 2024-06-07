@@ -21,6 +21,7 @@ spec:
     - name: releaseplanadmission
       type: string
       description: The namespaced name of the ReleasePlanAdmission
+      default: ""
     - name: snapshot
       type: string
       description: The namespaced name of the Snapshot
@@ -78,10 +79,12 @@ spec:
         echo -n $RELEASEPLAN_PATH > $(results.releasePlan.path)
         get-resource "releaseplan" "${RELEASE_PLAN}" > $(workspaces.data.path)/$RELEASEPLAN_PATH
 
-        RELEASEPLANADMISSION_PATH=$(params.subdirectory)/release_plan_admission.json
-        echo -n $RELEASEPLANADMISSION_PATH > $(results.releasePlanAdmission.path)
-        get-resource "releaseplanadmission" "${RELEASE_PLAN_ADMISSION}" \
-          > $(workspaces.data.path)/$RELEASEPLANADMISSION_PATH
+        if [ ! -z "${RELEASE_PLAN_ADMISSION}" ] ; then
+          RELEASEPLANADMISSION_PATH=$(params.subdirectory)/release_plan_admission.json
+          echo -n $RELEASEPLANADMISSION_PATH > $(results.releasePlanAdmission.path)
+          get-resource "releaseplanadmission" "${RELEASE_PLAN_ADMISSION}" \
+            > $(workspaces.data.path)/$RELEASEPLANADMISSION_PATH
+        fi
 
         SNAPSHOTSPEC_PATH=$(params.subdirectory)/snapshot_spec.json
         echo -n $SNAPSHOTSPEC_PATH > $(results.snapshotSpec.path)
@@ -94,14 +97,18 @@ spec:
 
         release_plan_result=$(get-resource "releaseplan" "${RELEASE_PLAN}" "{.spec.data}")
 
-        release_plan_admission_result=$(get-resource "releaseplanadmission" "${RELEASE_PLAN_ADMISSION}" \
-            "{.spec.data}")
+        if [ ! -z "${RELEASE_PLAN_ADMISSION}" ] ; then
+          release_plan_admission_result=$(get-resource "releaseplanadmission" "${RELEASE_PLAN_ADMISSION}" \
+              "{.spec.data}")
+        fi
 
         # Merge Release and ReleasePlan keys. ReleasePlan has higher priority
         merged_output=$(merge-json "$release_result" "$release_plan_result")
 
-        # Merge now with ReleasePlanAdmission keys. ReleasePlanAdmission has higher priority
-        merged_output=$(merge-json "$merged_output" "$release_plan_admission_result")
+        if [ ! -z "${RELEASE_PLAN_ADMISSION}" ] ; then
+          # Merge now with ReleasePlanAdmission keys. ReleasePlanAdmission has higher priority
+          merged_output=$(merge-json "$merged_output" "$release_plan_admission_result")
+        fi
 
         DATA_PATH=$(params.subdirectory)/data.json
         echo -n $DATA_PATH > $(results.data.path)
