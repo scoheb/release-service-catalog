@@ -16,7 +16,7 @@ spec:
       type: string
       description:
         The namespaced name (namespace/name) of the Release custom resource initiating this pipeline execution
-    - name: releaseplan
+    - name: releasePlan
       type: string
       description: The namespaced name (namespace/name) of the releasePlan
     - name: releaseServiceConfig
