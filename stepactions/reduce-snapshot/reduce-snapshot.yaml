@@ -34,8 +34,6 @@ spec:
     #!/usr/bin/env bash
     set -eux
 
-    #SNAPSHOT_PATH="${HOMEDIR}/snapshot.json"
-
     echo "Single Component mode? ${SINGLE_COMPONENT}"
     if [ "${SINGLE_COMPONENT}" == "true" ]; then
     
@@ -82,7 +80,6 @@ spec:
         echo "Reducing Snapshot to:"
         echo "$REDUCED_SNAPSHOT" | jq .
         SNAPSHOT=$(echo "$REDUCED_SNAPSHOT" | tr -d ' ' | tr -d '\n')
+        echo "$SNAPSHOT" > "${SNAPSHOT_PATH}"
       fi
     fi
-
-    echo "$SNAPSHOT" > "${SNAPSHOT_PATH}"
