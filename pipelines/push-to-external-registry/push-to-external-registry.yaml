@@ -121,15 +121,15 @@ spec:
             value: tasks/reduce-snapshot/reduce-snapshot.yaml
       params:
         - name: IMAGES
-          value: $(workspaces.data.path)/$(steps.collect-data.results.snapshotSpec)
+          value: $(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)
         - name: SINGLE_COMPONENT
-          value: $(steps.collect-data.results.singleComponentMode)
+          value: $(tasks.collect-data.results.singleComponentMode)
         - name: CR_TO_QUERY
-          value: snapshot/$(steps.collect-data.results.snapshotName)
+          value: snapshot/$(tasks.collect-data.results.snapshotName)
         - name: CR_TO_QUERY_NAMESPACE
-          value: $(steps.collect-data.results.snapshotNamespace)
+          value: $(tasks.collect-data.results.snapshotNamespace)
         - name: SNAPSHOT_PATH
-          value: $(workspaces.data.path)/$(steps.collect-data.results.snapshotSpec)
+          value: $(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)
       workspaces:
         - name: data
           workspace: release-workspace
