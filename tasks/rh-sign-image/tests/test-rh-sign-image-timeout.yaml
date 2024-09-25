@@ -9,7 +9,7 @@ spec:
   description: >
     Test a scenario when the IR processing times out. The timeout happens
     because the requestTimeout parameter of the task is set to 1 and this
-    is passed to the wait-for-ir call. So the mock would mark the IR as passed
+    is passed to the wait-for-internal-request call. So the mock would mark the IR as passed
     in 10 seconds, but it will time out before that happens.
   workspaces:
     - name: tests-workspace
@@ -28,7 +28,7 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              cat > $(workspaces.data.path)/snapshot_spec.json << EOF
+              cat > "$(workspaces.data.path)/snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -47,11 +47,37 @@ spec:
               }
               EOF
 
-              cat > $(workspaces.data.path)/data.json << EOF
+              cat > "$(workspaces.data.path)/data.json" << EOF
               {
                 "sign": {
                   "request": "hacbs-signing-pipeline",
                   "configMapName": "signing-config-map"
+                }
+              }
+              EOF
+              cat > "$(workspaces.data.path)/release_plan_admission.json" << EOF
+              {
+                "spec": {
+                  "pipeline": {
+                    "pipelineRef": {
+                      "resolver": "git",
+                      "params": [
+                        {
+                          "name": "url",
+                          "value": "https://localhost.git"
+                        },
+                        {
+                          "name": "revision",
+                          "value": "main"
+                        },
+                        {
+                          "name": "pathInRepo",
+                          "value": "pipelines/abc/abc.yaml"
+                        }
+                      ]
+                    },
+                    "serviceAccountName": "release-service-account"
+                  }
                 }
               }
               EOF
@@ -69,6 +95,12 @@ spec:
           value: snapshot_spec.json
         - name: dataPath
           value: data.json
+        - name: releasePlanAdmissionPath
+          value: release_plan_admission.json
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       workspaces:
         - name: data
           workspace: tests-workspace

@@ -6,8 +6,6 @@ function internal-request() {
   echo Mock internal-request called with: $*
   echo $* >> $(workspaces.data.path)/mock_internal-request.txt
 
-  /home/utils/internal-request $@
-
   sleep 1
   NAME=$(kubectl get internalrequest --no-headers -o custom-columns=":metadata.name" \
       --sort-by=.metadata.creationTimestamp | tail -1)
@@ -22,11 +20,14 @@ function internal-request() {
   if [[ "$*" == *"requester=testuser-failure"* ]]; then
       set_ir_status $NAME Failure 3 &
   elif [[ "$*" == *"requester=testuser-timeout"* ]]; then
-      # The interval in wait-for-ir is 5 sec, so increase the ir delay to timeout for sure
+      # The interval in wait-for-internal-request is 5 sec, so increase the ir delay to timeout for sure
       set_ir_status $NAME Succeeded 10 &
   else
       set_ir_status $NAME Succeeded 5 &
   fi
+
+  /home/utils/internal-request $@
+
 }
 
 function set_ir_status() {
@@ -51,6 +52,7 @@ function set_ir_status() {
   }
 }
 EOF
+    echo "Calling kubectl patch..."
     kubectl patch internalrequest $NAME --type=merge --subresource status --patch-file $PATCH_FILE
 }
 
