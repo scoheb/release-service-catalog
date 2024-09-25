@@ -1,0 +1,64 @@
+---
+apiVersion: tekton.dev/v1alpha1
+kind: StepAction
+metadata:
+  name: upload-signature
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+  annotations:
+    tekton.dev/tags: release
+spec:
+  params:
+    - description: Json file containing the list of signature data to upload to Pyxis
+        signature.
+      name: signature_data_file
+    - description: A docker image of operator-pipeline-images for the steps to run in.
+      name: pipeline_image
+    - description: Kubernetes secret name that contains the Pyxis SSL files.
+      name: pyxis_ssl_secret_name
+    - description: The key within the Kubernetes secret that contains the Pyxis SSL
+        cert.
+      name: pyxis_ssl_cert_secret_key
+    - description: The key within the Kubernetes secret that contains the Pyxis SSL
+        key.
+      name: pyxis_ssl_key_secret_key
+    - default: https://pyxis.engineering.redhat.com
+      description: Pyxis instance to upload the signature to.
+      name: pyxis_url
+  image: "$(params.pipeline_image)"
+  env:
+    - name: PYXIS_CERT_PATH
+      value: "/tmp/pyxisCert"
+    - name: PYXIS_KEY_PATH
+      value: "/tmp/pyxisKey"
+    - name: PyxisCert
+      valueFrom:
+        secretKeyRef:
+          name: $(params.pyxis_ssl_secret_name)
+          key: $(params.pyxis_ssl_cert_secret_key)
+    - name: PyxisKey
+      valueFrom:
+        secretKeyRef:
+          name: $(params.pyxis_ssl_secret_name)
+          key: $(params.pyxis_ssl_key_secret_key)
+    - name: pyxis_url
+      value: $(params.pyxis_url)
+    - name: signature_data_file
+      value: $(params.signature_data_file)
+  script: |
+      #!/bin/bash
+      set -xe
+
+      set +x
+      # This helps with Shellcheck warning
+      echo "${PyxisCert:?}" > /tmp/pyxisCert
+      echo "${PyxisKey:?}" > /tmp/pyxisKey
+      set -x
+
+      echo "Signature verified. Uploading to Pyxis sigstore"
+      upload-signature \
+        --pyxis-url "${pyxis_url:?}" \
+        --signature-data "${signature_data_file:?}" \
+        --verbose
+
+  workingDir: "$(workspaces.source.path)"

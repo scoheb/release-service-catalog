@@ -1,0 +1,129 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: request-and-upload-signature
+spec:
+  description: >-
+    Tekton task to request and upload a simple signature.
+
+    Why does this task use stepactions?
+
+    - This task is meant to be used in an internal pipeline that can be triggered frequently
+      and is expected to complete as quickly as possible.
+
+    -  This task used to be split into separate tasks (request and upload) and required a PV
+       to exchange data between the two tasks.
+
+    -  By combining the two tasks into once, you reduce the amount of pods that are needed. In addition, when using
+       stepactions, you can exchange data between steps using `steps.request-signature.results.signature_data_file`. This
+       then helps remove the need for a PV to back a workspace. An emptyDir can be used.
+  params:
+    - description: A docker image of operator-pipeline-images for the steps to run in.
+      name: pipeline_image
+      default: "quay.io/redhat-isv/operator-pipelines-images:released"
+    - name: config_map_name
+      description: Name of a configmap with pipeline configuration
+    - description: Manifest digest for the signed content, usually in the format sha256:xxx
+      name: manifest_digest
+    - description: Docker reference for the signed content, e.g. registry.redhat.io/redhat/community-operator-index:v4.9
+      name: reference
+    - description: Name of the user that requested the signing, for auditing purposes
+      name: requester
+    - default: 4096R/55A34A82 SHA-256
+      description: The signing key id that the content is signed with
+      name: sig_key_id
+    - default: containerisvsign
+      description: The signing key name that the content is signed with
+      name: sig_key_name
+    - description: Kubernetes secret name that contains the umb SSL files
+      name: ssl_cert_secret_name
+    - description: The key within the Kubernetes secret that contains the umb SSL cert.
+      name: ssl_cert_file_name
+    - description: The key within the Kubernetes secret that contains the umb SSL key.
+      name: ssl_key_file_name
+    - default: operatorpipelines
+      description: Client name to connect to umb, usually a service account name
+      name: umb_client_name
+    - default: VirtualTopic.eng.robosignatory.isv.sign
+      description: umb topic to listen to for responses with signed content
+      name: umb_listen_topic
+    - default: VirtualTopic.eng.operatorpipelines.isv.sign
+      description: umb topic to publish to for requesting signing
+      name: umb_publish_topic
+    - default: umb.api.redhat.com
+      description: umb host to connect to for messaging
+      name: umb_url
+    - default: https://pyxis.engineering.redhat.com
+      description: Pyxis instance to upload the signature to.
+      name: pyxis_url
+    - name: taskGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog tasks to be used are stored
+      default: https://github.com/konflux-ci/release-service-catalog.git
+    - name: taskGitRevision
+      type: string
+      description: The revision in the taskGitUrl repo to be used
+  steps:
+    - name: request-signature
+      params:
+        - name: pipeline_image
+          value: "$(params.pipeline_image)"
+        - name: manifest_digest
+          value: "$(params.manifest_digest)"
+        - name: reference
+          value: "$(params.reference)"
+        - name: requester
+          value: "$(params.requester)"
+        - name: sig_key_id
+          value: "$(params.sig_key_id)"
+        - name: sig_key_name
+          value: "$(params.sig_key_name)"
+        - name: umb_ssl_secret_name
+          value: "$(params.ssl_cert_secret_name)"
+        - name: umb_ssl_cert_secret_key
+          value: "$(params.ssl_cert_file_name)"
+        - name: umb_ssl_key_secret_key
+          value: "$(params.ssl_key_file_name)"
+        - name: umb_client_name
+          value: "$(params.umb_client_name)"
+        - name: umb_url
+          value: "$(params.umb_url)"
+        - name: umb_listen_topic
+          value: "$(params.umb_listen_topic)"
+        - name: umb_publish_topic
+          value: "$(params.umb_publish_topic)"
+      ref:
+        resolver: git
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/request-signature/request-signature.yaml
+    - name: upload-signature
+      params:
+        - name: pipeline_image
+          value: "$(params.pipeline_image)"
+        - name: signature_data_file
+          value: "$(steps.request-signature.results.signature_data_file)"
+        - name: pyxis_ssl_secret_name
+          value: "$(params.ssl_cert_secret_name)"
+        - name: pyxis_ssl_cert_secret_key
+          value: "$(params.ssl_cert_file_name)"
+        - name: pyxis_ssl_key_secret_key
+          value: "$(params.ssl_key_file_name)"
+        - name: pyxis_url
+          value: "$(params.pyxis_url)"
+      ref:
+        resolver: git
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/upload-signature/upload-signature.yaml
+  workspaces:
+    - name: source
