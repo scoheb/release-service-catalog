@@ -55,7 +55,7 @@ spec:
   steps:
     - name: sign-image
       # image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
-      image: quay.io/scoheb/release-service-utils:b5b043807dd8
+      image: quay.io/scoheb/release-service-utils:bb52e818fc1f
       computeResources:
         limits:
           memory: 4Gi
@@ -214,7 +214,7 @@ spec:
 
                 repository="${registry_reference#*/}"
                 set -x
-                find_signatures --verbose --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
+                find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
                     --manifest_digest "${manifest_digest}" \
                     --repository "${repository}" \
                     --output_file "/tmp/${manifest_digest}"
@@ -258,8 +258,6 @@ spec:
                     echo "- manifest_digest=${manifest_digest}"
                   fi
 
-                  sh "/tmp/$tmpFile" &
-
                   ((++REQUEST_COUNT))
                   echo "Request Count: $REQUEST_COUNT"
                 done
@@ -270,15 +268,16 @@ spec:
 
                 for registry_reference in ${rh_registry_repo} ${registry_access_repo}; do
                   repository="${registry_reference#*/}"
+
+                  set -x
+                  find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
+                      --manifest_digest "${sourceContainerDigest}" \
+                      --repository "${repository}" \
+                      --output_file "/tmp/${sourceContainerDigest}"
+                  set +x
+
                   for tag in ${TAGS}; do
                     sourceTag=${tag}-source
-
-                    set -x
-                    find_signatures --verbose --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
-                        --manifest_digest "${sourceContainerDigest}" \
-                        --repository "${repository}" \
-                        --output_file "/tmp/${sourceContainerDigest}"
-                    set +x
 
                     # is tag signed?
                     set +e
