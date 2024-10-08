@@ -69,10 +69,6 @@ spec:
           value: $(params.release)
         - name: releasePlan
           value: $(params.releasePlan)
-        - name: releasePlanAdmission
-          value: $(params.releasePlanAdmission)
-        - name: releaseServiceConfig
-          value: $(params.releaseServiceConfig)
         - name: snapshot
           value: $(params.snapshot)
         - name: requireInternalServices
@@ -92,10 +88,6 @@ spec:
           value: $(params.release)
         - name: releasePlan
           value: $(params.releasePlan)
-        - name: releasePlanAdmission
-          value: $(params.releasePlanAdmission)
-        - name: releaseServiceConfig
-          value: $(params.releaseServiceConfig)
         - name: snapshot
           value: $(params.snapshot)
         - name: subdirectory
