@@ -214,7 +214,7 @@ spec:
 
                 repository="${registry_reference#*/}"
                 set -x
-                find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
+                find_signatures --verbose --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
                     --manifest_digest "${manifest_digest}" \
                     --repository "${repository}" \
                     --output_file "/tmp/${manifest_digest}"
@@ -224,7 +224,7 @@ spec:
 
                   # is tag signed?
                   set +e
-                  grep -q "^${registry_reference}$" "/tmp/${manifest_digest}"
+                  grep -q "^${registry_reference}:${tag}$" "/tmp/${manifest_digest}"
                   notFound=$?
                   set -e
 
@@ -274,7 +274,7 @@ spec:
                     sourceTag=${tag}-source
 
                     set -x
-                    find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
+                    find_signatures --verbose --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
                         --manifest_digest "${sourceContainerDigest}" \
                         --repository "${repository}" \
                         --output_file "/tmp/${sourceContainerDigest}"
@@ -282,7 +282,7 @@ spec:
 
                     # is tag signed?
                     set +e
-                    grep -q "^${registry_reference}$" "/tmp/${sourceContainerDigest}"
+                    grep -q "^${registry_reference}:${sourceTag}$" "/tmp/${sourceContainerDigest}"
                     notFound=$?
                     set -e
 
