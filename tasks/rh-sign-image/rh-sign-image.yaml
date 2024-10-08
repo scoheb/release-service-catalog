@@ -55,7 +55,7 @@ spec:
   steps:
     - name: sign-image
       # image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
-      image: quay.io/scoheb/release-service-utils:a5901ed6b453
+      image: quay.io/scoheb/release-service-utils:71b0f8d6813f
       computeResources:
         limits:
           memory: 4Gi
@@ -144,19 +144,15 @@ spec:
 
         if [[ "$(params.pyxisServer)" == "production" ]]
         then
-          PYXIS_URL="https://pyxis.api.redhat.com/"
           PYXIS_GRAPHQL_URL="https://graphql-pyxis.api.redhat.com/graphql/"
         elif [[ "$(params.pyxisServer)" == "stage" ]]
         then
-          PYXIS_URL="https://pyxis.preprod.api.redhat.com/"
           PYXIS_GRAPHQL_URL="https://graphql-pyxis.preprod.api.redhat.com/graphql/"
         elif [[ "$(params.pyxisServer)" == "production-internal" ]]
         then
-          PYXIS_URL="https://pyxis.engineering.redhat.com/"
           PYXIS_GRAPHQL_URL="https://graphql.pyxis.engineering.redhat.com/graphql/"
         elif [[ "$(params.pyxisServer)" == "stage-internal" ]]
         then
-          PYXIS_URL="https://pyxis.stage.engineering.redhat.com/"
           PYXIS_GRAPHQL_URL="https://graphql.pyxis.stage.engineering.redhat.com/graphql/"
         else
           echo "Invalid pyxisServer parameter. Only 'production','production-internal,'stage-internal' \
@@ -228,7 +224,6 @@ spec:
                   set -x
                   set +e
                   find_signature --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
-                      --pyxis-api ${PYXIS_URL}  \
                       --manifest_digest "${manifest_digest}" \
                       --reference "${registry_reference}:${tag}"
                   notFound=\$?
@@ -284,7 +279,6 @@ spec:
                   #
                   set +e
                   find_signature --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
-                      --pyxis-api ${PYXIS_URL}  \
                       --manifest_digest "${sourceContainerDigest}" \
                       --reference "${registry_reference}:${sourceTag}"
                   notFound=\$?
