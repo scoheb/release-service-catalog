@@ -40,11 +40,11 @@ spec:
     - name: enterpriseContractTimeout
       type: string
       description: Timeout setting for `ec validate`
-      default: 60m0s
+      default: 90m0s
     - name: enterpriseContractWorkerCount
       type: string
       description: Number of parallel workers for policy evaluation
-      default: 3
+      default: 4
     - name: postCleanUp
       type: string
       description: Cleans up workspace after finishing executing the pipeline
