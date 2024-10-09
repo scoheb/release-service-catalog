@@ -174,7 +174,9 @@ spec:
 
             rh_registry_repo=$(jq -r ".components[${COMPONENTS_INDEX}][\"rh-registry-repo\"]" ${SNAPSHOT_PATH})
             registry_access_repo=$(jq -r ".components[${COMPONENTS_INDEX}][\"registry-access-repo\"]" ${SNAPSHOT_PATH})
-        
+
+            repository="${rh_registry_repo#*/}"
+
             git_sha=$(jq -r ".components[${COMPONENTS_INDEX}].source.git.revision" ${SNAPSHOT_PATH})
 
             TAGS=$(jq -r ".components[${COMPONENTS_INDEX}].tags | join(\" \")" ${SNAPSHOT_PATH})
@@ -209,16 +211,16 @@ spec:
             fi
 
             for manifest_digest in $manifest_digests; do
+
+              set -x
+              find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
+                  --manifest_digest "${manifest_digest}" \
+                  --repository "${repository}" \
+                  --output_file "/tmp/${manifest_digest}"
+              set +x
+
               # Iterate over both rh-registry-repo and registry-access-repo
               for registry_reference in ${rh_registry_repo} ${registry_access_repo}; do
-
-                repository="${registry_reference#*/}"
-                set -x
-                find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
-                    --manifest_digest "${manifest_digest}" \
-                    --repository "${repository}" \
-                    --output_file "/tmp/${manifest_digest}"
-                set +x
 
                 for tag in ${TAGS}; do
 
@@ -266,15 +268,14 @@ spec:
 
             if [ "${sourceContainerDigest}" != "" ] ; then
 
-                for registry_reference in ${rh_registry_repo} ${registry_access_repo}; do
-                  repository="${registry_reference#*/}"
+                set -x
+                find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
+                    --manifest_digest "${sourceContainerDigest}" \
+                    --repository "${repository}" \
+                    --output_file "/tmp/${sourceContainerDigest}"
+                set +x
 
-                  set -x
-                  find_signatures --pyxis-graphql-api "${PYXIS_GRAPHQL_URL}" \
-                      --manifest_digest "${sourceContainerDigest}" \
-                      --repository "${repository}" \
-                      --output_file "/tmp/${sourceContainerDigest}"
-                  set +x
+                for registry_reference in ${rh_registry_repo} ${registry_access_repo}; do
 
                   for tag in ${TAGS}; do
                     sourceTag=${tag}-source
