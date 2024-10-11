@@ -21,7 +21,7 @@ spec:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               cat > "$(workspaces.data.path)/snapshot_spec.json" << EOF
@@ -89,6 +89,8 @@ spec:
           value: data.json
         - name: releasePlanAdmissionPath
           value: release_plan_admission.json
+        - name: pyxisSecret
+          value: test-create-pyxis-image-cert
         - name: taskGitUrl
           value: "http://localhost"
         - name: taskGitRevision
@@ -105,7 +107,7 @@ spec:
           - name: delete-crs
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               kubectl delete internalrequests --all
