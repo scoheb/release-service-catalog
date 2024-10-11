@@ -58,7 +58,7 @@ spec:
           - name: revision
             value: $(params.taskGitRevision)
           - name: pathInRepo
-            value: tasks/request-and-upload-signature/request-and-upload-signature-2.yaml
+            value: tasks/request-and-upload-signature/request-and-upload-signature.yaml
       params:
         - name: config_map_name
           value: $(params.config_map_name)
