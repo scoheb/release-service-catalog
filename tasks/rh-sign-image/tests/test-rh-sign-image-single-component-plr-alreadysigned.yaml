@@ -137,8 +137,9 @@ spec:
     - name: cleanup
       taskSpec:
         steps:
-          - name: delete-crs
+          - name: delete-plrs
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
               #!/usr/bin/env bash
               set -eux
+              kubectl delete pr -l "internal-services.appstudio.openshift.io/pipelinerun-uid=$(context.pipelineRun.uid)"

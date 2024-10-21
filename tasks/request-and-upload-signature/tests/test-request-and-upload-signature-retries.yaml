@@ -2,7 +2,7 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: test-request-and-upload-signature
+  name: test-request-and-upload-signature-retries
 spec:
   description: |
     Run the request-and-upload-signature task and make sure that task retries before failing.
