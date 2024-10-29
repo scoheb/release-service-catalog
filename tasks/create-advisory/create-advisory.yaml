@@ -52,6 +52,7 @@ spec:
         #!/bin/bash
         set -ex
 
+        DEFAULT_ADVISORY_TYPE="RHBA"
         RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/create-advisory-results.json"
 
         # Obtain application from snapshot
@@ -65,7 +66,15 @@ spec:
         configMapName=$(jq -er '.sign.configMapName' "$(workspaces.data.path)/$(params.dataPath)")
 
         # Validate type
-        advisoryType=$(jq -r ".type" <<< "$advisoryData")
+        advisoryType=$(jq -r '.type' <<< "$advisoryData")
+        if [ "$advisoryType" == "null" ]; then
+          # default to $DEFAULT_ADVISORY_TYPE
+          echo "Defaulting to type = $DEFAULT_ADVISORY_TYPE"
+          advisoryData=$(jq -c --arg DEFAULT_ADVISORY_TYPE "$DEFAULT_ADVISORY_TYPE" \
+            '.type = $DEFAULT_ADVISORY_TYPE' <<< "$advisoryData")
+          advisoryType="$DEFAULT_ADVISORY_TYPE"
+        fi
+
         if ! [[ "$advisoryType" =~ ^(RHSA|RHBA|RHEA)$ ]]; then
             echo "Error: advisory type must be one of RHSA, RHBA or RHEA"
             exit 1

@@ -505,7 +505,6 @@
               "product_version",
               "product_stream",
               "cpe",
-              "type",
               "synopsis",
               "topic",
               "description",
