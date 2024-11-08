@@ -258,6 +258,35 @@ spec:
       runAfter:
         - collect-registry-token-secret
         - push-snapshot
+    - name: run-file-updates
+      when:
+        - input: "$(tasks.apply-mapping.results.mapped)"
+          operator: in
+          values: ["true"]
+      params:
+        - name: fileUpdatesPath
+          value: $(tasks.collect-data.results.data)
+        - name: jsonKey
+          value: ".fileUpdates"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: pipelineRunUid
+          value: $(context.pipelineRun.uid)
+      runAfter:
+        - push-snapshot
+      taskRef:
+        kind: Task
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/run-file-updates/run-file-updates.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
     - name: update-cr-status
       params:
         - name: resource
