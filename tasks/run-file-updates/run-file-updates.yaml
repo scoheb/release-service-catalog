@@ -79,14 +79,9 @@ spec:
                            -p application=${application} \
                            -p file_updates_secret=${file_updates_secret} \
                            -s "$(params.synchronously)" \
-                           -l ${pipelinerun_label}=$(params.pipelineRunUid) \
-                           > $(workspaces.data.path)/ir-result.txt
+                           -l ${pipelinerun_label}=$(params.pipelineRunUid)
 
-          cat $(workspaces.data.path)/ir-result.txt
-          internalRequest=$(awk 'NR==1{ print $2 }' $(workspaces.data.path)/ir-result.txt | xargs)
-          echo "done (${internalRequest})"
-
-          results=$(kubectl get internalrequest $internalRequest -o=jsonpath='{.status.results}')
+          results=$(kubectl get internalrequest -l ${pipelinerun_label}=$(params.pipelineRunUid) -o=jsonpath='{.status.results}')
           if [ "$(jq -jr '.buildState' <<< "${results}")" == "Failed" ]; then
             echo -en "  FileUpdates Error: "
             jq -r '.jsonBuildInfo | fromjson | .error' <<< "${results}"
