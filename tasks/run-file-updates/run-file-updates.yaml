@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: run-file-updates
   labels:
-    app.kubernetes.io/version: "1.3.0"
+    app.kubernetes.io/version: "2.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -25,7 +25,7 @@ spec:
     - name: request
       type: string
       description: Name of the request
-      default: "file-updates"
+      default: "process-file-updates"
     - name: synchronously
       type: string
       description: Whether to run synchronously or not
@@ -33,17 +33,23 @@ spec:
     - name: pipelineRunUid
       type: string
       description: The uid of the current pipelineRun. Used as a label value when creating internal requests
+    - name: resultsDirPath
+      description: Path to the results directory in the data workspace
+      type: string
+  results:
+    - name: mergeRequestUrl
+      description: URL of MR that was created
   workspaces:
     - name: data
       description: Workspace where the file updates to apply are defined
   steps:
     - name: run-script
-      image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+      image: quay.io/konflux-ci/release-service-utils:7d0135b80a47cdaa225010ea1e2dff78d057c922
       script: |
-        #!/bin/sh
+        #!/bin/bash
         #
         #
-        set -e
+        set -ex
 
         # Obtain application from snapshot
         application=$(jq -rc .application $(workspaces.data.path)/$(params.snapshotPath))
@@ -51,17 +57,23 @@ spec:
         # Extract the key from the JSON file
         fileUpdates=$(jq -rc "$(params.jsonKey)" $(workspaces.data.path)/$(params.fileUpdatesPath))
 
-        pipelinerun_label="internal-services.appstudio.openshift.io/pipelinerun-uid"
-  
+        TASK_LABEL="internal-services.appstudio.openshift.io/group-id"
+        TASK_ID=$(context.taskRun.uid)
+        PIPELINERUN_LABEL="internal-services.appstudio.openshift.io/pipelinerun-uid"
+
+        RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/file-updates-results.json"
+        RESULTS_JSON='{"merge_requests":[]}'
+
         # Iterate over the extracted array and call the script
         fileUpdatesLength=$(jq '. | length' <<< "${fileUpdates}")
         for((i=0; i<fileUpdatesLength; i++)); do
           item=$(jq -cr ".[$i]" <<< "${fileUpdates}")
 
-          repo=$(jq -cr '.repo' <<< "${item}")
-          upstream_repo=$(jq -cr '.upstream_repo' <<< "${item}")
-          ref=$(jq -cr '.ref // "main"' <<< "${item}")
+          repo=$(jq -r '.repo' <<< "${item}")
+          upstream_repo=$(jq -r '.upstream_repo' <<< "${item}")
+          ref=$(jq -r '.ref // "main"' <<< "${item}")
           paths=$(jq -cr '.paths // "[]"' <<< "${item}")
+          file_updates_secret=$(jq -r '.file_updates_secret // "file-updates-secret"' <<< "${item}")
 
           echo "=== Updates for repo: ${repo} ==="
 
@@ -76,16 +88,17 @@ spec:
                            -p ref="${ref}" \
                            -p paths="${updatedPaths}" \
                            -p application=${application} \
+                           -p file_updates_secret="${file_updates_secret}" \
                            -s "$(params.synchronously)" \
-                           -l ${pipelinerun_label}=$(params.pipelineRunUid) \
-                           > $(workspaces.data.path)/ir-result.txt || \
-                           (grep "^\[" $(workspaces.data.path)/ir-result.txt | jq . && exit 1)
-          
-          internalRequest=$(awk 'NR==1{ print $2 }' $(workspaces.data.path)/ir-result.txt | xargs)
-          echo "done (${internalRequest})"
+                           -l ${TASK_LABEL}="${TASK_ID}" \
+                           -l "${PIPELINERUN_LABEL}=$(params.pipelineRunUid)"
 
-          results=$(kubectl get internalrequest $internalRequest -o=jsonpath='{.status.results}')
-          if [ $(jq -jr '.buildState' <<< "${results}") == "Failed" ]; then
+          IR=$(kubectl get internalrequest \
+              -l "${PIPELINERUN_LABEL}=$(params.pipelineRunUid),${TASK_LABEL}=${TASK_ID}" \
+              --no-headers -o custom-columns=":metadata.name" --sort-by=.metadata.creationTimestamp | head -1)
+          IRjson=$(kubectl get "internalrequest/${IR}" -ojson)
+          results=$(jq -r '.status.results' <<< "${IRjson}")
+          if [ "$(jq -jr '.buildState' <<< "${results}")" == "Failed" ]; then
             echo -en "  FileUpdates Error: "
             jq -r '.jsonBuildInfo | fromjson | .error' <<< "${results}"
             echo -e "  Diff (content might be truncated): "
@@ -93,9 +106,12 @@ spec:
             echo -e "=== Finished ===\n"
             exit 1
           else
-            echo -en "  MR Created: "
-            jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}"
+            MR=$(jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request // "unknown"' <<< "${results}")
+            echo "MR Created: ${MR}"
+            echo -n "${MR}" >> "$(results.mergeRequestUrl.path)"
+            RESULTS_JSON=$(jq --arg i "$i" --arg MR "${MR}" '.merge_requests[$i|tonumber] += {"url": $MR}' \
+                <<< "$RESULTS_JSON")
+            echo -n "${RESULTS_JSON}" | tee "$RESULTS_FILE"
           fi
           echo -e "=== Finished ===\n"
-
         done
