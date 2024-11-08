@@ -33,11 +33,11 @@ spec:
         #!/usr/bin/env bash
         set -eux
 
-        if [ -n "$(params.pipelineRunUid)" ] ; then
+        #if [ -n "$(params.pipelineRunUid)" ] ; then
             # Cleanup all internalrequests
-            kubectl delete internalrequest \
-                -l internal-services.appstudio.openshift.io/pipelinerun-uid="$(params.pipelineRunUid)"
-        fi
+            #kubectl delete internalrequest \
+            #    -l internal-services.appstudio.openshift.io/pipelinerun-uid="$(params.pipelineRunUid)"
+        #fi
 
         if [ -z "$(params.subdirectory)" ] ; then
             echo "The empty string is not a valid subdirectory"
