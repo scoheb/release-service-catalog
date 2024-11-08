@@ -82,6 +82,7 @@ spec:
                            -l ${pipelinerun_label}=$(params.pipelineRunUid) \
                            > $(workspaces.data.path)/ir-result.txt
 
+          cat $(workspaces.data.path)/ir-result.txt
           internalRequest=$(awk 'NR==1{ print $2 }' $(workspaces.data.path)/ir-result.txt | xargs)
           echo "done (${internalRequest})"
 
