@@ -304,3 +304,4 @@ spec:
               "${SNAPSHOT_SPEC_FILE}" > /tmp/temp && mv /tmp/temp "${SNAPSHOT_SPEC_FILE}"
             fi
         done
+        cat "${SNAPSHOT_SPEC_FILE}"
