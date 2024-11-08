@@ -43,7 +43,7 @@ spec:
         #!/bin/sh
         #
         #
-        set -ex
+        set -e
 
         # Obtain application from snapshot
         application=$(jq -rc .application $(workspaces.data.path)/$(params.snapshotPath))
