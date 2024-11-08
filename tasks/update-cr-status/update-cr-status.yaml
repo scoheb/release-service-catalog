@@ -49,7 +49,6 @@ spec:
             # If two files have arrays with the same key, it will be overwritten. Otherwise, the jsons
             # are merged (only arrays are not merged properly with this notation).
             RESULTS_JSON=$(jq -c "${RESULTS_JSON} * ." "${resultsFile}")
-            echo "${RESULTS_JSON}"
         done
 
         IFS='/' read -r namespace name <<< "$(params.resource)"
