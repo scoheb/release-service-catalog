@@ -14,6 +14,9 @@ the field `spec.data.fileUpdates` in the ReleasePlanAdmission resource.
 | synchronously   | Whether the task should wait for InternalRequests to complete                             | Yes      | true                     |
 | pipelineRunUid  | The uid of the current pipelineRun. Used as a label value when creating internal requests | No       | -                        |
 
+## Changes in 1.3.1
+* Fix linting issues and added additional test
+
 ## Changes in 1.3.0
 * Updated the base image used in this task
 

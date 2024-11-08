@@ -2,10 +2,11 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: test-run-file-updates
+  name: test-run-file-updates-addons
 spec:
   description: |
-    Run the run-file-updates task and verify if the internalrequests were created and the replacements were done
+    Run the run-file-updates task for the osd-addons use case 
+    and verify if the internalrequests were created and the replacements were done
   workspaces:
     - name: tests-workspace
   tasks:
@@ -29,25 +30,19 @@ spec:
                 origin: foo
                 data:
                       fileUpdates:
-                        - repo: https://gitlab.cee.redhat.com/foo
-                          paths:
-                            - path: foo
-                              replacements:
-                                - key: bar
-                                  replacement: baz
-                        - repo: https://gitlab.cee.redhat.com/bar
-                          paths:
-                            - path: bar
-                              replacements:
-                                - key: baz
-                                  replacement: qux
                         - repo: https://gitlab.cee.redhat.com/foobar
+                          file_updates_secret: mysecret
                           paths:
                             - path: foobar
                               replacements:
-                                - key: ".spec.containers[].image"
-                                  replacement: "|image:.*|image: {{ .components[].containerImage }}|"
+                                - key: ".indexImage"
+                                  replacement: '|indexImage:.*|indexImage: {{ .components[] | (.repository + "@" + (.containerImage | split ("@"))[-1]) }}|'
+                                - key: ".name"
+                                  replacement: '|name:.*|name: myName|'
               EOF
+
+              #indexImage: quay.io/osd-addons/rhods-index@sha256:d17b15a67530299d0189c00e237c1b387194a2e960de9d47b46d6b96ed5967e8
+              #name: rhods.v2.15.0
 
               yq -o json > "$(workspaces.data.path)/snapshot_spec.json" << EOF
               {
@@ -55,7 +50,7 @@ spec:
                   "artifacts": {},
                   "components": [
                       {
-                          "containerImage": "test-container-foo:bar",
+                          "containerImage": "test-container-foo@sha256:b5e3a30517bd74fec1e10df0088172946763850e05beafe10369a1b3b76dcf0e",
                           "name": "test-container-foo",
                           "source": {
                               "git": {
@@ -109,22 +104,22 @@ spec:
 
               # Get application
               application=$(jq -r '.application' $(workspaces.data.path)/snapshot_spec.json)
-              
+
               # Parse the input json file
               fileUpdates=$(jq -r '.spec.data.fileUpdates | length' "$(workspaces.data.path)/rpa.json")
-              
+
               # Fetch all the InternalRequest resources
               allRequests=$(kubectl get InternalRequest -o json)
-              
+
               # Count the number of InternalRequests
               requestsCount=$(echo "$allRequests" | jq -r '.items | length')
-              
+
               # Check if the number of InternalRequests is as expected
               if [ "$requestsCount" -ne "$fileUpdates" ]; then
                 echo "Unexpected number of InternalRequests. Expected: $fileUpdates, Found: $requestsCount"
                 exit 1
               fi
-                
+
               # Loop over the fileUpdates
               i=0
               while [ "$i" -lt "$fileUpdates" ]
@@ -133,11 +128,14 @@ spec:
                         "$(workspaces.data.path)/rpa.json")
                 paths=$(jq -r --argjson i "$i" '.spec.data.fileUpdates[$i].paths' \
                         "$(workspaces.data.path)/rpa.json")
+                #file_updates_secret="file-updates-secret"
+                file_updates_secret=$(jq -r --argjson i "$i" '.spec.data.fileUpdates[$i].file_updates_secret' \
+                        "$(workspaces.data.path)/rpa.json")
               
                 # Check if ref is present in the input file. If not, set it to 'main'
                 ref=$(jq -r --argjson i "$i" '.spec.data.fileUpdates[$i].ref // "main"' \
                         "$(workspaces.data.path)/rpa.json")
-              
+
                 # check if requestApplication is correct
                 requestApplication=$(echo "$allRequests" | \
                   jq -r --arg application "$application" '.items[] | select(.spec.params.application == $application)')
@@ -145,7 +143,16 @@ spec:
                   echo "No InternalRequest found with application: $application"
                   exit 1
                 fi
-              
+
+                # check if requestSecret is correct
+                requestSecret=$(echo "$allRequests" | \
+                  jq -r --arg file_updates_secret "$file_updates_secret" \
+                    '.items[] | select(.spec.params.file_updates_secret == $file_updates_secret)')
+                if [ -z "$requestSecret" ]; then
+                  echo "No InternalRequest found with file_updates_secret: $file_updates_secret"
+                  exit 1
+                fi
+
                 # Check if an InternalRequest with the same repo exists
                 requestRepo=$(echo "$allRequests" | \
                               jq -r --arg repo "$repo" '.items[] | select(.spec.params.repo == $repo)')
@@ -154,13 +161,13 @@ spec:
                   echo "No InternalRequest found with repo: $repo"
                   exit 1
                 fi
-                
+
                 # Check if the 'request' field contains 'file-updates'
                 if [ "$(echo "$requestRepo" | jq -r '.spec.request' )" != "file-updates" ]; then
                   echo "InternalRequest for repo: $repo doesn't contain 'file-updates' in 'request' field"
                   exit 1
                 fi
-                
+
                 # Check if the 'ref' field matches
                 if [ "$(echo "$requestRepo" | jq -r '.spec.params.ref')" != "$ref" ]; then
                   echo "InternalRequest for repo: $repo has different 'ref'. Expected: $ref"
@@ -170,9 +177,9 @@ spec:
                 requestPaths="$(echo "$requestRepo" | jq -r '.spec.params.paths')"
                 replacements="$(echo "$requestPaths" | jq '.[] | select(.path == "foobar") | .replacements[]')"
                 if [ -n "${replacements}" ]; then
-                  if [[ ! $(echo "${replacements}" | jq '.replacement') =~ "test-container-foo:bar" ]]; then
+                  if [[ ! $(echo "${replacements}" | jq '.replacement') =~ "test/foo/bar@sha256:b5e3a30517bd74fec1e10df0088172946763850e05beafe10369a1b3b76dcf0e" ]]; then
                     echo "InternalRequest for repo: $repo has different 'replacement' for foobar. 
-                          Expected: 'test-container-foo:bar'"
+                          Expected: 'test/foo/bar@sha256:b5e3a30517bd74fec1e10df0088172946763850e05beafe10369a1b3b76dcf0e'"
                     exit 1
                   fi
                 fi
