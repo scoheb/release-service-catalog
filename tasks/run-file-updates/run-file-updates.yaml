@@ -98,8 +98,8 @@ spec:
             exit 1
           else
             MR=$(jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}")
-            echo -en "  MR Created: ${MR}"
-            echo -n "{MR}" > "$(results.mergeRequestUrl.path)"
+            echo "MR Created: ${MR}"
+            echo -n "${MR}" > "$(results.mergeRequestUrl.path)"
           fi
           echo -e "=== Finished ===\n"
 
