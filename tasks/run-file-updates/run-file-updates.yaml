@@ -81,7 +81,8 @@ spec:
                            -s "$(params.synchronously)" \
                            -l ${pipelinerun_label}=$(params.pipelineRunUid)
 
-          IR=$(kubectl get internalrequest -l ${pipelinerun_label}=$(params.pipelineRunUid) --no-headers)
+          IR=$(kubectl get internalrequest -l ${pipelinerun_label}=$(params.pipelineRunUid) \
+              --no-headers -o custom-columns=":metadata.name")
           echo "IR is: ${IR}"
           IRjson=$(kubectl get internalrequest/${IR} -ojson)
           echo "IRjson: ${IRjson}"
