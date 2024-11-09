@@ -91,6 +91,9 @@ spec:
             exit 1
           else
             echo -en "  MR Created: "
+            echo ""
+            echo "${results}"
+            jq -r '.jsonBuildInfo | fromjson | .merge_request' <<< "${results}"
             jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}"
           fi
           echo -e "=== Finished ===\n"
