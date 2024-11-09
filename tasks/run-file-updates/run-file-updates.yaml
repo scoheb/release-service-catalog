@@ -33,6 +33,9 @@ spec:
     - name: pipelineRunUid
       type: string
       description: The uid of the current pipelineRun. Used as a label value when creating internal requests
+  results:
+    - name: mergeRequestUrl
+      description: URL of MR that was created
   workspaces:
     - name: data
       description: Workspace where the file updates to apply are defined
@@ -85,7 +88,6 @@ spec:
               --no-headers -o custom-columns=":metadata.name")
           echo "IR is: ${IR}"
           IRjson=$(kubectl get internalrequest/${IR} -ojson)
-          echo "IRjson: ${IRjson}"
           results=$(jq -r '.status.results' <<< "${IRjson}")
           if [ "$(jq -jr '.buildState' <<< "${results}")" == "Failed" ]; then
             echo -en "  FileUpdates Error: "
@@ -95,9 +97,9 @@ spec:
             echo -e "=== Finished ===\n"
             exit 1
           else
-            echo -en "  MR Created: "
-            echo ""
-            jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}"
+            MR=$(jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}")
+            echo -en "  MR Created: ${MR}"
+            echo -n "{MR}" > "$(results.mergeRequestUrl.path)"
           fi
           echo -e "=== Finished ===\n"
 
