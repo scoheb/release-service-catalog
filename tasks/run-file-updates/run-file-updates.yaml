@@ -97,7 +97,6 @@ spec:
           else
             echo -en "  MR Created: "
             echo ""
-            jq -r '.jsonBuildInfo | fromjson | .merge_request' <<< "${results}"
             jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}"
           fi
           echo -e "=== Finished ===\n"
