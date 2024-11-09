@@ -81,7 +81,11 @@ spec:
                            -s "$(params.synchronously)" \
                            -l ${pipelinerun_label}=$(params.pipelineRunUid)
 
-          results=$(kubectl get internalrequest -l ${pipelinerun_label}=$(params.pipelineRunUid) -o=jsonpath='{.status.results}')
+          IR=$(kubectl get internalrequest -l ${pipelinerun_label}=$(params.pipelineRunUid))
+          echo "IR is: ${IR}"
+          IRjson=$(kubectl get internalrequest/${IR} -ojson)
+          echo "IRjson: ${IRjson}"
+          results=$(jq -r '.status.results' <<< "${IRjson}")
           if [ "$(jq -jr '.buildState' <<< "${results}")" == "Failed" ]; then
             echo -en "  FileUpdates Error: "
             jq -r '.jsonBuildInfo | fromjson | .error' <<< "${results}"
@@ -92,7 +96,6 @@ spec:
           else
             echo -en "  MR Created: "
             echo ""
-            echo "${results}"
             jq -r '.jsonBuildInfo | fromjson | .merge_request' <<< "${results}"
             jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}"
           fi
