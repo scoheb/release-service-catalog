@@ -272,6 +272,8 @@ spec:
           value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
+        - name: resultsDirPath
+          value: "$(tasks.collect-data.results.resultsDir)"
       runAfter:
         - push-snapshot
       taskRef:

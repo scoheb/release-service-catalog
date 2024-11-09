@@ -33,6 +33,9 @@ spec:
     - name: pipelineRunUid
       type: string
       description: The uid of the current pipelineRun. Used as a label value when creating internal requests
+    - name: resultsDirPath
+      description: Path to the results directory in the data workspace
+      type: string
   results:
     - name: mergeRequestUrl
       description: URL of MR that was created
@@ -55,7 +58,10 @@ spec:
         fileUpdates=$(jq -rc "$(params.jsonKey)" $(workspaces.data.path)/$(params.fileUpdatesPath))
 
         pipelinerun_label="internal-services.appstudio.openshift.io/pipelinerun-uid"
-  
+
+        RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/file-updates-results.json"
+        RESULTS_JSON='{"merge_requests":[]}'
+
         # Iterate over the extracted array and call the script
         fileUpdatesLength=$(jq '. | length' <<< "${fileUpdates}")
         for((i=0; i<fileUpdatesLength; i++)); do
@@ -99,8 +105,10 @@ spec:
           else
             MR=$(jq -r '.jsonBuildInfo | fromjson | fromjson | .merge_request' <<< "${results}")
             echo "MR Created: ${MR}"
-            echo -n "${MR}" > "$(results.mergeRequestUrl.path)"
+            echo -n "${MR}" >> "$(results.mergeRequestUrl.path)"
+            RESULTS_JSON=$(jq --arg i "$i" --arg MR "${MR}" '.merge_requests[$i|tonumber] += {"url": $MR}' \
+                <<< $RESULTS_JSON)
           fi
           echo -e "=== Finished ===\n"
-
         done
+        echo -n "${RESULTS_JSON}" | tee $RESULTS_FILE

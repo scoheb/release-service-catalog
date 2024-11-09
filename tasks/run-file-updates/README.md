@@ -5,14 +5,16 @@ the field `spec.data.fileUpdates` in the ReleasePlanAdmission resource.
 
 ## Parameters
 
-| Name            | Description                                                                               | Optional | Default value            |
-|-----------------|-------------------------------------------------------------------------------------------|----------|--------------------------|
-| jsonKey         | JSON key where the information is defined                                                 | Yes      | .spec.data.fileUpdates[] |
-| fileUpdatesPath | Path to the JSON file containing the key                                                  | No       | -                        |
-| snapshotPath    | Path to the JSON string of the Snapshot spec in the data workspace                        | No       | -                        |
-| request         | Type of request to be created                                                             | Yes      | file-updates             |
-| synchronously   | Whether the task should wait for InternalRequests to complete                             | Yes      | true                     |
-| pipelineRunUid  | The uid of the current pipelineRun. Used as a label value when creating internal requests | No       | -                        |
+| Name               | Description                                                                               | Optional | Default value            |
+|--------------------|-------------------------------------------------------------------------------------------|----------|--------------------------|
+| jsonKey            | JSON key where the information is defined                                                 | Yes      | .spec.data.fileUpdates[] |
+| fileUpdatesPath    | Path to the JSON file containing the key                                                  | No       | -                        |
+| snapshotPath       | Path to the JSON string of the Snapshot spec in the data workspace                        | No       | -                        |
+| request            | Type of request to be created                                                             | Yes      | file-updates             |
+| synchronously      | Whether the task should wait for InternalRequests to complete                             | Yes      | true                     |
+| pipelineRunUid     | The uid of the current pipelineRun. Used as a label value when creating internal requests | No       | -                        |
+| resultsDirPath     | Path to results directory in the data workspace                                           | No       | -                        |
+
 
 ## Changes in 1.3.1
 * Fix linting issues and added additional test
