@@ -309,6 +309,7 @@ spec:
           workspace: release-workspace
       runAfter:
         - push-snapshot
+        - run-file-updates
   finally:
     - name: cleanup
       taskRef:
