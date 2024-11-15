@@ -111,16 +111,25 @@ spec:
         PATHS_LENGTH="$(jq '. | length' "${updatePathsTmpfile}")"
         for (( PATH_INDEX=0; PATH_INDEX < PATHS_LENGTH; PATH_INDEX++ )); do
           # getting the replacements for the file
+          echo "-- start updatePathsTmpfile --"
           cat "${updatePathsTmpfile}"
+          echo "-- end updatePathsTmpfile --"
           targetFile="$(jq -cr ".[${PATH_INDEX}].path" "${updatePathsTmpfile}")"
+          echo "targetFile: ${targetFile}"
     
-          seed=$(jq -cr ".[${PATH_INDEX}].seed // \"\"" "${updatePathsTmpfile}")
+          seed=$(jq ".[${PATH_INDEX}].seed // \"\"" "${updatePathsTmpfile}")
+          seed="${seed%\"}"
+          seed="${seed#\"}"
+          echo "${seed}"
                       
           if [ -n "${seed}" ] ; then
             echo "seed operation to perform"
             targetDir=$(dirname "${targetFile}")
             mkdir -p "${targetDir}"
-            echo "${seed}" > "${targetFile}"
+            echo -e "${seed}" > "${targetFile}"
+            echo "-- start targetFile --"
+            cat "${targetFile}"
+            echo "-- end targetFile --"
             git add "${targetFile}"
             git status
           fi
@@ -170,8 +179,9 @@ spec:
               fi
       
               # run the replace
+              echo "--start file--"
               cat "${targetFile}"
-              echo ""
+              echo "--end file--"
               sed -i "${startBlock},+${valueSize}s${replacement}" "${targetFile}"
       
               # get the replace part of "|search|replace|"

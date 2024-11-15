@@ -44,7 +44,7 @@ spec:
           value: "main"
         - name: paths
           value: >-
-            [{"path":"addons/my-addon2.yaml","seed":"indexImage: \\ntom:",
+            [{"path":"addons/my-addon2.yaml","seed":"indexImage: \\n",
             "replacements":[{"key":".indexImage","replacement":"|indexImage:.*|indexImage: Tom|"}]}]
         - name: application
           value: "scott"
@@ -98,11 +98,11 @@ spec:
 
               cat > "/tmp/my-addon2.yaml" << EOF
               indexImage: Tom
-              tom:
+
               EOF
               
               echo "Testing that file present in working directory is what we expect"
-              diff -q "$(params.tempDir)/one-update/addons/my-addon2.yaml" "/tmp/my-addon2.yaml"
+              diff "$(params.tempDir)/one-update/addons/my-addon2.yaml" "/tmp/my-addon2.yaml"
       workspaces:
         - name: pipeline
           workspace: tests-workspace
