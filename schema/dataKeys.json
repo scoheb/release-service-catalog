@@ -152,6 +152,30 @@
             "type": "string"
           }
         },
+        "cves": {
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "The key of the CVE e.g. CVE-3414"
+              },
+              "component": {
+                "type": "string",
+                "description": "The name of the component"
+              },
+              "packages": {
+                "type": "array",
+                "description": "A list of packages that fixed the CVE e.g. [ 'pkg:golang/golang.org/x/net/http2@1.11.1' ]",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
         "issues": {
           "type": "object",
           "additionalProperties": false,
