@@ -176,6 +176,11 @@ spec:
         #!/usr/bin/env bash
         set -eu
 
+        if [ ! -f "$(workspaces.data.path)/$(params.subdirectory)/release_plan_admission.json" ] ; then
+          echo "Release Plan Admission not found. Running Tenant Release Pipeline?"
+          exit 0
+        fi
+
         pipelineref=$(jq -c '.spec.pipeline.pipelineRef' \
           "$(workspaces.data.path)/$(params.subdirectory)/release_plan_admission.json")
         resolver=$(jq -r '.resolver // ""' <<< "${pipelineref}")
