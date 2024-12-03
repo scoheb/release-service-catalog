@@ -181,10 +181,6 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/apply-mapping/apply-mapping.yaml
-          - name: pipelineRunName
-            value: $(context.pipelineRun.name)
-          - name: pipelineRunNamespace
-            value: $(context.pipelineRun.namespace)
       params:
         - name: failOnEmptyResult
           value: "true"
@@ -192,6 +188,10 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: pipelineRunName
+          value: $(context.pipelineRun.name)
+        - name: pipelineRunNamespace
+          value: $(context.pipelineRun.namespace)
       workspaces:
         - name: config
           workspace: release-workspace
