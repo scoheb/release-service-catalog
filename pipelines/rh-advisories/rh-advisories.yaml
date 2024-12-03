@@ -181,6 +181,10 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/apply-mapping/apply-mapping.yaml
+          - name: pipelineRunName
+            value: $(context.pipelineRun.name)
+          - name: pipelineRunNamespace
+            value: $(context.pipelineRun.namespace)
       params:
         - name: failOnEmptyResult
           value: "true"

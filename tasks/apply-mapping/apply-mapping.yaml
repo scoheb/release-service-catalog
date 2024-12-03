@@ -22,6 +22,12 @@ spec:
       type: string
       description: Fail the task if the resulting snapshot contains 0 components
       default: "false"
+    - name: pipelineRunName
+      type: string
+      description: The name of the current pipelineRun.
+    - name: pipelineRunNamespace
+      type: string
+      description: The name of the namespace of the current pipelineRun.
   workspaces:
     - name: config
       description: The workspace where the extra config file containing the mapping and snapshot json reside
@@ -36,7 +42,7 @@ spec:
         #!/usr/bin/env bash
         set -eux
 
-        tkn
+        tkn pipelinerun cancel "$(params.pipelineRunName)" -n "$(params.pipelineRunNamespace)"
 
         SNAPSHOT_SPEC_FILE="$(workspaces.config.path)/$(params.snapshotPath)"
         DATA_FILE="$(workspaces.config.path)/$(params.dataPath)"
