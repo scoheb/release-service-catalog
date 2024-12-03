@@ -42,8 +42,6 @@ spec:
         #!/usr/bin/env bash
         set -eux
 
-        tkn pipelinerun cancel "$(params.pipelineRunName)" -n "$(params.pipelineRunNamespace)"
-
         SNAPSHOT_SPEC_FILE="$(workspaces.config.path)/$(params.snapshotPath)"
         DATA_FILE="$(workspaces.config.path)/$(params.dataPath)"
         SNAPSHOT_SPEC_FILE_ORIG="${SNAPSHOT_SPEC_FILE}.orig"

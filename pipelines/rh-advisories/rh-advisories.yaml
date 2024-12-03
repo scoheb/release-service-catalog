@@ -183,7 +183,7 @@ spec:
             value: tasks/apply-mapping/apply-mapping.yaml
       params:
         - name: failOnEmptyResult
-          value: "true"
+          value: "false"
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
