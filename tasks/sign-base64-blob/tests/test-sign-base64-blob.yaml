@@ -25,7 +25,6 @@ spec:
               cat > $(workspaces.data.path)/data.json << EOF
               {
                 "sign": {
-                  "request": "blob-signing-pipeline",
                   "configMapName": "signing-config-map"
                 }
               }

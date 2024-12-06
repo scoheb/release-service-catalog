@@ -7,7 +7,6 @@ Creates an InternalRequest to sign a base64 encoded blob
 | Name                 | Description                                                                               | Optional | Default value         |
 |----------------------|-------------------------------------------------------------------------------------------|----------|-----------------------|
 | dataPath             | Path to the JSON string of the merged data to use in the data workspace                   | No       | -                     |
-| request              | Signing pipeline name to handle this request                                              | Yes      | blob-signing-pipeline |
 | referenceImage       | The image to be signed                                                                    | No       | -                     |
 | manifestDigestImage  | Manifest Digest Image used to extract the SHA                                             | Yes      | ""                    |
 | requester            | Name of the user that requested the signing, for auditing purposes                        | No       | -                     |
@@ -22,10 +21,12 @@ Creates an InternalRequest to sign a base64 encoded blob
 ```
 data:
     sign:
-        request: <signing pipeline name>
         pipelineImage: <image pullspec>
         configMapName: <configmap name>
 ```
+
+## Changes in 2.4.0
+* No longer examine `.data.sign.request` to obtain the Signing pipeline name. Use the default - blob-signing-pipeline
 
 ## Changes in 2.3.0
 * Updated the base image used in this task
