@@ -4,16 +4,17 @@ Creates an InternalRequest to sign an index image
 
 ## Parameters
 
-| Name                 | Description                                                                               | Optional | Default value          |
-|----------------------|-------------------------------------------------------------------------------------------|----------|------------------------|
-| dataPath             | Path to the JSON string of the merged data to use in the data workspace                   | No       | -                      |
-| referenceImage       | The image to be signed                                                                    | No       | -                      |
-| manifestListDigests  | The manifest digests for each arch in manifest list                                       | No       | -                      |
-| requester            | Name of the user that requested the signing, for auditing purposes                        | No       | -                      |
-| requestTimeout       | InternalRequest timeout                                                                   | Yes      | 180                    |
-| pipelineRunUid       | The uid of the current pipelineRun. Used as a label value when creating internal requests | No       | -                      |
-| taskGitUrl           | The url to the git repo where the release-service-catalog tasks to be used are stored     | No       | -                      |
-| taskGitRevision      | The revision in the taskGitUrl repo to be used                                            | No       | -                      |
+| Name                     | Description                                                                               | Optional | Default value  |
+|--------------------------|-------------------------------------------------------------------------------------------|----------|----------------|
+| dataPath                 | Path to the JSON string of the merged data to use in the data workspace                   | No       | -              |
+| releasePlanAdmissionPath | Path to the JSON string of the releasePlanAdmission in the data workspace                 | No       | -              | 
+| referenceImage           | The image to be signed                                                                    | No       | -              |
+| manifestListDigests      | The manifest digests for each arch in manifest list                                       | No       | -              |
+| requester                | Name of the user that requested the signing, for auditing purposes                        | No       | -              |
+| requestTimeout           | InternalRequest timeout                                                                   | Yes      | 180            |
+| pipelineRunUid           | The uid of the current pipelineRun. Used as a label value when creating internal requests | No       | -              |
+| taskGitUrl               | The url to the git repo where the release-service-catalog tasks to be used are stored     | No       | -              |
+| taskGitRevision          | The revision in the taskGitUrl repo to be used                                            | No       | -              |
 
 ## Signing data parameters
 
@@ -27,6 +28,12 @@ data:
         pipelineImage: <image pullspec>
         configMapName: <configmap name>
 ```
+
+## Changes in 4.1.0
+* Updated task to support the `internal-pipelinerun` requestType
+* New mandatory parameter `releasePlanAdmissionPath`
+  * It is needed in order to obtain the serviceAccount so it can be used in the PipelineRun definition for the
+  internal-pipelinerun
 
 ## Changes in 4.0.0
 * Added new task parameters `taskGitRevision` and `taskGitUrl`

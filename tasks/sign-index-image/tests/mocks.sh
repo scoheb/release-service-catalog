@@ -13,3 +13,15 @@ function internal-request() {
   echo "Sync flag set to true. Waiting for the InternalRequest to be completed."
   sleep 2
 }
+
+function internal-pipelinerun() {
+  echo Mock internal-request called with: $*
+  echo $* >> $(workspaces.data.path)/mock_internal-request.txt
+
+  # set to async
+  /home/utils/internal-pipelinerun $@ -s false
+
+  # mimic the sync output
+  echo "Sync flag set to true. Waiting for the InternalRequest to be completed."
+  sleep 2
+}

@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: fbc-release
   labels:
-    app.kubernetes.io/version: "4.0.3"
+    app.kubernetes.io/version: "4.0.4"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -300,6 +300,8 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: releasePlanAdmissionPath
+          value: "$(tasks.collect-data.results.releasePlanAdmission)"
         - name: referenceImage
           value: $(tasks.add-fbc-contribution-to-index-image.results.requestTargetIndex)
         - name: manifestListDigests

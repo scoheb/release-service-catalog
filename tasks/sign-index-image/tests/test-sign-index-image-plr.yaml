@@ -2,9 +2,9 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: test-sign-index-image
+  name: test-sign-index-image-plr
 spec:
-  description: Test creating a internal request to sign an image
+  description: Test creating a internal pipelinerun to sign an image using the simple-signing-pipeline request
   workspaces:
     - name: tests-workspace
   tasks:
@@ -19,13 +19,15 @@ spec:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
-              cat > $(workspaces.data.path)/data.json << EOF
+              cat > "$(workspaces.data.path)/data.json" << EOF
               {
                 "sign": {
-                  "configMapName": "signing-config-map"
+                  "configMapName": "signing-config-map",
+                  "request": "simple-signing-pipeline",
+                  "requestType": "internal-pipelinerun"
                 }
               }
               EOF
@@ -92,62 +94,70 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              counter=0
-              testValues=('sha256:6f9a420f660e73a' \
-                          'sha256:6f9a420f660e73b')
-              internalRequests="$(kubectl get internalrequest --sort-by=.metadata.creationTimestamp --no-headers)"
-              internalRequestsCount=$(echo $internalRequests | wc -w)
+              internalPipelineruns="$(kubectl get pr \
+                -l "internal-services.appstudio.openshift.io/pipelinerun-uid=$(context.pipelineRun.uid)" \
+                -o json --sort-by=.metadata.creationTimestamp | jq -c)"
+              plrsLength=$(jq ".items | length" <<< "${internalPipelineruns}" )
 
-              if [ $internalRequestsCount != "2" ] ; then
-                echo "incorrect number of internalRequests created. Expected 2"
-                exit 1
-              fi
+              expectedReferences=()
+              expectedReferences+=("quay.io/testrepo/testimage:tag")
+              expectedReferences+=("quay.io/testrepo/testimage:tag")
 
-              for internalRequest in ${internalRequests};
-              do
-                params=$(kubectl get internalrequest ${internalRequest} -o jsonpath="{.spec.params}")
+              expectedDigests=()
+              expectedDigests+=("sha256:6f9a420f660e73a")
+              expectedDigests+=("sha256:6f9a420f660e73b")
 
-                if [ $(jq -r '.reference' <<< "${params}") != "quay.io/testrepo/testimage:tag" ]; then
-                  echo "reference image does not match"
-                  exit 1
-                fi
+              foundReferences=()
+              foundDigests=()
+              for((iplr=0; iplr<plrsLength; iplr++)); do
+                params=$(jq -r ".items[$iplr].spec.params" <<< "${internalPipelineruns}")
+                refValue=$(jq -r '.[1].value' <<< "${params}")
+                manifestDigest=$(jq -r '.[2].value' <<< "${params}")
+                foundReferences+=("${refValue}")
+                foundDigests+=("${manifestDigest}")
 
-                if [ $(jq -r '.manifest_digest' <<< "${params}") != "${testValues[$counter]}" ]; then
-                  echo "manifest_digest does not match"
-                  exit 1
-                fi
-
-                if [ $(jq -r '.config_map_name' <<< "${params}") != "signing-config-map" ]
-                then
+                if [ "$(jq -r '.[4].value' <<< "${params}")" != "signing-config-map" ]; then
                   echo "config_map_name does not match"
                   exit 1
                 fi
 
-                if [ $(jq -r '.requester' <<< "${params}") != "testuser" ]
-                then
+                if [ "$(jq -r '.[3].value' <<< "${params}")" != "testuser" ]; then
                   echo "requester does not match"
                   exit 1
                 fi
 
-                if [ $(jq -r '.pipeline_image' <<< "${params}") != \
-                   "quay.io/redhat-isv/operator-pipelines-images:released" ]
-                then
+                if [ "$(jq -r '.[0].value' <<< "${params}")" != \
+                   "quay.io/redhat-isv/operator-pipelines-images:released" ]; then
                   echo "pipeline_image does not match"
                   exit 1
                 fi
-
-                counter=$((counter+1))
               done
+
+              differenceReferences=$(echo "${expectedReferences[@]}" "${foundReferences[@]}" | tr ' ' '\n' \
+                | sort | uniq -u)
+              differenceDigests=$(echo "${expectedDigests[@]}" "${foundDigests[@]}" | tr ' ' '\n' | sort | uniq -u)
+
+              if [ -n "${differenceReferences}" ] ; then
+                echo "error: references expected compared to found do not match"
+                echo ""
+                echo "${differenceReferences}"
+                exit 1
+              fi
+              if [ -n "${differenceDigests}" ] ; then
+                echo "error: digests expected compared to found do not match"
+                echo ""
+                echo "${differenceDigests}"
+                exit 1
+              fi
       runAfter:
         - run-task
   finally:
     - name: cleanup
       taskSpec:
         steps:
-          - name: delete-crs
+          - name: delete-plrs
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
-
-              kubectl delete internalrequests --all
+              kubectl delete pr -l "internal-services.appstudio.openshift.io/pipelinerun-uid=$(context.pipelineRun.uid)"

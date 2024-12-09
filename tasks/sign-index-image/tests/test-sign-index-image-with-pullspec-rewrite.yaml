@@ -29,6 +29,32 @@ spec:
                 }
               }
               EOF
+              cat > "$(workspaces.data.path)/release_plan_admission.json" << EOF
+              {
+                "spec": {
+                  "pipeline": {
+                    "pipelineRef": {
+                      "resolver": "git",
+                      "params": [
+                        {
+                          "name": "url",
+                          "value": "https://localhost.git"
+                        },
+                        {
+                          "name": "revision",
+                          "value": "main"
+                        },
+                        {
+                          "name": "pathInRepo",
+                          "value": "pipelines/abc/abc.yaml"
+                        }
+                      ]
+                    },
+                    "serviceAccountName": "release-service-account"
+                  }
+                }
+              }
+              EOF
     - name: run-task
       taskRef:
         name: sign-index-image
@@ -47,6 +73,8 @@ spec:
           value: "main"
         - name: dataPath
           value: data.json
+        - name: releasePlanAdmissionPath
+          value: release_plan_admission.json
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -61,7 +89,7 @@ spec:
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               internalRequest="$(kubectl get internalrequest --sort-by=.metadata.creationTimestamp --no-headers)"
