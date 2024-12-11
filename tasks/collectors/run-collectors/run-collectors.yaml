@@ -61,10 +61,11 @@ spec:
             exit 1
         fi
 
+        pwd
         ls -lR
         git clone "${COLLECTORS_REPOSITORY}" collectors
         pushd collectors
-        
+
         # Set COLLECTOR_TYPE based on the value of COLLECTORS_RESOURCE_TYPE
         if [[ "$COLLECTORS_RESOURCE_TYPE" == "releaseplan" ]]; then
           COLLECTOR_TYPE="tenant"
