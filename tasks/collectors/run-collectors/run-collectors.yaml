@@ -61,6 +61,7 @@ spec:
             exit 1
         fi
 
+        ls -lR
         git clone "${COLLECTORS_REPOSITORY}" collectors
         pushd collectors
         
