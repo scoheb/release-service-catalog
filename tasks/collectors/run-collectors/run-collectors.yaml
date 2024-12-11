@@ -79,9 +79,9 @@ spec:
         if [ ! -f "${COLLECTORS_FILE}" ] ; then
             echo "No valid file was found so no collectors will be run."
         else
-            NUM_COLLECTORS="$(jq '.spec.collectors | length' "${COLLECTORS_FILE}")"
+            NUM_COLLECTORS="$(jq '.spec.collectors.items | length' "${COLLECTORS_FILE}")"
             for ((i = 0; i < NUM_COLLECTORS; i++)) ; do
-                collector="$(jq -c --argjson i "$i" '.spec.collectors[$i]' "${COLLECTORS_FILE}")"
+                collector="$(jq -c --argjson i "$i" '.spec.collectors.items.[$i]' "${COLLECTORS_FILE}")"
                 # Limit batch size to concurrent limit
                 while (( ${RUNNING_JOBS@P} >= "$CONCURRENT_LIMIT" )); do
                     wait -n
