@@ -18,15 +18,28 @@ spec:
     - name: collectorsResourceType
       description: The type of resource that contains the collectors
       type: string
+    - name: collectorsSecretsName
+      description: The name of the secret that contains various credentials to use for collecting metadata
+      type: string
+      default: "collectors-secret"
     - name: resultsDir
       type: string
       description: The relative path in the workspace to save the collector results to
   workspaces:
     - name: data
       description: Workspace where the CRs are stored
+  volumes:
+    - name: collector-secrets-volume
+      secret:
+        secretName: $(params.collectorsSecretsName)
+        optional: true
   steps:
     - name: run-collectors
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+      volumeMounts:
+        - name: collector-secrets-volume
+          mountPath: "/etc/collectors-secrets"
+          readOnly: true
       script: |
         #!/usr/bin/env bash
         set -xeo pipefail

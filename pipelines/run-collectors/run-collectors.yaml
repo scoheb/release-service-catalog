@@ -80,6 +80,8 @@ spec:
           value: $(tasks.collect-collectors-resources.results.collectorsResource)
         - name: collectorsResourceType
           value: $(params.collectorsResourceType)
+        - name: collectorsSecretsName
+          value: $(tasks.collect-collectors-resources.results.collectorsSecretName)
         - name: resultsDir
           value: $(tasks.collect-collectors-resources.results.resultsDir)
       workspaces:

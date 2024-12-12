@@ -42,6 +42,9 @@ spec:
     - name: collectorsResource
       type: string
       description: The relative path in the workspace to the stored collectors resource json
+    - name: collectorsSecretName
+      type: string
+      description: The name of the secret to use for collecting metadata
     - name: resultsDir
       type: string
       description: The relative path in the workspace to the results directory
@@ -82,3 +85,5 @@ spec:
         echo -n "$COLLECTORS_RESOURCE_PATH" > "$(results.collectorsResource.path)"
         get-resource "${COLLECTORS_RESOURCE_TYPE}" "${COLLECTORS_RESOURCE}" | \
           tee "$(workspaces.data.path)/$COLLECTORS_RESOURCE_PATH"
+
+        echo -n "jira-token > "$(results.collectorsSecretName.path)"
