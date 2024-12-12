@@ -86,4 +86,4 @@ spec:
         get-resource "${COLLECTORS_RESOURCE_TYPE}" "${COLLECTORS_RESOURCE}" | \
           tee "$(workspaces.data.path)/$COLLECTORS_RESOURCE_PATH"
 
-        echo -n "jira-token > "$(results.collectorsSecretName.path)"
+        echo -n "jira-token" > "$(results.collectorsSecretName.path)"
