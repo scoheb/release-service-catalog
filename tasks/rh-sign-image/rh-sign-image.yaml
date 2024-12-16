@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: rh-sign-image
   labels:
-    app.kubernetes.io/version: "5.0.1"
+    app.kubernetes.io/version: "5.0.2"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -128,9 +128,9 @@ spec:
         default_pipeline_image="quay.io/redhat-isv/operator-pipelines-images:released"
 
         pipeline_image=$(jq -r --arg default_pipeline_image ${default_pipeline_image} \
-            '.sign.pipelineImage // $default_pipeline_image' ${DATA_FILE})
-        config_map_name=$(jq -r '.sign.configMapName // "signing-config-map"' ${DATA_FILE})
-        defaultPushSourceContainer=$(jq -r '.mapping.defaults.pushSourceContainer' ${DATA_FILE})
+            '.sign.pipelineImage // $default_pipeline_image' "${DATA_FILE}")
+        config_map_name=$(jq -r '.sign.configMapName // "signing-config-map"' "${DATA_FILE}")
+        defaultPushSourceContainer=$(jq -r '.mapping.defaults.pushSourceContainer' "${DATA_FILE}")
 
         if [[ "$(params.pyxisServer)" == "production" ]]
         then
@@ -158,21 +158,20 @@ spec:
         export PYXIS_CERT_PATH=/tmp/crt
         export PYXIS_KEY_PATH=/tmp/key
 
-        COMPONENTS_LENGTH=$(jq '.components |length' ${SNAPSHOT_PATH})
+        COMPONENTS_LENGTH=$(jq '.components |length' "${SNAPSHOT_PATH}")
         for (( COMPONENTS_INDEX=0; COMPONENTS_INDEX<COMPONENTS_LENGTH; COMPONENTS_INDEX++ )); do
 
-            referenceContainerImage=$(jq -r ".components[${COMPONENTS_INDEX}].containerImage" ${SNAPSHOT_PATH})
+            referenceContainerImage=$(jq -r ".components[${COMPONENTS_INDEX}].containerImage" "${SNAPSHOT_PATH}")
 
-            rh_registry_repo=$(jq -r ".components[${COMPONENTS_INDEX}][\"rh-registry-repo\"]" ${SNAPSHOT_PATH})
-            registry_access_repo=$(jq -r ".components[${COMPONENTS_INDEX}][\"registry-access-repo\"]" ${SNAPSHOT_PATH})
+            rh_registry_repo=$(jq -r ".components[${COMPONENTS_INDEX}][\"rh-registry-repo\"]" "${SNAPSHOT_PATH}")
+            registry_access_repo=$(jq -r ".components[${COMPONENTS_INDEX}][\"registry-access-repo\"]" \
+              "${SNAPSHOT_PATH}")
             repository="${rh_registry_repo#*/}"
 
-            git_sha=$(jq -r ".components[${COMPONENTS_INDEX}].source.git.revision" ${SNAPSHOT_PATH})
-
-            TAGS=$(jq -r ".components[${COMPONENTS_INDEX}].tags | join(\" \")" ${SNAPSHOT_PATH})
+            TAGS=$(jq -r ".components[${COMPONENTS_INDEX}].tags | join(\" \")" "${SNAPSHOT_PATH}")
 
             # check if multi-arch
-            RAW_OUTPUT=$(skopeo inspect --no-tags --raw docker://${referenceContainerImage})
+            RAW_OUTPUT=$(skopeo inspect --no-tags --raw "docker://${referenceContainerImage}")
             # Always sign the top level sha
             manifest_digests="${referenceContainerImage#*@}"
             # For multi arch, also sign all the manifests inside
@@ -185,9 +184,9 @@ spec:
             # Push source container if the component has pushSourceContainer: true or if the
             # pushSourceContainer key is missing from the component and the defaults has
             # pushSourceContainer: true
-            if [[ $(jq -r ".components[$COMPONENTS_INDEX].pushSourceContainer" ${SNAPSHOT_PATH}) == "true" ]] || \
-               [[ $(jq ".components[$COMPONENTS_INDEX] | has(\"pushSourceContainer\")" ${SNAPSHOT_PATH}) == "false" && \
-                ${defaultPushSourceContainer} == "true" ]] ; then
+            if [[ $(jq -r ".components[$COMPONENTS_INDEX].pushSourceContainer" "${SNAPSHOT_PATH}") == "true" ]] || \
+               [[ $(jq ".components[$COMPONENTS_INDEX] | has(\"pushSourceContainer\")" "${SNAPSHOT_PATH}") == "false" \
+                && ${defaultPushSourceContainer} == "true" ]] ; then
               source_repo=${referenceContainerImage%%@sha256:*}
               source_reference_tag=sha256-${referenceContainerImage#*@sha256:}.src
               # Calculate the source container image based on the provided container image
