@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: run-file-updates
   labels:
-    app.kubernetes.io/version: "2.0.1"
+    app.kubernetes.io/version: "2.0.2"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -52,10 +52,10 @@ spec:
         set -ex
 
         # Obtain application from snapshot
-        application=$(jq -rc .application $(workspaces.data.path)/$(params.snapshotPath))
+        application=$(jq -rc .application "$(workspaces.data.path)/$(params.snapshotPath)")
 
         # Extract the key from the JSON file
-        fileUpdates=$(jq -rc "$(params.jsonKey)" $(workspaces.data.path)/$(params.fileUpdatesPath))
+        fileUpdates=$(jq -rc "$(params.jsonKey)" "$(workspaces.data.path)/$(params.fileUpdatesPath)")
 
         TASK_LABEL="internal-services.appstudio.openshift.io/group-id"
         REQUEST_LABEL="internal-services.appstudio.openshift.io/request-id"
@@ -82,7 +82,7 @@ spec:
           echo "=== Updates for repo: ${repo} ==="
 
           echo -en "  Evaluating '{{ }}' expressions..."
-          updatedPaths=$(update-paths -p "${paths}" -f $(workspaces.data.path)/$(params.snapshotPath))
+          updatedPaths=$(update-paths -p "${paths}" -f "$(workspaces.data.path)/$(params.snapshotPath)")
           echo "done"
 
           echo -en "  Creating InternalRequest to produce file-updates..."
@@ -92,7 +92,7 @@ spec:
                            -p repo="${repo}" \
                            -p ref="${ref}" \
                            -p paths="${updatedPaths}" \
-                           -p application=${application} \
+                           -p application="${application}" \
                            -p file_updates_secret="${file_updates_secret}" \
                            -s "$(params.synchronously)" \
                            -l ${TASK_LABEL}="${TASK_ID}" \

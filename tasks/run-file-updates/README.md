@@ -15,6 +15,8 @@ the field `spec.data.fileUpdates` in the ReleasePlanAdmission resource.
 | pipelineRunUid     | The uid of the current pipelineRun. Used as a label value when creating internal requests | No       | -                        |
 | resultsDirPath     | Path to results directory in the data workspace                                           | No       | -                        |
 
+## Changes in 2.0.2
+* fix linting issues
 
 ## Changes in 2.0.1
 * fix typo in default value for `jq`

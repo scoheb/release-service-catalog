@@ -103,7 +103,7 @@ spec:
               set -ex
 
               # Get application
-              application=$(jq -r '.application' $(workspaces.data.path)/snapshot_spec.json)
+              application=$(jq -r '.application' "$(workspaces.data.path)/snapshot_spec.json")
 
               # Parse the input json file
               fileUpdates=$(jq -r '.spec.data.fileUpdates | length' "$(workspaces.data.path)/rpa.json")
@@ -125,8 +125,6 @@ spec:
               while [ "$i" -lt "$fileUpdates" ]
               do
                 repo=$(jq -r --argjson i "$i" '.spec.data.fileUpdates[$i].repo' \
-                        "$(workspaces.data.path)/rpa.json")
-                paths=$(jq -r --argjson i "$i" '.spec.data.fileUpdates[$i].paths' \
                         "$(workspaces.data.path)/rpa.json")
                 file_updates_secret=$(jq -r --argjson i "$i" '.spec.data.fileUpdates[$i].file_updates_secret' \
                         "$(workspaces.data.path)/rpa.json")
