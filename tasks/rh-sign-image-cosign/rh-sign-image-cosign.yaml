@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: rh-sign-image-cosign
   labels:
-    app.kubernetes.io/version: "1.2.0"
+    app.kubernetes.io/version: "1.2.1"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -77,15 +77,24 @@ spec:
         run_cosign () { # Expected arguments are [digest_reference, tag_reference]
             # Upload transparency log when rekor url is specified
             if [ -v REKOR_URL ]; then
-                COSIGN_COMMON_ARGS="-y --rekor-url=$REKOR_URL --key $SIGN_KEY"
+                COSIGN_COMMON_ARGS=(
+                  -y
+                  --rekor-url="$REKOR_URL"
+                  --key
+                  "$SIGN_KEY"
+                )
             else
-                COSIGN_COMMON_ARGS="--tlog-upload=false --key $SIGN_KEY"
+                COSIGN_COMMON_ARGS=(
+                  --tlog-upload=false
+                  --key
+                  "$SIGN_KEY"
+                )
             fi
             echo "Signing manifest $1 ($2)"
             attempt=0
             until [ "$attempt" -gt "$(params.retries)" ] ; do # 3 retries by default
                 cosign -t 3m0s sign\
-                ${COSIGN_COMMON_ARGS}\
+                "${COSIGN_COMMON_ARGS[@]}" \
                 --sign-container-identity "$2"\
                 "$1" && break
                 attempt=$((attempt+1))

@@ -25,7 +25,7 @@ spec:
               _TEST_MANIFEST_LIST_OCI_REFERENCE="quay.io/redhat-pending/test-product----test-image0@sha256:0000"
               _TEST_REPO="quay.io/redhat-pending/test-product----test-image0"
 
-              cat > $(workspaces.data.path)/snapshot_spec.json << EOF
+              cat > "$(workspaces.data.path)/snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
