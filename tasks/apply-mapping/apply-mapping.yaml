@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: apply-mapping
   labels:
-    app.kubernetes.io/version: "1.8.1"
+    app.kubernetes.io/version: "1.9.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -252,6 +252,7 @@ spec:
         defaultTags=$(jq '.defaults.tags // []' <<< "$MAPPING")
         defaultTimestampFormat=$(jq -r '.defaults.timestampFormat // "%s"' <<< "$MAPPING")
         currentTimestamp="$(date "+%Y%m%d %T")"
+        defaultCGWSettings=$(jq -c '.defaults.contentGateway // {}' <<< "$MAPPING")
         NUM_MAPPED_COMPONENTS=$(jq '.components | length' "${SNAPSHOT_SPEC_FILE}")
         for ((i = 0; i < NUM_MAPPED_COMPONENTS; i++)) ; do
             component=$(jq -c --argjson i "$i" '.components[$i]' "${SNAPSHOT_SPEC_FILE}")
@@ -313,6 +314,17 @@ spec:
                   '.components[$i].staged.files[$j].filename = $filename' "${SNAPSHOT_SPEC_FILE}" > /tmp/temp \
                   && mv /tmp/temp "${SNAPSHOT_SPEC_FILE}"
             done
+
+            # apply defaults for contentGateway
+            componentCGWSettings=$(jq -c '.contentGateway // {}' <<< "$component")
+            updatedComponentCGWSettings=$(merge-json "$defaultCGWSettings" "$componentCGWSettings")
+            componentCGWSettingsSize=$(jq '. | length' <<< "${updatedComponentCGWSettings}")
+          
+            if [ "${componentCGWSettingsSize}" -gt "0" ]; then
+              jq --argjson i "$i" --argjson componentCGWSettings "$updatedComponentCGWSettings" \
+              '.components[$i].contentGateway = $componentCGWSettings' \
+              "${SNAPSHOT_SPEC_FILE}" > /tmp/temp && mv /tmp/temp "${SNAPSHOT_SPEC_FILE}"
+            fi
 
             # Determine the format of the original repository and update keys accordingly
             repository=$(jq -r '.repository' <<< "$component")

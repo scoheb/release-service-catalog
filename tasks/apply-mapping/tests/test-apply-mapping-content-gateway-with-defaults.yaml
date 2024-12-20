@@ -1,0 +1,174 @@
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: test-apply-mapping-content-gateway-with-defaults
+spec:
+  description: |
+    Run the apply-mapping task with a snapshot.spec json and a default configuration for content gateway and
+    validate that the values are overridden if defined in the component or if not defined then the defaults are used.
+  workspaces:
+    - name: tests-workspace
+  tasks:
+    - name: setup
+      workspaces:
+        - name: config
+          workspace: tests-workspace
+      taskSpec:
+        workspaces:
+          - name: config
+        steps:
+          - name: setup-values
+            image: quay.io/konflux-ci/release-service-utils:d320c36f3d707cd5bfe55fe783f70236c06cc2e5
+            script: |
+              #!/usr/bin/env sh
+              set -eux
+
+              cat > "$(workspaces.config.path)/test_data.json" << EOF
+              {
+                "mapping": {
+                  "defaults": {
+                    "contentGateway": {
+                      "productName": "myapp",
+                      "productCode": "MYAPP",
+                      "productVersionName": "1.0",
+                      "filePrefix": "myapp-1.3"
+                    }
+                  },
+                  "components": [
+                    {
+                      "name": "comp1",
+                      "contentGateway": {
+                        "productVersionName": "comp1-1"
+                      },
+                      "staged": {
+                        "destination": "ai-1-for-isos",
+                        "files": [
+                          {
+                            "source": "one.qcow2",
+                            "filename": "ai-{{git_sha}}"
+                          },
+                          {
+                            "source": "one.raw",
+                            "filename": "ai-{{git_short_sha}}"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "name": "comp2",
+                      "contentGateway": {
+                        "filePrefix": "myapp-comp1-1"
+                      },
+                      "staged": {
+                        "destination": "ai-2-for-isos",
+                        "files": [
+                          {
+                            "source": "two.qcow2",
+                            "filename": "ai-{{digest_sha}}"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "name": "comp3",
+                      "staged": {
+                        "destination": "ai-2-for-isos",
+                        "files": [
+                          {
+                            "source": "three.qcow2",
+                            "filename": "ai-{{digest_sha}}"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+              EOF
+
+              cat > "$(workspaces.config.path)/test_snapshot_spec.json" << EOF
+              {
+                "application": "myapp",
+                "components": [
+                  {
+                    "name": "comp1",
+                    "containerImage": "registry.io/image1@sha256:123456",
+                    "source": {
+                      "git": {
+                        "revision": "testrevision",
+                        "url": "myurl"
+                      }
+                    }
+                  },
+                  {
+                    "name": "comp2",
+                    "containerImage": "registry.io/image2@sha256:123456",
+                    "source": {
+                      "git": {
+                        "revision": "testrevision2",
+                        "url": "myurl2"
+                      }
+                    }
+                  },
+                  {
+                    "name": "comp3",
+                    "containerImage": "registry.io/image3@sha256:78910",
+                    "source": {
+                      "git": {
+                        "revision": "testrevision3",
+                        "url": "myurl3"
+                      }
+                    }
+                  }
+                ]
+              }
+              EOF
+    - name: run-task
+      taskRef:
+        name: apply-mapping
+      params:
+        - name: snapshotPath
+          value: test_snapshot_spec.json
+        - name: dataPath
+          value: test_data.json
+      runAfter:
+        - setup
+      workspaces:
+        - name: config
+          workspace: tests-workspace
+    - name: check-result
+      workspaces:
+        - name: config
+          workspace: tests-workspace
+      taskSpec:
+        workspaces:
+          - name: config
+        steps:
+          - name: check-result
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+
+              cat "$(workspaces.config.path)/test_snapshot_spec.json"
+
+              echo Test that comp1 has the correct contentGateway.productVersionName
+              test "$(
+                jq -r '.components[] | select(.name=="comp1") | .contentGateway.productVersionName' \
+                < "$(workspaces.config.path)/test_snapshot_spec.json"
+              )" == "comp1-1"
+
+              echo Test that comp2 has the correct contentGateway.filePrefix
+              test "$(
+                jq -r '.components[] | select(.name=="comp2") | .contentGateway.filePrefix' \
+                < "$(workspaces.config.path)/test_snapshot_spec.json"
+              )" == "myapp-comp1-1"
+  
+              echo Test that comp3 has the correct contentGateway defaults
+              test "$(
+                jq -c '.components[] | select(.name=="comp3") | .contentGateway' \
+                < "$(workspaces.config.path)/test_snapshot_spec.json"
+              )" == '{"productName":"myapp","productCode":"MYAPP","productVersionName":"1.0","filePrefix":"myapp-1.3"}'
+      runAfter:
+        - run-task

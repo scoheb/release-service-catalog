@@ -31,6 +31,9 @@ You can also expand image labels, e.g. "{{ labels.mylabel }}" -> The value of im
 | dataPath          | Path to the JSON string of the merged data to use in the data workspace                      | No       | -             |
 | failOnEmptyResult | Fail the task if the resulting snapshot contains zero components                             | Yes      | false         |
 
+## Changes in 1.9.0
+* support defaults for `contentGateway`
+
 ## Changes in 1.8.1
 * Fixed substitution logic to prevent incomplete replacements in `translate_tags`.
 

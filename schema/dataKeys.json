@@ -536,6 +536,31 @@
             "public": {
               "type": "boolean",
               "description": "Indicates if the target repositories should be made public"
+            },
+            "contentGateway": {
+              "type": "object",
+              "properties": {
+                "productName": {
+                  "type": "string",
+                  "description": "productName in content gateway"
+                },
+                "productCode": {
+                  "type": "string",
+                  "description": "productCode in content gateway"
+                },
+                "productVersionName": {
+                  "type": "string",
+                  "description": "productVersionName in content gateway"
+                },
+                "filePrefix": {
+                  "type": "string",
+                  "description": "filePrefix to use to select files to add to content gateway"
+                },
+                "mirrorOpenshiftPush": {
+                  "type": "boolean",
+                  "description": "whether or not to push to mirror.openshift.com"
+                }
+              }
             }
           }
         },
