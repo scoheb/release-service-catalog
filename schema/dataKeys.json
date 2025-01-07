@@ -18,6 +18,11 @@
           "mapping"
         ],
         "description": "List of systems that are supported to be required in the data"
+      },
+      "requestType": {
+        "type": "string",
+        "description": "The request type to be used when requesting internal workloads",
+        "enum": ["internal-request", "internal-pipelinerun"]
       }
     },
     "fbc": {

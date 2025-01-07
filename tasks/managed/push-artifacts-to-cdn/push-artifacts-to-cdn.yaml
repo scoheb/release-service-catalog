@@ -1,0 +1,191 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: push-artifacts-to-cdn
+  labels:
+    app.kubernetes.io/version: "0.0.1"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: release
+spec:
+  description: >-
+    Tekton task to push artifacts via an InternalRequest to Exodus CDN in addition to Developer Portal.
+    The environment to use is pulled from the `cdn.env` key in the data file.
+  params:
+    - name: snapshotPath
+      type: string
+      description: Path to the JSON string of the Snapshot spec in the data workspace
+    - name: dataPath
+      type: string
+      description: Path to the data JSON in the data workspace
+    - name: releasePlanAdmissionPath
+      description: Path to the JSON string of the releasePlanAdmission in the data workspace
+      type: string
+    - name: pipelineRunUid
+      type: string
+      description: The uid of the current pipelineRun. Used as a label value when creating internal requests
+    - name: taskGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog tasks to be used are stored
+    - name: taskGitRevision
+      type: string
+      description: The revision in the taskGitUrl repo to be used
+    - name: resultsDirPath
+      description: Path to the results directory in the data workspace
+      type: string
+    - name: requestTimeout
+      type: string
+      default: "86400"
+      description: Request timeout
+  workspaces:
+    - name: data
+      description: Workspace where the json files are stored
+  steps:
+    - name: run-script
+      image: quay.io/konflux-ci/release-service-utils:7835e32b1974f956a6c942e24adbc79705cab12e
+      script: |
+        #!/usr/bin/env bash
+        set -ex
+
+        TASK_LABEL="internal-services.appstudio.openshift.io/group-id"
+        TASK_ID=$(context.taskRun.uid)
+        PIPELINERUN_LABEL="internal-services.appstudio.openshift.io/pipelinerun-uid"
+
+        # default internal workload to be used
+        REQUEST="push-artifacts-to-cdn"
+
+        DATA_FILE="$(workspaces.data.path)/$(params.dataPath)"
+        if [ ! -f "${DATA_FILE}" ] ; then
+            echo "No valid data file was provided."
+            exit 1
+        fi
+        RPA_FILE="$(workspaces.data.path)/$(params.releasePlanAdmissionPath)"
+        if [ ! -f "${RPA_FILE}" ] ; then
+            echo "No valid rpa file was provided."
+            exit 1
+        fi
+
+        REQUESTTYPE=$(jq -r '.requestType // "internal-request"' "${DATA_FILE}")
+        service_account_name=$(jq -r '.spec.pipeline.serviceAccountName // "appstudio-pipeline"' "${RPA_FILE}")
+        if [ "${REQUESTTYPE}" == "internal-pipelinerun" ] ; then
+          requestType=internal-pipelinerun
+          requestK8sType=pipelinerun
+          EXTRA_ARGS=(
+          --task-git-url "$(params.taskGitUrl)"
+          --task-git-revision "$(params.taskGitRevision)"
+          --service-account "${service_account_name}"
+          )
+        else
+          requestType=internal-request
+          requestK8sType=internalrequest
+          EXTRA_ARGS=(
+          --service-account "${service_account_name}"
+          )
+        fi
+
+        snapshot=$(jq -c '.' "$(workspaces.data.path)/$(params.snapshotPath)")
+        # .cdn.env is likely to change in the future. This is just for POC
+        env=$(jq -r '.cdn.env' "$(workspaces.data.path)/$(params.dataPath)")
+
+        RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/push-artifacts-results.json"
+        FILES=$(jq -c '{"artifacts": [.components[].staged?.files[]?.filename]}' <<< "$snapshot")
+        echo "$FILES" > "$RESULTS_FILE"
+
+        # There are three envs supported...production, stage, and qa
+        exodusGwSecret=""
+        exodusGwEnv=""
+        pulpSecret=""
+        udcacheSecret=""
+
+        if [ "${env}" = "production" ] ; then
+          exodusGwSecret="exodus-prod-secret"
+          exodusGwEnv="live"
+          pulpSecret="rhsm-pulp-prod-secret"
+          udcacheSecret="udcache-prod-secret"
+          cgwHostname="https://developers.redhat.com/content-gateway/rest/admin"
+          cgwSecret="cgw-service-account-prod-secret"
+        elif [ "${env}" = "stage" ] ; then
+          # The url is the same for exodus in both prod and stage, it is just a different env and pulp url
+          exodusGwSecret="exodus-prod-secret"
+          exodusGwEnv="pre"
+          pulpSecret="rhsm-pulp-stage-secret"
+          udcacheSecret="udcache-stage-secret"
+          cgwHostname="https://developers.redhat.com/content-gateway/rest/admin"
+          cgwSecret="cgw-service-account-prod-secret"
+        elif [ "${env}" = "qa" ]; then
+          exodusGwSecret="exodus-stage-secret"
+          exodusGwEnv="live"
+          pulpSecret="rhsm-pulp-qa-secret"
+          udcacheSecret="udcache-qa-secret"
+          cgwHostname="https://developers.stage.redhat.com/content-gateway/rest/admin"
+          cgwSecret="cgw-service-account-stage-secret"
+        else
+          echo "cdn.env in the data file must be one of [production, stage, qa]."
+          exit 1
+        fi
+
+        echo "Creating ${requestType} to push artifacts..."
+
+        ${requestType} -r "${REQUEST}" \
+          -p snapshot_json="${snapshot}" \
+          -p exodusGwSecret="${exodusGwSecret}" \
+          -p exodusGwEnv="${exodusGwEnv}" \
+          -p pulpSecret="${pulpSecret}" \
+          -p udcacheSecret="${udcacheSecret}" \
+          -p cgwHostname="${cgwHostname}" \
+          -p cgwSecret="${cgwSecret}" \
+          -p taskGitUrl="$(params.taskGitUrl)" \
+          -p taskGitRevision="$(params.taskGitRevision)" \
+          -l ${TASK_LABEL}="${TASK_ID}" \
+          -l ${PIPELINERUN_LABEL}="$(params.pipelineRunUid)" \
+          -t "$(params.requestTimeout)" \
+          --pipeline-timeout 24h0m0s \
+          --task-timeout 23h50m0s \
+          --finally-timeout 0h10m0s \
+          "${EXTRA_ARGS[@]}" -s true
+
+        # Since we expect no requests (IR or PLR) to fail
+        # we can assume that we'll have results at our disposal.
+        # Results are stored differently between IRs and PLRs
+        # therefore we need to address each case accordingly
+        #
+        NAME=$(kubectl get "${requestK8sType}" -l \
+          "${TASK_LABEL}=${TASK_ID},${PIPELINERUN_LABEL}=$(params.pipelineRunUid)" \
+          --no-headers -o custom-columns=":metadata.name" \
+          --sort-by=.metadata.creationTimestamp | tail -1)
+        if [ -z "${NAME}" ]; then
+          echo "Warning: Unable to get ${requestK8sType} name"
+        fi
+
+        if [ "${requestK8sType}" == "internalrequest" ]; then
+          results=$(kubectl get "${requestK8sType}" "${NAME}" -o=jsonpath='{.status.results}')
+          if [ "$(echo "${results}" | jq -r '.result')" == "Success" ]; then
+            echo "Artifacts pushed"
+            echo "${results}" | jq '.'
+          else
+            echo "Artifact push failed"
+            echo "${results}" | jq -r '.result'
+            exit 1
+          fi
+        else
+          overallStatus=$(kubectl get "${requestK8sType}" "${NAME}" -o=jsonpath='{.status}')
+          status=$(jq -r '.conditions[0].status' <<< "${overallStatus}")
+          results=$(jq -c '.results' <<< "${overallStatus}")
+          # despite the assumption of never having a failed pipeline,
+          # let's try to at least still a log message about the abnormal
+          # failure 
+          if [ "${status}" == "True" ]; then
+            resultValue=$(jq -r '.[]  | select(.name == "result").value' <<< "${results}")
+            if [ "${resultValue}" == "Success" ]; then
+              echo "Artifacts pushed: ${resultValue}"
+            else
+              echo "Artifact push failed:"
+              echo "${resultValue}"
+              exit 1
+            fi
+          else
+            echo "Artifact push abnormally failed"
+            exit 1
+          fi
+        fi
