@@ -119,6 +119,26 @@ spec:
               set -eux
       runAfter:
         - collect-data
+    - name: populate-release-notes-images
+      params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/populate-release-notes-images/populate-release-notes-images.yaml
+        resolver: git
+      runAfter:
+        - collect-collectors-data
+      workspaces:
+        - name: data
+          workspace: release-workspace
   finally:
     - name: cleanup
       taskRef:
