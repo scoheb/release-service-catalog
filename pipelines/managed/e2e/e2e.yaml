@@ -135,7 +135,7 @@ spec:
             value: tasks/managed/populate-release-notes-images/populate-release-notes-images.yaml
         resolver: git
       runAfter:
-        - collect-collectors-data
+        - collect-collector-data
       workspaces:
         - name: data
           workspace: release-workspace
