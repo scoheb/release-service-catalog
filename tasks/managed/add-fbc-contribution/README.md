@@ -13,6 +13,9 @@ Task to create a internalrequest to add fbc contributions to index images
 | targetIndex    | targetIndex value updated by update-ocp-tag task                                          | No       | -                    |
 | resultsDirPath | Path to results directory in the data workspace                                           | No       | -                    |
 
+## Changes in 3.4.3
+* Change internal request pipeline from `iib` to `update-fbc-catalog`
+
 ## Changes in 3.4.2
 * Improve clarity of log statements when fbc_opt_in is not set to True.
 
