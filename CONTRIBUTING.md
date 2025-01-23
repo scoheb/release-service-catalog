@@ -119,6 +119,17 @@ For other images, the reference should always either specify an image by a non-m
 or by its digest (e.g. `registry.access.redhat.com/ubi8/ubi@sha256:c94bc309b197f9fc465052123ead92bf50799ba72055bd040477ded`).
 Floating tags like `latest` or `8.8` in the case of the ubi image should be avoided.
 
+### Modes for Running Pipelines
+
+Note: There are currently 2 modes that may be used when running pipelines:
+- **Legacy/PV** mode involving using a workspace that is backed by a PV (physical volume)
+- **Trusted Artifact** mode that uses an OCI registry as a mean to share data between tasks.
+
+A significant portion of tasks have been converted to support both modes. The CI process analyzes that task under test
+and performs a simple check to verify it supports Trusted Artifacts and if so, tests are executed in both modes.
+
+You can follow this [video](https://miro.com/app/board/uXjVIbidSuI=/?playRecording=5ed2a205-bad5-4f62-a1b1-1dae27ddc65c) for an overview on Trusted Artifacts
+
 ### Tekton Task Testing
 
 When a pull request is opened, Tekton Task tests are run for all the task directories
@@ -281,9 +292,21 @@ Requirements:
 
     ```kubectl apply --filename https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml```
 
+* Local Registry is installed in the Cluster
+
+    ```.github/scripts/deploy_registry.sh```
+
 * tkn cli installed ([docs](https://tekton.dev/docs/cli/))
 
 * jq installed
+
+* Optionally enable **Trusted Artifact** mode by setting the environment variable:
+
+```
+export USE_TRUSTED_ARTIFACTS=true
+```
+
+Note: if a task has not been converted, and you have enable Trusted Artifacts, you will see errors.
 
 Once you have everything ready, you can run the test script and pass task version directories
 as arguments, e.g.

@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: rh-push-to-external-registry
   labels:
-    app.kubernetes.io/version: "5.5.1"
+    app.kubernetes.io/version: "5.6.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -116,7 +116,7 @@ spec:
         - name: schema
           value: $(params.taskGitUrl)/raw/$(params.taskGitRevision)/schema/dataKeys.json
         - name: systems
-          value: 
+          value:
             - pyxis
             - mapping
       taskRef:
@@ -177,7 +177,7 @@ spec:
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
       workspaces:
-        - name: config
+        - name: data
           workspace: release-workspace
       runAfter:
         - reduce-snapshot
