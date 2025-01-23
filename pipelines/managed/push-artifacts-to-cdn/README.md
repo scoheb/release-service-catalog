@@ -20,3 +20,6 @@ It uses InternalRequests so that it can be run on both public and private cluste
 | verify_ec_task_bundle           | The location of the bundle containing the verify-enterprise-contract task                              | No       | -               |
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                  | Yes | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                         | No       | -               |
+
+## Changes in 0.1.0
+* Align workspace name with changes in the apply-mapping task
