@@ -8,19 +8,64 @@ spec:
     Tests uploading CycloneDX SBOMs to Atlas using the upload-sbom-to-atlas task.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+        - name: sbomDir
+          value: $(context.pipelineRun.uid)/sboms
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
         params:
           - name: sbomDir
-            default: "sboms"
             description: Directory containing generated SBOM files.
+            type: string
+          - name: subdirectory
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:91d9f4886c57a8b86c3c643ea00617250ac30ff0
@@ -29,12 +74,12 @@ spec:
               set -eux
 
               # creating directory for generated SBOM-s
-              mkdir "$(workspaces.data.path)/$(params.sbomDir)"
+              mkdir -p "$(params.dataDir)/$(params.sbomDir)"
               # creating working directory
-              mkdir "$(workspaces.data.path)/workdir"
+              workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
+              mkdir -p "${workdir}"
 
-              sbomsDir="$(workspaces.data.path)/$(params.sbomDir)"
-              workdir="$(workspaces.data.path)/workdir"
+              sbomsDir="$(params.dataDir)/$(params.sbomDir)"
 
               # minimal CycloneDX SBOM - no need for conversion stays as 1.2
               cat > "$sbomsDir/cyclonedx_minimal_1_2.json" << EOF
@@ -81,7 +126,36 @@ spec:
 
               # Random empty file that will be skipped
               touch "$sbomsDir/random_file"
-
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
     - name: run-task
       taskRef:
         name: upload-sbom-to-atlas
@@ -89,7 +163,19 @@ spec:
         - name: atlasSecretName
           value: atlas-test-sso-secret
         - name: sbomDir
-          value: "sboms"
+          value: "$(context.pipelineRun.uid)/sboms"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -100,25 +186,77 @@ spec:
       workspaces:
         - name: data
           workspace: tests-workspace
+      params:
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
+        - name: sbomDir
+          value: "$(context.pipelineRun.uid)/sboms"
+        - name: dataDir
+          value: $(params.dataDir)
       runAfter:
         - run-task
       taskSpec:
         params:
           - name: sbomDir
-            default: "sboms"
             description: Directory containing generated SBOM files.
             type: string
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         workspaces:
           - name: data
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:a5072c6da901bc9cf4d767da82e700784c7df981
             script: |
               #!/usr/bin/env bash
               set -eux
 
-              workdir="$(workspaces.data.path)/workdir"
-              sbomsDir="$(workspaces.data.path)/$(params.sbomDir)"
+              workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
+              sbomsDir="$(params.dataDir)/$(params.sbomDir)"
+              mkdir -p "${workdir}"
+              mkdir -p "${sbomsDir}"
 
               # Check count of curl calls
               if [ "$(wc -l < "$workdir/mock_curl.txt")" -ne 6 ]; then

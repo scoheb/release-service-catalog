@@ -9,14 +9,59 @@ spec:
     validate that the values are overridden if defined in the component or if not defined then the defaults are used.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
-        - name: config
+        - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
         workspaces:
-          - name: config
+          - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
@@ -24,7 +69,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              cat > "$(workspaces.config.path)/test_data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/test_data.json" << EOF
               {
                 "mapping": {
                   "defaults": {
@@ -87,7 +133,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.config.path)/test_snapshot_spec.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -124,51 +170,143 @@ spec:
                 ]
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
     - name: run-task
       taskRef:
         name: apply-mapping
       params:
         - name: snapshotPath
-          value: test_snapshot_spec.json
+          value: $(context.pipelineRun.uid)/test_snapshot_spec.json
         - name: dataPath
-          value: test_data.json
+          value: $(context.pipelineRun.uid)/test_data.json
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       runAfter:
         - setup
       workspaces:
-        - name: config
+        - name: data
           workspace: tests-workspace
     - name: check-result
       workspaces:
-        - name: config
+        - name: data
           workspace: tests-workspace
+      params:
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
+      runAfter:
+        - run-task
       taskSpec:
         workspaces:
-          - name: config
+          - name: data
+        params:
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
             script: |
               #!/usr/bin/env bash
               set -eux
 
-              cat "$(workspaces.config.path)/test_snapshot_spec.json"
+              cat "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
 
               echo Test that comp1 has the correct contentGateway.productVersionName
               test "$(
                 jq -r '.components[] | select(.name=="comp1") | .contentGateway.productVersionName' \
-                < "$(workspaces.config.path)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
               )" == "comp1-1"
 
               echo Test that comp2 has the correct contentGateway.filePrefix
               test "$(
                 jq -r '.components[] | select(.name=="comp2") | .contentGateway.filePrefix' \
-                < "$(workspaces.config.path)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
               )" == "myapp-comp1-1"
 
               echo Test that comp3 has the correct contentGateway defaults
               test "$(
                 jq -c '.components[] | select(.name=="comp3") | .contentGateway' \
-                < "$(workspaces.config.path)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
               )" == '{"productName":"myapp","productCode":"MYAPP","productVersionName":"1.0","filePrefix":"myapp-1.3"}'
-      runAfter:
-        - run-task

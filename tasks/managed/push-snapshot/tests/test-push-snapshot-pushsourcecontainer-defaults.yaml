@@ -8,23 +8,68 @@ spec:
     Run the push-snapshot task with pushSourceContainer enabled via the defaults
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         workspaces:
           - name: data
+        params:
+          - name: subdirectory
+            type: string
+        results:
+          - name: sourceDataArtifact
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:066a63d25546239e79533b99c83ff521a045c819
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
-              mkdir "$(workspaces.data.path)/results"
-              cat > "$(workspaces.data.path)"/snapshot.json << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)/results"
+              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -46,7 +91,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)"/data.json << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/data.json" << EOF
               {
                 "mapping": {
                   "defaults": {
@@ -55,18 +100,60 @@ spec:
                 }
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
     - name: run-task
       taskRef:
         name: push-snapshot
       params:
         - name: snapshotPath
-          value: snapshot.json
+          value: $(context.pipelineRun.uid)/snapshot.json
         - name: dataPath
-          value: data.json
+          value: $(context.pipelineRun.uid)/data.json
         - name: retries
           value: 0
         - name: resultsDirPath
-          value: results
+          value: $(context.pipelineRun.uid)/results
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -76,19 +163,69 @@ spec:
       workspaces:
         - name: data
           workspace: tests-workspace
+      params:
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       taskSpec:
         workspaces:
           - name: data
+        params:
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:066a63d25546239e79533b99c83ff521a045c819
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               # The sha 570fd5a1e41b5545a24828be5a3df2e85e4a5a67703385f39594837e77e2478e is calculated
               # from the origin image pull spec - see mocks.sh
-              cat > "$(workspaces.data.path)"/cosign_expected_calls.txt << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls.txt" << EOF
               copy -f registry.io/image:sha256-4c0020cf1fd28563704fb5f05396899faf8ae642b94950c72c6282a507df1a03.src\
                prod-registry.io/prod-location:sha256-4c0020cf1fd28563704fb5f05396899faf8ae642b94950c72c6282a507df1a03.src
               copy -f registry.io/image@sha256:abcdefg prod-registry.io/prod-location:testtag
@@ -97,30 +234,30 @@ spec:
               EOF
 
               # Sort to ignore the cosign call orders as it differs from parallel execution.
-              sort "$(workspaces.data.path)"/cosign_expected_calls.txt > \
-              "$(workspaces.data.path)"/cosign_expected_calls_sorted.txt
-              sort "$(workspaces.data.path)"/mock_cosign.txt > \
-              "$(workspaces.data.path)"/mock_cosign_sorted.txt
+              sort "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls.txt" > \
+              "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls_sorted.txt"
+              sort "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt" > \
+              "$(params.dataDir)/$(params.subdirectory)/mock_cosign_sorted.txt"
 
-              if [ "$(md5sum < "$(workspaces.data.path)"/cosign_expected_calls_sorted.txt)" \
-                != "$(md5sum < "$(workspaces.data.path)/mock_cosign_sorted.txt")" ]; then
+              if [ "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls_sorted.txt)" \
+                != "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/mock_cosign_sorted.txt")" ]; then
                 echo "Error: Expected cosign calls do not match actual calls"
                 echo Actual calls:
-                cat "$(workspaces.data.path)/mock_cosign_sort.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_cosign_sort.txt"
                 echo Expected calls:
-                cat "$(workspaces.data.path)"/cosign_expected_calls_sort.txt
+                cat "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls_sort.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(workspaces.data.path)/mock_skopeo.txt")" != 1 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt")" != 1 ]; then
                 echo Error: skopeo was expected to be called 1 time. Actual calls:
-                cat "$(workspaces.data.path)/mock_skopeo.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(workspaces.data.path)/mock_oras.txt")" != 5 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt")" != 5 ]; then
                 echo Error: oras was expected to be called 5 times. Actual calls:
-                cat "$(workspaces.data.path)/mock_oras.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"
                 exit 1
               fi
       runAfter:

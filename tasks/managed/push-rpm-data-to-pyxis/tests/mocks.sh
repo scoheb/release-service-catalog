@@ -5,7 +5,7 @@ set -eux
 
 function cosign() {
   echo Mock cosign called with: $*
-  echo $* >> $(workspaces.data.path)/mock_cosign.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_cosign.txt
 
   if [[ "$*" != "download sbom --output-file myImageID"[1-5]*".json imageurl"[1-5] && \
      "$*" != "download sbom --output-file myImageID"[1-5]*".json --platform linux/"*" multiarch-"[1-5] ]]
@@ -20,12 +20,12 @@ function cosign() {
     SBOM_JSON='{"spdxVersion": "SPDX-2.3"}'
   fi
 
-  echo "$SBOM_JSON" > /workspace/data/downloaded-sboms/${4}
+  echo "$SBOM_JSON" > "$(params.dataDir)/$(params.subdirectory)/downloaded-sboms/${4}"
 }
 
 function upload_rpm_data() {
   echo Mock upload_rpm_data called with: $*
-  echo $* >> "$(workspaces.data.path)/mock_upload_rpm_data.txt"
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_upload_rpm_data.txt"
 
   if [[ "$*" != "--retry --image-id "*" --sbom-path "*".json --verbose" ]]
   then
@@ -41,11 +41,11 @@ function upload_rpm_data() {
 
   if [[ "$3" == myImageID?Parallel ]]
   then
-    LOCK_FILE=$(workspaces.data.path)/${3}.lock
+    LOCK_FILE=$(params.dataDir)/$(params.subdirectory)/${3}.lock
     touch $LOCK_FILE
     sleep 2
-    LOCK_FILE_COUNT=$(ls $(workspaces.data.path)/*.lock | wc -l)
-    echo $LOCK_FILE_COUNT > $(workspaces.data.path)/${3}.count
+    LOCK_FILE_COUNT=$(ls $(params.dataDir)/$(params.subdirectory)/*.lock | wc -l)
+    echo $LOCK_FILE_COUNT > $(params.dataDir)/$(params.subdirectory)/${3}.count
     sleep 2
     rm $LOCK_FILE
   fi
@@ -53,7 +53,7 @@ function upload_rpm_data() {
 
 function upload_rpm_data_cyclonedx() {
   echo Mock upload_rpm_data_cyclonedx called with: $*
-  echo $* >> "$(workspaces.data.path)/mock_upload_rpm_data_cyclonedx.txt"
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_upload_rpm_data_cyclonedx.txt"
 
   if [[ "$*" != "--retry --image-id "*" --sbom-path "*".json --verbose" ]]
   then
@@ -63,5 +63,5 @@ function upload_rpm_data_cyclonedx() {
 }
 
 function select-oci-auth() {
-  echo $* >> $(workspaces.data.path)/mock_select-oci-auth.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_select-oci-auth.txt
 }

@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: check-data-keys
   labels:
-    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/version: "2.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -16,7 +16,7 @@ spec:
     - name: dataPath
       description: Path to the JSON string of the merged data to use
       type: string
-    - name: schema 
+    - name: schema
       description: URL to the JSON schema file to validate the data against
       type: string
       default: https://raw.githubusercontent.com/konflux-ci/release-service-catalog/refs/heads/development/schema/dataKeys.json
@@ -24,10 +24,101 @@ spec:
       description: The systems to check that all data keys are present for
       type: array
       default: []
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+      default: "empty"
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: sourceDataArtifact
+      type: string
+      description: Location of trusted artifacts to be used to populate data directory
+      default: ""
+    - name: subdirectory
+      description: Subdirectory inside the workspace to be used
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
+      default: $(workspaces.data.path)
+    - name: stepActionGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog stepActions to be used are stored
+      default: https://github.com/konflux-ci/release-service-catalog.git
+    - name: stepActionGitRevision
+      type: string
+      description: The revision in the stepActionGitUrl repo to be used
+      default: production
   workspaces:
     - name: data
       description: The workspace where the data JSON file resides
+  results:
+    - description: Produced trusted data artifact
+      name: sourceDataArtifact
+      type: string
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: "DEBUG"
+        value: "$(params.trustedArtifactsDebug)"
+      - name: "HOME"
+        value: "/tekton/home"
   steps:
+    - name: skip-trusted-artifact-operations
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+    - name: use-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
+      params:
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: sourceDataArtifact
+          value: $(params.sourceDataArtifact)
     - name: check-data-keys
       image: quay.io/konflux-ci/release-service-utils:9089cafbf36bb889b4b73d8c2965613810f13736
       args: ["$(params.systems[*])"]
@@ -38,10 +129,11 @@ spec:
         #!/usr/bin/env bash
         set -ex
 
-        if [ ! -f "$(workspaces.data.path)/$(params.dataPath)" ] ; then
+        if [ ! -f "$(params.dataDir)/$(params.dataPath)" ] ; then
             echo "No data JSON was provided."
             exit 1
         fi
+        cat "$(params.dataDir)/$(params.dataPath)"
 
         schema="${SCHEMA_FILE/\.git\///}"
         if ! curl -sL --fail-with-body "$schema" -o /tmp/schema ; then
@@ -52,7 +144,42 @@ spec:
         systemsJSON=$(echo "$@" | jq -R 'split(" ")')
 
         jq --argjson systems "$systemsJSON" '.systems += $systems' \
-            "$(workspaces.data.path)/$(params.dataPath)" > "/tmp/systems" 
-        mv "/tmp/systems" "$(workspaces.data.path)/$(params.dataPath)"
+            "$(params.dataDir)/$(params.dataPath)" > "/tmp/systems" 
+        mv "/tmp/systems" "$(params.dataDir)/$(params.dataPath)"
 
-        check-jsonschema --output-format=text --schemafile "/tmp/schema"  "$(workspaces.data.path)/$(params.dataPath)"
+        cat "$(params.dataDir)/$(params.dataPath)"
+        check-jsonschema --output-format=text --schemafile "/tmp/schema"  "$(params.dataDir)/$(params.dataPath)"
+    - name: create-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)
+    - name: patch-source-data-artifact-result
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)

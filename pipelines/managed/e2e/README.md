@@ -25,6 +25,9 @@ affected by RHTAP services or which results could affect the RHTAP workflow.
 * Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task
   via git resolver
 
+## Changes in 3.2.0
+* Update all tasks that now support trusted artifacts to specify the stepAction* parameters
+
 ## Changes in 3.1.0
 * Update all task pathInRepo values as they are now in `tasks/managed`
 

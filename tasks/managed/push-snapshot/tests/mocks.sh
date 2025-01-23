@@ -5,7 +5,7 @@ set -eux
 
 function cosign() {
   echo Mock cosign called with: $*
-  echo $* >> "$(workspaces.data.path)"/mock_cosign.txt
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt"
 
   if [[ "$*" == "copy -f registry.io/parallel-image:tag"*" "*":"* ]]
   then 
@@ -29,7 +29,7 @@ function cosign() {
   # mock cosign failing the first 3x for the retry test
   if [[ "$*" == "copy -f registry.io/retry-image:tag "*":"* ]]
   then
-    if [[ "$(wc -l < "$(workspaces.data.path)/mock_cosign.txt")" -le 3 ]]
+    if [[ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt")" -le 3 ]]
     then
       echo Expected cosign call failure for retry test
       return 1
@@ -54,7 +54,7 @@ function cosign() {
 
 function skopeo() {
   echo Mock skopeo called with: $* >&2
-  echo $* >> "$(workspaces.data.path)"/mock_skopeo.txt
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt"
   if [[ "$*" == "inspect --raw docker://reg.io/test@sha256:abcdefg" ]]; then
     echo '{"mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [{"platform":{"os":"linux","architecture":"amd64"}}, {"platform":{"os":"linux","architecture":"ppc64le"}}]}'
     return
@@ -74,11 +74,11 @@ function get-image-architectures() {
 }
 
 function select-oci-auth() {
-  echo $* >> "$(workspaces.data.path)"/mock_select-oci-auth.txt
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_select-oci-auth.txt"
 }
 
 function oras() {
-  echo $* >> "$(workspaces.data.path)"/mock_oras.txt
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"
   if [[ "$*" == "resolve --registry-config "*" "* ]]; then
     if [[ "$*" =~ "--platform" && "$4" =~ ".src" ]]; then
       echo "Error: .src images should not use --platform" >&2

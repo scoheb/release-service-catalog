@@ -8,7 +8,7 @@ function internal-pipelinerun() {
   END_TIME=$(date -ud "$TIMEOUT seconds" +%s)
 
   echo Mock internal-pipelinerun called with: $*
-  echo $* >> $(workspaces.data.path)/mock_internal-pipelinerun.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_internal-pipelinerun.txt
 
   # since we put the PLR in the background, we need to be able to locate it so we can
   # get the name to patch it. We do this by tacking on another random label that we can use
@@ -53,7 +53,7 @@ function set_plr_status() {
     DELAY=$3
     echo Setting status of $NAME to reason $REASON in $DELAY seconds... >&2
     sleep $DELAY
-    PATCH_FILE=$(workspaces.data.path)/${NAME}-patch.json
+    PATCH_FILE=$(params.dataDir)/$(params.subdirectory)/${NAME}-patch.json
     status="True"
     if [ "${REASON}" == "Failure" ]; then
       status="False"
@@ -82,7 +82,7 @@ function internal-request() {
   END_TIME=$(date -ud "$TIMEOUT seconds" +%s)
 
   echo Mock internal-request called with: $*
-  echo $* >> $(workspaces.data.path)/mock_internal-request.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_internal-request.txt
 
   # since we put the IR in the background, we need to be able to locate it so we can
   # get the name to patch it. We do this by tacking on another random label that we can use
@@ -127,7 +127,7 @@ function set_ir_status() {
     DELAY=$3
     echo Setting status of $NAME to reason $REASON in $DELAY seconds... >&2
     sleep $DELAY
-    PATCH_FILE=$(workspaces.data.path)/${NAME}-patch.json
+    PATCH_FILE=$(params.dataDir)/$(params.subdirectory)/${NAME}-patch.json
     status="True"
     if [ "${REASON}" == "Failure" ]; then
       status="False"
@@ -152,7 +152,7 @@ EOF
 }
 
 function skopeo() {
-  echo $* >> $(workspaces.data.path)/mock_skopeo.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt
   echo Mock skopeo called with: $*  >> /dev/stderr
   if [[ "$*" == "inspect --raw docker://"* ]] || [[ "$*" == "inspect --no-tags --override-os linux --override-arch "*" docker://"* ]]
   then
@@ -236,11 +236,11 @@ function skopeo() {
 }
 
 function select-oci-auth() {
-  echo $* >> $(workspaces.data.path)/mock_select-oci-auth.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_select-oci-auth.txt
 }
 
 function oras() {
-  echo $* >> $(workspaces.data.path)/mock_oras.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_oras.txt
   echo Mock oras called with: $*  >> /dev/stderr
   if [[ "$*" == "resolve --registry-config "*" registry.io/multi-arch-image0"* ]]
   then
@@ -259,7 +259,7 @@ function oras() {
 }
 
 function find_signatures() {
-  echo $* >> $(workspaces.data.path)/mock_find_signatures.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_find_signatures.txt
 
   reference=$(echo $* | grep -oP 'repository \K\w+')
   file=$(echo $* | grep -oP 'output_file (.+)$' | cut -f2 -d' ')

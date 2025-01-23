@@ -8,9 +8,45 @@ spec:
     Run the collect-data task and verify that all resources are stored in the workspace.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       taskSpec:
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: create-crs
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -105,6 +141,14 @@ spec:
           value: default/snapshot-sample
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       runAfter:
         - setup
       workspaces:
@@ -132,6 +176,12 @@ spec:
           value: $(tasks.run-task.results.snapshotName)
         - name: snapshotNamespace
           value: $(tasks.run-task.results.snapshotNamespace)
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.run-task.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.run-task.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -159,9 +209,51 @@ spec:
             type: string
           - name: snapshotNamespace
             type: string
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
+          - name: dataDir
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
@@ -169,24 +261,24 @@ spec:
               set -eux
 
               echo Test that the results directory was created
-              test -d "$(workspaces.data.path)/$(resultsDir)"
+              test -d "$(params.dataDir)/$(params.resultsDir)"
 
               echo Test that Release CR was saved to workspace
-              test "$(jq -r '.metadata.name' < "$(workspaces.data.path)/$(params.release)")" == release-sample
+              test "$(jq -r '.metadata.name' < "$(params.dataDir)/$(params.release)")" == release-sample
 
               echo Test that ReleasePlan CR was saved to workspace
-              test "$(jq -r '.metadata.name' < "$(workspaces.data.path)/$(params.releasePlan)")" == releaseplan-sample
+              test "$(jq -r '.metadata.name' < "$(params.dataDir)/$(params.releasePlan)")" == releaseplan-sample
 
               echo Test that ReleasePlanAdmission CR was saved to workspace
-              test "$(jq -r '.metadata.name' < "$(workspaces.data.path)/$(params.releasePlanAdmission)")" == \
+              test "$(jq -r '.metadata.name' < "$(params.dataDir)/$(params.releasePlanAdmission)")" == \
                 releaseplanadmission-sample
 
               echo Test that ReleaseServiceConfig CR was saved to workspace
-              test "$(jq -r '.metadata.name' < "$(workspaces.data.path)/$(params.releaseServiceConfig)")" == \
+              test "$(jq -r '.metadata.name' < "$(params.dataDir)/$(params.releaseServiceConfig)")" == \
                 releaseserviceconfig-sample
 
               echo Test that Snapshot spec was saved to workspace
-              test "$(jq -r '.application' < "$(workspaces.data.path)/$(params.snapshotSpec)")" == foo
+              test "$(jq -r '.application' < "$(params.dataDir)/$(params.snapshotSpec)")" == foo
 
               echo Test the fbcFragment result was properly set
               test "$(params.fbcFragment)" == "newimage"

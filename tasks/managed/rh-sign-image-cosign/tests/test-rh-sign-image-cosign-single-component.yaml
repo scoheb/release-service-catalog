@@ -7,21 +7,68 @@ spec:
   description: Test signing a single image by cosign
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:70be98cc78c9ef52526c4f2be437321aa943b516
             script: |
               #!/usr/bin/env bash
               set -eux
-              cat > "$(workspaces.data.path)/snapshot_spec.json" << EOF
+
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -39,29 +86,71 @@ spec:
               # create empty cosign verify mock files
               for D in sha256:0000 sha256:1111 sha256:2222 ; do
                 REF="quay.io/redhat-pending/test-product----test-image2@${D}"
-                touch "$(workspaces.data.path)/$(echo $REF | tr '/' '-')"
+                touch "$(params.dataDir)/$(params.subdirectory)/$(echo $REF | tr '/' '-')"
               done
 
               # first 8 cosign calls should end with success
               for _ in $(seq 1 8); do
-                  echo "1" >> "$(workspaces.data.path)/mock_cosign_success_calls"
+                  echo "1" >> "$(params.dataDir)/$(params.subdirectory)/mock_cosign_success_calls"
               done
 
-              cat > "$(workspaces.data.path)/signRegistryAccess.txt" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/signRegistryAccess.txt" << EOF
               test-product/test-image2
               EOF
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
     - name: run-task
       taskRef:
         name: rh-sign-image-cosign
       params:
         - name: snapshotPath
-          value: snapshot_spec.json
+          value: $(context.pipelineRun.uid)/snapshot_spec.json
         - name: secretName
           value: 'test-cosign-secret'
         - name: signRegistryAccessPath
-          value: signRegistryAccess.txt
+          value: $(context.pipelineRun.uid)/signRegistryAccess.txt
         - name: concurrentLimit
           value: 2
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -71,8 +160,58 @@ spec:
       workspaces:
         - name: data
           workspace: tests-workspace
+      params:
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       taskSpec:
+        params:
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:70be98cc78c9ef52526c4f2be437321aa943b516
             script: |
@@ -83,12 +222,12 @@ spec:
               _TEST_PUB_REPO2="registry.access.stage.redhat.com/test-product/test-image2"
               _TEST_REPO="quay.io/redhat-pending/test-product----test-image2"
 
-              CALLS=$(cat "$(workspaces.data.path)/mock_skopeo_calls")
+              CALLS=$(cat "$(params.dataDir)/$(params.subdirectory)/mock_skopeo_calls")
               EXPECTED="inspect --raw docker://quay.io/redhat-user-workloads/test-product/test-image2@sha256:2222"
               test "$CALLS" = "$EXPECTED"
 
               # call records need to be sorted as concurrentLimit is set to 2
-              CALLS=$(sort "$(workspaces.data.path)/mock_cosign_sign_calls")
+              CALLS=$(sort "$(params.dataDir)/$(params.subdirectory)/mock_cosign_sign_calls")
               COSIGN_COMMON="-t 3m0s sign --tlog-upload=false --key aws://arn:mykey --sign-container-identity"
               EXPECTED=$(cat <<EOF
               $COSIGN_COMMON ${_TEST_PUB_REPO2}:t1 ${_TEST_REPO}@sha256:2222
@@ -108,7 +247,7 @@ spec:
                 exit 1
               fi
 
-              CALLS=$(cat "$(workspaces.data.path)/mock_cosign_verify_calls")
+              CALLS=$(cat "$(params.dataDir)/$(params.subdirectory)/mock_cosign_verify_calls")
               COSIGN_COMMON="verify --insecure-ignore-tlog=true --key temp_key_file"
               EXPECTED=$(cat <<EOF
               $COSIGN_COMMON ${_TEST_REPO}@sha256:2222

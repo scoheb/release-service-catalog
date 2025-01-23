@@ -13,14 +13,59 @@ spec:
     in 10 seconds, but it will time out before that happens.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:2d6f05c89fc619042a2be19d64ff48de9975397a
@@ -28,7 +73,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              cat > "$(workspaces.data.path)/snapshot_spec.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -47,14 +93,14 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/data.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/data.json" << EOF
               {
                 "sign": {
                   "configMapName": "signing-config-map"
                 }
               }
               EOF
-              cat > "$(workspaces.data.path)/release_plan_admission.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/release_plan_admission.json" << EOF
               {
                 "spec": {
                   "pipeline": {
@@ -81,9 +127,39 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/signRegistryAccess.txt" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/signRegistryAccess.txt" << EOF
               myproduct/myrepo
               EOF
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
     - name: run-task
       taskRef:
         name: rh-sign-image
@@ -95,11 +171,11 @@ spec:
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
         - name: snapshotPath
-          value: snapshot_spec.json
+          value: $(context.pipelineRun.uid)/snapshot_spec.json
         - name: dataPath
-          value: data.json
+          value: $(context.pipelineRun.uid)/data.json
         - name: releasePlanAdmissionPath
-          value: release_plan_admission.json
+          value: $(context.pipelineRun.uid)/release_plan_admission.json
         - name: pyxisSecret
           value: test-create-pyxis-image-cert
         - name: taskGitUrl
@@ -107,7 +183,19 @@ spec:
         - name: taskGitRevision
           value: "main"
         - name: signRegistryAccessPath
-          value: signRegistryAccess.txt
+          value: $(context.pipelineRun.uid)/signRegistryAccess.txt
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       workspaces:
         - name: data
           workspace: tests-workspace

@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: collect-atlas-params
   labels:
-    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/version: "1.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -16,6 +16,43 @@ spec:
       type: string
       description: |
         Path to the JSON string of the merged data containing the Atlas config.
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+      default: "empty"
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: sourceDataArtifact
+      type: string
+      description: Location of trusted artifacts to be used to populate data directory
+      default: ""
+    - name: subdirectory
+      description: Subdirectory inside the workspace to be used
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
+      default: $(workspaces.data.path)
+    - name: stepActionGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog stepActions to be used are stored
+      default: https://github.com/konflux-ci/release-service-catalog.git
+    - name: stepActionGitRevision
+      type: string
+      description: The revision in the stepActionGitUrl repo to be used
+      default: production
   workspaces:
     - name: data
   results:
@@ -31,7 +68,57 @@ spec:
       type: string
       description: |
         The kubernetes secret to use to authenticate to bombastic.
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: "DEBUG"
+        value: "$(params.trustedArtifactsDebug)"
+      - name: "HOME"
+        value: "/tekton/home"
   steps:
+    - name: skip-trusted-artifact-operations
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+    - name: use-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
+      params:
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: sourceDataArtifact
+          value: $(params.sourceDataArtifact)
     - name: collect-atlas-params
       image:
         quay.io/konflux-ci/release-service-utils:d320c36f3d707cd5bfe55fe783f70236c06cc2e5
@@ -39,7 +126,7 @@ spec:
         #!/usr/bin/env bash
         set -x
 
-        DATA_FILE="$(workspaces.data.path)/$(params.dataPath)"
+        DATA_FILE="$(params.dataDir)/$(params.dataPath)"
         if [ ! -f "${DATA_FILE}" ] ; then
             echo "ERROR: No valid data file was provided."
             exit 1
