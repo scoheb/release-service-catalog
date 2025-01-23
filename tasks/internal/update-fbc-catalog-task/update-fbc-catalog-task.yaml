@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: update-fbc-catalog-task
   labels:
-    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/version: "1.0.1"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -127,11 +127,11 @@ spec:
             # than the upstream catalog index.
             # in case the new catalog index is older than the upstream, a new build is
             # required to assure the catalog integrity.
-            if [ "${newCatalogCreatedDate}" -gt "${upstreamCatalogCreatedDate}" ]; then
-              echo "${build}"
-              exit
+            if [ "${newCatalogCreatedDate}" -lt "${upstreamCatalogCreatedDate}" ]; then
+              return 0
             fi
           fi
+          echo "${build}"
         }
 
         # performs kerberos authentication.
@@ -195,7 +195,7 @@ spec:
              "overwrite_fromindex_image": $overwrite_fromindex_image,
              "publish_index_image": $publish_index_image,
              "sign_index_image": $sign_index_image
-            } | tostring' | tee "$(results.genericResult.path)"
+            } '| tee "$(results.genericResult.path)"
 
         # if it finds a build which is completed or in progress, it should exit this step and jump to
         # the next step `s-wait-for-build-state` which will watch the build until it is completed.
@@ -272,7 +272,7 @@ spec:
                 esac
             done
             echo
-            jq -cr '{ "state": .state, "state_reason": .state_reason }' "$(results.jsonBuildInfo.path)" | jq -Rc \
+            jq -cr '{ "state": .state, "state_reason": .state_reason }' "$(results.jsonBuildInfo.path)" \
             | tee "$(results.buildState.path)"
             test "${state}" = "complete" && exit 0 || exit 1
         }

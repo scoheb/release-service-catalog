@@ -2,11 +2,14 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: test-update-fbc-catalog-error
+  name: test-update-fbc-catalog-retry-outdated
 spec:
-  description: Tests the pipeline using a set of parameters in consonance with a production fbc release. In this test
-    the mocked commands and functions emulates the behavior of a fbc opt in fragment, but forces an IIB error which is
-    triggered by having the "error" tag in the image value of the fromIndex parameter.
+  description: Tests the retry of the pipeline considering a fragment that was already built by IIB (complete) but
+    the retry is executed when the catalog (targetIndex) is newer than the fbc_fragment, using a set of parameters in
+    consonance with a production fbc release. For this test the mocked commands and functions emulates the behavior of a
+    fbc opt in fragment already complete, so it skips the build phase, waits for completion and sets the results,
+    including the non-pipeline one "mock_case", to determine if the proper scenario was executed.
+    The behavior of the mocks in this test is determined by the test name.
   tasks:
     - name: run-task
       taskRef:
@@ -15,9 +18,9 @@ spec:
         - name: fbcFragment
           value: "registry.io/image0@sha256:0000"
         - name: fromIndex
-          value: "quay.io/scoheb/fbc-index-testing:error"
+          value: "quay.io/scoheb/fbc-index-testing:latest"
         - name: targetIndex
-          value: "quay.io/fbc/catalog:test"
+          value: "quay.io/fbc/catalog:outdated"
         - name: buildTags
           value: "[]"
         - name: addArches
@@ -73,8 +76,15 @@ spec:
                 exit 1
               fi
 
+              mock_case=$(jq -r '.mock_case' <<< "${JSON_BUILDINFO}")
+              # outdated retries triggers a new build, so the mock_case should be absent
+              if [[ ! "${mock_case}" = "null" ]]; then
+                echo "The task did not test the correct case for outdated fbc fragment retries"
+                exit 1
+              fi
+
               state="$(jq -cr .state <<< "${BUILD_STATE}")"
-              if [ "$state" != "failed" ]; then
+              if [ "$state" != "complete" ]; then
                 echo "The task did not save a completed IIB build in buildState result"
                 exit 1
               fi
@@ -87,14 +97,19 @@ spec:
                 exit 1
               fi
 
+              if [ "$(params.indexImageDigests)" != "sha256:000" ]; then
+                echo "The task did not save a valid digest image in the indexImageDigests result"
+                exit 1
+              fi
+
               iibLog=$(awk '{match($0, /https.*/); print(substr($0, RSTART)) }' <<< "$(params.iibLog)")
               if [  "$iibLog" != "https://fakeiib.host/api/v1/builds/1/logs" ]; then
                 echo "The task did not save a valid iib log url in the iibLog result"
                 exit 1
               fi
 
-              if [ "$(params.exitCode)" != "1" ]; then
-                echo "The task did not finish with a fail exit code"
+              if [ "$(params.exitCode)" != "0" ]; then
+                echo "The task did not finish with a successful exit code"
                 exit 1
               fi
       runAfter:

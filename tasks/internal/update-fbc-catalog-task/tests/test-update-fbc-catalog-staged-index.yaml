@@ -4,7 +4,9 @@ kind: Pipeline
 metadata:
   name: test-update-fbc-catalog-staged-index
 spec:
-  description: Tests a stage FBC release
+  description: Tests the pipeline using a set of parameters in consonance with a stage fbc release. In this test
+    the mocked commands and functions emulates the behavior of a fbc opt in fragment, but with the stagedIndex parameter
+    set to "true", mocking a successful build but with the keys the "genericResult" set to "false" but the "fbc_opt_in".
   tasks:
     - name: run-task
       taskRef:
@@ -55,6 +57,13 @@ spec:
         steps:
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            env:
+              - name: BUILD_STATE
+                value: $(params.buildState)
+              - name: GENERIC_RESULT
+                value: $(params.genericResult)
+              - name: JSON_BUILDINFO
+                value: $(params.jsonBuildInfo)
             script: |
               #!/bin/bash
               set -x
@@ -66,21 +75,16 @@ spec:
                 exit 1
               fi
 
-              # shellcheck disable=SC2046 # (warning): Quote this to prevent word splitting
-              # reason: wrapping the tekton parameters in the following line with double quotes is adding unwanted
-              #         quotes to the contained json, breaking jq.
-              state="$(jq -cr '.state' <<< $(params.buildState))"
+              state="$(jq -cr .state <<< "${BUILD_STATE}")"
               if [ "$state" != "complete" ]; then
                 echo "The task did not save a completed IIB build in buildState result"
                 exit 1
               fi
 
-              # shellcheck disable=SC2046 # (warning): Quote this to prevent word splitting
-              # reason: wrapping the tekton parameters in the following line with double quotes is adding unwanted
-              #         quotes to the contained json, breaking jq.
-              genericResult=$(jq -r \
+              genericResult=$(jq -cr \
                 '. |[.fbc_opt_in, .overwrite_fromindex_image, .publish_index_image,.sign_index_image] |@csv' \
-                <<< $(params.genericResult))
+                <<< "${GENERIC_RESULT}")
+
               if [ "$genericResult" != '"true","false","false","false"' ]; then
                 echo "The stask did not save the correct values in genericResult result"
                 exit 1

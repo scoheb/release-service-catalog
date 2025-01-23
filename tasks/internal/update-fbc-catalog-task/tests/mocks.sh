@@ -48,10 +48,7 @@ function mock_build_progress() {
         build=$(jq -rc '.state |= "complete"' <<< "$build")
         build=$(jq -rc '.state_reason |= "The FBC fragment was successfully added in the index image"' <<< "${build}")
         jq -rc --argjson progress "{ \"state\": \"complete\", \"state_reason\": \"${state_reason[$calls]}\" }" '.state_history |= [$progress] + .' <<< "${build}"
-        if [[ "$(context.taskRun.name)" =~ test-update-fbc-catalog-retry-outdated* ]]; then
-          build=$(jq -rc '.items[0].retry = "outdated"' <<< "${build}")
-        fi
-        exit
+        return
     else
         jq -rc --argjson progress "{ \"state\": \"in_progress\", \"state_reason\": \"${state_reason[$calls]}\" }" '.state_history |= [$progress] + .' <<< "${build}"
     fi
@@ -59,29 +56,33 @@ function mock_build_progress() {
 
 function curl() {
   params="$*"
-
   if [[ "$params" =~ "--negotiate -u: https://pyxis.engineering.redhat.com/v1/repositories/registry/quay.io/repository/repo/image -o"* ]]; then
     tempfile="$5"
     echo -e '{ "fbc_opt_in": true }' > "$tempfile"
 
   elif [[ "$params" =~ "-s https://fakeiib.host/builds?user=iib@kerberos&from_index=quay.io/scoheb/fbc-index-testing:"* ]]; then
-    if [[ "$(context.taskRun.name)" =~ "test-update-fbc-catalog-retry-in-progress"* ]]; then
-        echo -en "${buildSeed}" 
-    elif [[ "$(context.taskRun.name)" =~ test-update-fbc-catalog-retry* ]]; then
-        build=$(jq -rc '.items[0].state = "complete"' <<< "$buildSeed")
-        build=$(jq -rc '.items[0].state_reason = "The FBC fragment was successfully added in the index image"' <<< "${build}")
-
-        if [[ "$(context.taskRun.name)" =~ test-update-fbc-catalog-retry-outdated* ]]; then
-            build=$(jq -rc '.items[0].retry = "outdated"' <<< "${build}")
-        fi
-    fi
+    build="${buildSeed}"
+    case "$(context.taskRun.name)" in
+        *complete*|*outdated*)
+          taskrun_name=$(awk '{print substr($1, index($1, "retry"))}' <<< "$(context.taskRun.name)")
+          build=$(jq -rc --arg taskrun_name "$taskrun_name" '.items[0].mock_case = $taskrun_name' <<< "${build}")
+          build=$(jq -rc '.items[0].state = "complete"' <<< "${build}")
+          build=$(jq -rc '.items[0].state_reason = "The FBC fragment was successfully added in the index image"' <<< "${build}")
+        ;;
+        *"retry-in-progress"*)
+          build=$(jq -rc '.items[0].mock_case = "retry-in-progress"' <<< "${buildSeed}")
+        ;;
+    esac
+    echo -en "${build}"
 
   elif [[ "$params" == "-s https://fakeiib.host/builds/1" ]]; then
+    set -x
     echo "$*" >> mock_build_progress_calls
     if [[ "$(context.taskRun.name)" =~ "test-update-fbc-catalog-error"* ]]; then
         mock_error="true"
     fi
 
+    buildJson="$(cat $(results.jsonBuildInfo.path))"
     mock_build_progress "$(awk 'END{ print NR }' mock_build_progress_calls)" "$(base64 <<< "${buildJson}")" "$mock_error" | tee build_json
     export -n buildJson
     buildJson=$(cat build_json)
@@ -91,11 +92,9 @@ function curl() {
     echo "Logs are for weaks"
 
   elif [[ "$params" =~ "-u : --negotiate -s -X POST -H Content-Type: application/json -d@".*" --insecure https://fakeiib.host/builds/fbc-operations" ]]; then
-    echo -en "${buildJson}" | jq -cr
-
+    echo "${buildJson}"
   else
     echo ""
-
   fi
 }
 

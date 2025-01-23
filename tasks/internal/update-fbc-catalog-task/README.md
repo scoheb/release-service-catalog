@@ -12,3 +12,7 @@ Tekton task to submit a IIB build request to add/update a fbc-fragment to an ind
 | iibServiceAccountSecret | Secret with IIB credentials to be used                                       | No       | -             |
 | hotfix                  | Whether this build is a hotfix build                                         | Yes      | "false"       |
 | stagedIndex             | Whether this build is for a staged index build                               | Yes      | "false"       |
+
+## Changes in 1.0.1
+* fixes the case when an in_progress IIB build is not resumed;
+* adds more unit tests for retry scenarios; 
