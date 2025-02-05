@@ -11,7 +11,45 @@ spec:
     snapshotPath. The task should fail.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
+    - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+      workspaces:
+        - name: data
+          workspace: tests-workspace
+      taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
+        workspaces:
+          - name: data
+        steps:
+          - name: setup-values
+            image: quay.io/konflux-ci/release-service-utils:4477c5aa19a8cbb4fc79bf0381bcdbc992810424
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+
+              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
     - name: run-task
       taskRef:
         name: create-pyxis-image
@@ -22,6 +60,12 @@ spec:
           value: missing
         - name: dataPath
           value: ""
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: ""
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
