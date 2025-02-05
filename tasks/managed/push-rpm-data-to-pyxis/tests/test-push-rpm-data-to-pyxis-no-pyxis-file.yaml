@@ -11,17 +11,63 @@ spec:
     This should result in a failure.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
+    - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+      workspaces:
+        - name: data
+          workspace: tests-workspace
+      taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
+        workspaces:
+          - name: data
+        steps:
+          - name: setup-values
+            image: quay.io/konflux-ci/release-service-utils:34016ab5a3904257c198a12d1829b0093214b6ee
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+
+              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
     - name: run-task
       taskRef:
         name: push-rpm-data-to-pyxis
       params:
         - name: pyxisJsonPath
-          value: missing.json
+          value: $(context.pipelineRun.uid)/missing.json
         - name: pyxisSecret
           value: test-push-rpm-data-to-pyxis-cert
         - name: server
           value: production
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: ""
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+      runAfter:
+        - setup
       workspaces:
         - name: data
           workspace: tests-workspace
