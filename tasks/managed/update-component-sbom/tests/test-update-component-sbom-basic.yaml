@@ -8,7 +8,125 @@ spec:
     Run the update-component-sbom task and verify that the update_component_sbom script is called as expected.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
+    - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+      workspaces:
+        - name: data
+          workspace: tests-workspace
+      taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
+        workspaces:
+          - name: data
+        steps:
+          - name: setup-values
+            image: quay.io/konflux-ci/release-service-utils:d320c36f3d707cd5bfe55fe783f70236c06cc2e5
+            script: |
+              #!/usr/bin/env sh
+              set -eux
+
+              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+              cat > "$(workspaces.data.path)/$(params.subdirectory)/test_data.json" << EOF
+              {
+                "mapping": {
+                  "components": [
+                    {
+                      "name": "comp1",
+                      "repository": "repo1"
+                    },
+                    {
+                      "name": "comp2",
+                      "repository": "repo2"
+                    },
+                    {
+                      "name": "comp3",
+                      "repository": "repo3a"
+                    },
+                    {
+                      "name": "comp4",
+                      "customfield": "custom"
+                    }
+                  ]
+                }
+              }
+              EOF
+
+              cat > "$(workspaces.data.path)/$(params.subdirectory)/test_snapshot_spec.json" << EOF
+              {
+                "application": "myapp",
+                "components": [
+                  {
+                    "name": "comp1",
+                    "containerImage": "imageurl1@sha256:123456",
+                    "source": {
+                      "git": {
+                        "revision": "myrev",
+                        "url": "myurl"
+                      }
+                    }
+                  },
+                  {
+                    "name": "comp3",
+                    "containerImage": "imageurl3@sha256:123456",
+                    "repository": "repo3"
+                  },
+                  {
+                    "name": "comp4",
+                    "containerImage": "imageurl4@sha256:123456",
+                    "repository": "repo4"
+                  },
+                  {
+                    "name": "comp5",
+                    "containerImage": "imageurl5@sha256:123456"
+                  }
+                ]
+              }
+              EOF
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
+          - name: create-trusted-artifact
+            args:
+              - create
+              - --store
+              - $(params.ociStorage)
+              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+            computeResources: { }
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            env:
+              - name: IMAGE_EXPIRES_AFTER
+                value: 1d
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+          - name: patch-source-data-artifact-result
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eu
+              
+              # this is needed to skip trusted-artifacts tasks
+              # when using PVC based workspaces.
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo -n "$(params.ociStorage)" > "$(results.sourceDataArtifact.path)"
+              fi
     - name: run-task
       workspaces:
         - name: data
@@ -17,27 +135,54 @@ spec:
         name: update-component-sbom
       params:
         - name: sbomJsonPath
-          value: "data.json"
+          value: "$(context.pipelineRun.uid)/data.json"
         - name: downloadedSbomPath
-          value: downloaded-sboms
+          value: "$(context.pipelineRun.uid)/downloaded-sboms"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+      runAfter:
+        - setup
     - name: check-result
       workspaces:
         - name: data
           workspace: tests-workspace
+      params:
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
       runAfter:
         - run-task
       taskSpec:
         workspaces:
           - name: data
+        params:
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
         steps:
+          - name: use-trusted-artifact
+            args:
+              - use
+              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+            env:
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+            computeResources: {}
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:4a67d0c959e63cbb4bc0d37db1ce962091d6072a
             script: |
               #!/usr/bin/env bash
               set -eux
 
-              if [ "$(wc -l < "$(workspaces.data.path)/mock_update.txt")" != 1 ]; then
+              if [ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_update.txt")" != 1 ]; then
                 echo Error: update_component_sbom was expected to be called 1 time. Actual calls:
-                cat "$(workspaces.data.path)/mock_update.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_update.txt"
                 exit 1
               fi
