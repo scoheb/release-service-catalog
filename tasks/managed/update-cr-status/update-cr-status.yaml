@@ -29,10 +29,50 @@ spec:
         Path to the directory containing the result files in the data workspace which will be added to the
         resource's status
       type: string
+    - name: resultsDirName
+      description: |
+        Name of possible directories in subdirectory containing the result files in the data workspace 
+        which will be added to the resource's status
+      type: string
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: resultArtifacts
+      type: array
+    - name: subdirectory
+      description: Subdirectory inside the workspace to be used
+      type: string
+      default: ""
   workspaces:
     - name: data
       description: Workspace where the results directory is stored
   steps:
+    - name: skip-trusted-artifact-operations
+      image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+      script: |
+        #!/usr/bin/env bash
+        set -eo pipefail
+
+        if [ "$(params.ociStorage)" == "empty" ]; then
+          echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+          touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+        fi
+    - name: use-trusted-artifact
+      args: ["use", "$(params.resultArtifacts[*])"]
+      env:
+        - name: "ORAS_OPTIONS"
+          value: "--insecure"
+        - name: "HOME"
+          value: "/tekton/home"
+        - name: "DEBUG"
+          value: "1"
+      computeResources: {}
+      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
     - name: update-cr-status
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       script: |
@@ -40,15 +80,21 @@ spec:
         set -ex
 
         RESULTS_JSON="{}"
-        RESULTS_DIR="$(workspaces.data.path)/$(params.resultsDirPath)"
-        for resultsFile in $([ -d "$RESULTS_DIR" ] && find "$RESULTS_DIR" -type f); do
-            if ! jq . >/dev/null 2>&1 "${resultsFile}" ; then
-                echo "Passed results JSON file ${resultsFile} in results directory was not proper JSON."
-                exit 1
-            fi
-            # If two files have arrays with the same key, it will be overwritten. Otherwise, the jsons
-            # are merged (only arrays are not merged properly with this notation).
-            RESULTS_JSON=$(jq -c "${RESULTS_JSON} * ." "${resultsFile}")
+        resultPaths=$(find "$(workspaces.data.path)/$(params.subdirectory)" \
+          -name "$(params.resultsDirName)" -type d)
+        for resultsPath in ${resultPaths}; do
+          if [ -d "$resultsPath" ]; then
+            resultFiles=$(find "$resultsPath" -type f)
+            for resultsFile in ${resultFiles}; do
+                if ! jq . >/dev/null 2>&1 "${resultsFile}" ; then
+                    echo "Passed results JSON file ${resultsFile} in results directory was not proper JSON."
+                    exit 1
+                fi
+                # If two files have arrays with the same key, it will be overwritten. Otherwise, the jsons
+                # are merged (only arrays are not merged properly with this notation).
+                RESULTS_JSON=$(jq -c "${RESULTS_JSON} * ." "${resultsFile}")
+            done
+          fi
         done
 
         IFS='/' read -r namespace name <<< "$(params.resource)"
