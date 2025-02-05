@@ -5,9 +5,9 @@ set -eux
 
 function curl() {
   echo Mock curl called with: $* >&2
-  echo $* >> $(workspaces.data.path)/mock_curl.txt
+  echo $* >> $(workspaces.data.path)/$(params.subdirectory)/mock_curl.txt
 
-  CALL_ID=$(cat $(workspaces.data.path)/mock_curl.txt | wc -l)
+  CALL_ID=$(cat $(workspaces.data.path)/$(params.subdirectory)/mock_curl.txt | wc -l)
 
   if [[ "$*" == "--retry 5 --key /tmp/key --cert /tmp/crt https://pyxis.api.redhat.com/v1/repositories/registry/${PYXIS_REGISTRY}/repository/my-product/my-image"?" -X GET" ]]
   then
