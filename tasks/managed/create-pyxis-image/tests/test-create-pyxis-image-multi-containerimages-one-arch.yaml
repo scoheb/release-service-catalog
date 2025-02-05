@@ -9,12 +9,25 @@ spec:
     and a single arch.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
         workspaces:
           - name: data
         steps:
@@ -24,7 +37,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              cat > "$(workspaces.data.path)"/mapped_snapshot.json << EOF
+              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+              cat > "$(workspaces.data.path)/$(params.subdirectory)"/mapped_snapshot.json << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -56,10 +70,44 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/mydata.json" << EOF
+              cat > "$(workspaces.data.path)/$(params.subdirectory)/mydata.json" << EOF
               {
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
+          - name: create-trusted-artifact
+            args:
+              - create
+              - --store
+              - $(params.ociStorage)
+              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+            computeResources: { }
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            env:
+              - name: IMAGE_EXPIRES_AFTER
+                value: 1d
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+          - name: patch-source-data-artifact-result
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eu
+              
+              # this is needed to skip trusted-artifacts tasks
+              # when using PVC based workspaces.
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo -n "$(params.ociStorage)" > "$(results.sourceDataArtifact.path)"
+              fi
     - name: run-task
       taskRef:
         name: create-pyxis-image
@@ -69,9 +117,15 @@ spec:
         - name: server
           value: stage
         - name: snapshotPath
-          value: mapped_snapshot.json
+          value: $(context.pipelineRun.uid)/mapped_snapshot.json
         - name: dataPath
-          value: mydata.json
+          value: $(context.pipelineRun.uid)/mydata.json
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -81,6 +135,10 @@ spec:
       params:
         - name: pyxisDataPath
           value: $(tasks.run-task.results.pyxisDataPath)
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -88,48 +146,62 @@ spec:
         params:
           - name: pyxisDataPath
             type: string
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
         workspaces:
           - name: data
         steps:
+          - name: use-trusted-artifact
+            args:
+              - use
+              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+            env:
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+            computeResources: {}
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:4477c5aa19a8cbb4fc79bf0381bcdbc992810424
             script: |
               #!/usr/bin/env bash
               set -eux
 
-              if [ "$(wc -l < "$(workspaces.data.path)"/mock_create_container_image.txt)" != 3 ]; then
+              if [ "$(wc -l < \
+                "$(workspaces.data.path)/$(params.subdirectory)/mock_create_container_image.txt")" != 3 ]; then
                 echo Error: create_container_image was expected to be called 3 times. Actual calls:
-                cat "$(workspaces.data.path)/mock_create_container_image.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_create_container_image.txt"
                 exit 1
               fi
 
-              if [ -f "$(workspaces.data.path)"/mock_cleanup_tags.txt ]; then
+              if [ -f "$(workspaces.data.path)/$(params.subdirectory)/mock_cleanup_tags.txt" ]; then
                 echo Error: cleanup_tags was not expected to be called. Actual calls:
-                cat "$(workspaces.data.path)/mock_cleanup_tags.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_cleanup_tags.txt"
                 exit 1
               fi
 
-              cat > "$(workspaces.data.path)"/skopeo_expected_calls.txt << EOF
+              cat > "$(workspaces.data.path)/$(params.subdirectory)/skopeo_expected_calls.txt" << EOF
               inspect --raw docker://registry.io/image1@sha256:mydigest1
               inspect --raw docker://registry.io/image2@sha256:mydigest2
               inspect --raw docker://registry.io/image3@sha256:mydigest3
               EOF
 
               # check that the actual calls match the expected calls
-              if [ "$(md5sum < "$(workspaces.data.path)/skopeo_expected_calls.txt")" \
-                != "$(md5sum < "$(workspaces.data.path)/mock_skopeo.txt")" ]
+              if [ "$(md5sum < "$(workspaces.data.path)/$(params.subdirectory)/skopeo_expected_calls.txt")" \
+                != "$(md5sum < "$(workspaces.data.path)/$(params.subdirectory)/mock_skopeo.txt")" ]
               then
                 echo "Error: Actual skopeo calls do not match expected calls."
                 echo Expected calls:
-                cat "$(workspaces.data.path)/skopeo_expected_calls.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/skopeo_expected_calls.txt"
                 echo Actual calls:
-                cat "$(workspaces.data.path)/mock_skopeo.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_skopeo.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(workspaces.data.path)"/mock_oras.txt)" != 9 ]; then
+              if [ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_oras.txt")" != 9 ]; then
                 echo Error: oras was expected to be called 9 times. Actual calls:
-                cat "$(workspaces.data.path)/mock_oras.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_oras.txt"
                 exit 1
               fi
 
