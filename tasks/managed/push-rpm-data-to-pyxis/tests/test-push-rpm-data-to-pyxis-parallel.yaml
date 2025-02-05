@@ -9,12 +9,25 @@ spec:
     processed in parallel.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
         workspaces:
           - name: data
         steps:
@@ -24,7 +37,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              cat > "$(workspaces.data.path)/pyxis.json" << EOF
+              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+              cat > "$(workspaces.data.path)/$(params.subdirectory)/pyxis.json" << EOF
               {
                 "components": [
                   {
@@ -90,18 +104,58 @@ spec:
                 ]
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
+          - name: create-trusted-artifact
+            args:
+              - create
+              - --store
+              - $(params.ociStorage)
+              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+            computeResources: { }
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            env:
+              - name: IMAGE_EXPIRES_AFTER
+                value: 1d
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+          - name: patch-source-data-artifact-result
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eu
+              
+              # this is needed to skip trusted-artifacts tasks
+              # when using PVC based workspaces.
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo -n "$(params.ociStorage)" > "$(results.sourceDataArtifact.path)"
+              fi
     - name: run-task
       taskRef:
         name: push-rpm-data-to-pyxis
       params:
         - name: pyxisJsonPath
-          value: pyxis.json
+          value: $(context.pipelineRun.uid)/pyxis.json
         - name: pyxisSecret
           value: test-push-rpm-data-to-pyxis-cert
         - name: server
           value: production
         - name: concurrentLimit
           value: 4
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       runAfter:
         - setup
       workspaces:
@@ -111,36 +165,55 @@ spec:
       workspaces:
         - name: data
           workspace: tests-workspace
+      params:
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
       taskSpec:
         workspaces:
           - name: data
+        params:
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
         steps:
+          - name: use-trusted-artifact
+            args:
+              - use
+              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+            env:
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+            computeResources: {}
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:863fee5fdf48937dead6a2355c67eb3b4f469340
             script: |
               #!/usr/bin/env bash
               set -eux
 
-              if [ "$(wc -l < "$(workspaces.data.path)/mock_cosign.txt")" != 5 ]; then
+              if [ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_cosign.txt")" != 5 ]; then
                 echo Error: cosign was expected to be called 5 times. Actual calls:
-                cat "$(workspaces.data.path)/mock_cosign.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_cosign.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(workspaces.data.path)/mock_upload_rpm_data.txt")" != 5 ]; then
+              if [ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_upload_rpm_data.txt")" != 5 ]; then
                 echo Error: upload_rpm_data was expected to be called 5 times. Actual calls:
-                cat "$(workspaces.data.path)/mock_upload_rpm_data.txt"
+                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_upload_rpm_data.txt"
                 exit 1
               fi
 
               # Check that multiple instances of upload_rpm_data were running in parallel - up to 4 at once
-              if ! grep 4 "$(workspaces.data.path)"/myImageID[1234]Parallel.count; then
+              if ! grep 4 "$(workspaces.data.path)/$(params.subdirectory)"/myImageID[1234]Parallel.count; then
                 echo Error: Expected to see 4 parallel runs of upload_rpm_data at some point.
                 echo Actual counts:
-                cat "$(workspaces.data.path)"/myImageID[1234]Parallel.count
+                cat "$(workspaces.data.path)/$(params.subdirectory)"/myImageID[1234]Parallel.count
                 exit 1
               fi
               # The last instance of upload_rpm_data was in a new batch - it ran alone
-              test "$(wc -l < "$(workspaces.data.path)/myImageID5Parallel.count")" -eq 1
+              test "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/myImageID5Parallel.count")" -eq 1
       runAfter:
         - run-task
