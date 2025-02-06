@@ -10,13 +10,23 @@ spec:
     Run the check-data-keys task without a data JSON and verify that the task fails as expected.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
     - name: run-task
       taskRef:
         name: check-data-keys
       params:
         - name: dataPath
-          value: "missing.json"
+          value: "$(context.pipelineRun.uid)/missing.json"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: ""
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
