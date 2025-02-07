@@ -307,7 +307,6 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - apply-mapping
         - verify-enterprise-contract
     - name: collect-pyxis-params
       taskRef:
@@ -333,6 +332,105 @@ spec:
           workspace: release-workspace
       runAfter:
         - collect-data
+    - name: create-pyxis-image
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      retries: 5
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/create-pyxis-image/create-pyxis-image.yaml
+      params:
+        - name: server
+          value: $(tasks.collect-pyxis-params.results.server)
+        - name: pyxisSecret
+          value: $(tasks.collect-pyxis-params.results.secret)
+        - name: rhPush
+          value: "true"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - push-snapshot
+    - name: publish-pyxis-repository
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      retries: 5
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/publish-pyxis-repository/publish-pyxis-repository.yaml
+      params:
+        - name: server
+          value: $(tasks.collect-pyxis-params.results.server)
+        - name: pyxisSecret
+          value: $(tasks.collect-pyxis-params.results.secret)
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: resultsDirPath
+          value: "$(tasks.collect-data.results.resultsDir)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - collect-pyxis-params
+        - apply-mapping
+    - name: push-rpm-data-to-pyxis
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      retries: 5
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/push-rpm-data-to-pyxis/push-rpm-data-to-pyxis.yaml
+      params:
+        - name: pyxisJsonPath
+          value: $(tasks.create-pyxis-image.results.pyxisDataPath)
+        - name: server
+          value: $(tasks.collect-pyxis-params.results.server)
+        - name: pyxisSecret
+          value: $(tasks.collect-pyxis-params.results.secret)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.create-pyxis-image.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - create-pyxis-image
     - name: update-cr-status
       params:
         - name: resource
@@ -346,6 +444,7 @@ spec:
         - name: resultArtifacts
           value:
             - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+            - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
       taskRef:
@@ -362,3 +461,5 @@ spec:
           workspace: release-workspace
       runAfter:
         - push-snapshot
+        - publish-pyxis-repository
+        - create-pyxis-image
