@@ -180,6 +180,7 @@ spec:
       runAfter:
         - verify-access-to-resources
     - name: apply-mapping
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       retries: 3
       taskRef:
         resolver: "git"
@@ -208,6 +209,48 @@ spec:
           workspace: release-workspace
       runAfter:
         - reduce-snapshot
+    - name: verify-enterprise-contract
+      timeout: "4h00m0s"
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/verify-enterprise-contract/verify-enterprise-contract.yaml
+      params:
+        - name: IMAGES
+          value: "$(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)"
+        - name: SSL_CERT_DIR
+          value: /var/run/secrets/kubernetes.io/serviceaccount
+        - name: POLICY_CONFIGURATION
+          value: $(params.enterpriseContractPolicy)
+        - name: STRICT
+          # only set for development
+          # CHANGEME
+          value: "false"
+          #value: "1"
+        - name: IGNORE_REKOR
+          value: "true"
+        - name: EXTRA_RULE_DATA
+          value: $(params.enterpriseContractExtraRuleData)
+        - name: TIMEOUT
+          value: $(params.enterpriseContractTimeout)
+        - name: WORKERS
+          value: $(params.enterpriseContractWorkerCount)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - apply-mapping
     - name: collect-cosign-params
       taskRef:
         resolver: "git"
@@ -265,6 +308,7 @@ spec:
           workspace: release-workspace
       runAfter:
         - apply-mapping
+        - verify-enterprise-contract
     - name: collect-pyxis-params
       taskRef:
         resolver: "git"
