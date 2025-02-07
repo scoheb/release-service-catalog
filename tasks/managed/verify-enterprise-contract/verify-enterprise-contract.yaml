@@ -1,0 +1,263 @@
+---
+# IMPORTANT: This Task definition exists in this repository as a means to facilitate integration
+# with RHTAP. It is NOT meant to be used in Konflux. If you are debugging EC failures in Konflux,
+# this is NOT the file you are looking for. Do NOT directly modify this file. Any change should
+# first be done in the https://github.com/enterprise-contract/ec-cli repository then synced to this
+# repository. Any pull request that modifies anything other than this comment in this file and is
+# not a sync from the ec-cli repository will be immediately closed. See
+# https://github.com/enterprise-contract/ec-cli/blob/main/tasks/verify-enterprise-contract/0.1/verify-enterprise-contract.yaml
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: verify-enterprise-contract
+  annotations:
+    tekton.dev/displayName: Verify Enterprise Contract
+    tekton.dev/pipelines.minVersion: "0.19"
+    tekton.dev/tags: ec, chains, signature, conftest
+  labels:
+    app.kubernetes.io/version: "0.1"
+spec:
+
+  # spec:
+  #  params:
+  #    - name: IMAGES
+  #      value: $(workspaces.data.path)/f9f5a1a1-a957-409d-8ff3-2e3f5f3b2f0e/snapshot_spec.json
+  #    - name: SSL_CERT_DIR
+  #      value: /var/run/secrets/kubernetes.io/serviceaccount
+  #    - name: POLICY_CONFIGURATION
+  #      value: '{"description":"Includes rules to set a standard for current App Interface deployments","sources":[{"name":"Release Policies","policy":["oci::quay.io/enterprise-contract/ec-release-policy:konflux"],"data":["github.com/release-engineering/rhtap-ec-policy//data","oci::quay.io/konflux-ci/tekton-catalog/data-acceptable-bundles:latest"],"ruleData":{"allowed_registry_prefixes":["registry.access.redhat.com/","registry.redhat.io/","brew.registry.redhat.io/rh-osbs/openshift-golang-builder","quay.io/redhat-services-prod/","quay.io/konflux-ci","quay.io/cloudservices/caddy-ubi"],"allowed_rpm_signature_keys":["199e2f91fd431d51","unsigned"]},"config":{"exclude":["cve","tasks.required_tasks_found:prefetch-dependencies","test.required_tests_passed:sast-snyk-check","test.no_skipped_tests:sast-snyk-check","test.required_tests_passed:sast-snyk-check-oci-ta","test.no_skipped_tests:sast-snyk-check-oci-ta","hermetic_build_task","labels.disallowed_inherited_labels","attestation_task_bundle.tasks_defined_in_bundle","tasks.required_tasks_found:source-build","source_image.exists","test.no_failed_tests:ecosystem-cert-preflight-checks","schedule.weekday_restriction"],"include":["@redhat"]},"volatileConfig":{}}],"publicKey":"k8s://openshift-pipelines/public-key"}'
+  #    - name: STRICT
+  #      value: '1'
+  #    - name: IGNORE_REKOR
+  #      value: 'true'
+  #    - name: EXTRA_RULE_DATA
+  #      value: pipeline_intention=release
+  #    - name: TIMEOUT
+  #      value: 40m0s
+
+  description: Verify the enterprise contract is met
+  params:
+    - name: IMAGES
+      type: string
+      description: |
+        Spec section of an ApplicationSnapshot resource. Not all fields of the
+        resource are required. A minimal example:
+          {
+            "components": [
+              {
+                "containerImage": "quay.io/example/repo:latest"
+              }
+            ]
+          }
+        Each "containerImage" in the "components" array is validated.
+    - name: POLICY_CONFIGURATION
+      type: string
+      description: |
+        Name of the policy configuration (EnterpriseContractPolicy
+        resource) to use. `namespace/name` or `name` syntax supported. If
+        namespace is omitted the namespace where the task runs is used.
+      default: "enterprise-contract-service/default"
+
+    - name: PUBLIC_KEY
+      type: string
+      description: >-
+        Public key used to verify signatures. Must be a valid k8s cosign
+        reference, e.g. k8s://my-space/my-secret where my-secret contains
+        the expected cosign.pub attribute.
+      default: ""
+
+    - name: REKOR_HOST
+      type: string
+      description: Rekor host for transparency log lookups
+      default: ""
+
+    - name: IGNORE_REKOR
+      type: string
+      description: >-
+        Skip Rekor transparency log checks during validation.
+      default: "false"
+
+    - name: TUF_MIRROR
+      type: string
+      description: TUF mirror URL. Provide a value when NOT using public sigstore deployment.
+      default: ""
+
+    - name: SSL_CERT_DIR
+      type: string
+      description: |
+        Path to a directory containing SSL certs to be used when communicating
+        with external services. This is useful when using the integrated registry
+        and a local instance of Rekor on a development cluster which may use
+        certificates issued by a not-commonly trusted root CA. In such cases,
+        "/var/run/secrets/kubernetes.io/serviceaccount" is a good value. Multiple
+        paths can be provided by using the ":" separator.
+      default: ""
+
+    - name: INFO
+      type: string
+      description: Include rule titles and descriptions in the output. Set to "false" to disable it.
+      default: "true"
+
+    - name: STRICT
+      type: string
+      description: Fail the task if policy fails. Set to "false" to disable it.
+      default: "true"
+
+    - name: HOMEDIR
+      type: string
+      description: Value for the HOME environment variable.
+      default: /tekton/home
+
+    - name: EFFECTIVE_TIME
+      type: string
+      description: Run policy checks with the provided time.
+      default: "now"
+
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+      default: "empty"
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: sourceDataArtifact
+      type: string
+    - name: subdirectory
+      description: Subdirectory inside the workspace to be used
+      type: string
+      default: ""
+
+  workspaces:
+    - name: data
+      description: The workspace where the snapshot spec json file resides
+      optional: true
+
+  results:
+    - name: TEST_OUTPUT
+      description: Short summary of the policy evaluation for each image
+
+  stepTemplate:
+    env:
+      - name: HOME
+        value: "$(params.HOMEDIR)"
+
+  steps:
+    - name: skip-trusted-artifact-operations
+      image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+      script: |
+        #!/usr/bin/env bash
+        set -eo pipefail
+
+        if [ "$(params.ociStorage)" == "empty" ]; then
+          echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+          touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+        fi
+    - name: use-trusted-artifact
+      args:
+        - use
+        - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+      env:
+        - name: "ORAS_OPTIONS"
+          value: "--insecure"
+        - name: "HOME"
+          value: "/tekton/home"
+      computeResources: {}
+      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+    - name: version
+      image: registry.redhat.io/rhtas/ec-rhel9:0.2
+      command: [ec]
+      args:
+        - version
+    - name: initialize-tuf
+      image: registry.redhat.io/rhtas/ec-rhel9:0.2
+      script: |-
+        set -euo pipefail
+
+        if [[ -z "${TUF_MIRROR:-}" ]]; then
+            echo 'TUF_MIRROR not set. Skipping TUF root initialization.'
+            exit
+        fi
+
+        echo 'Initializing TUF root...'
+        cosign initialize --mirror "${TUF_MIRROR}" --root "${TUF_MIRROR}/root.json"
+        echo 'Done!'
+      env:
+        - name: TUF_MIRROR
+          value: "$(params.TUF_MIRROR)"
+    - name: validate
+      image: registry.redhat.io/rhtas/ec-rhel9:0.2
+      command: [ec]
+      args:
+        - validate
+        - image
+        - "--verbose"
+        - "--images"
+        - "$(params.IMAGES)"
+        - "--policy"
+        - "$(params.POLICY_CONFIGURATION)"
+        - "--public-key"
+        - "$(params.PUBLIC_KEY)"
+        - "--rekor-url"
+        - "$(params.REKOR_HOST)"
+        - "--ignore-rekor=$(params.IGNORE_REKOR)"
+        # NOTE: The syntax below is required to negate boolean parameters
+        - "--info=$(params.INFO)"
+        - "--strict=false"
+        - "--show-successes"
+        - "--effective-time=$(params.EFFECTIVE_TIME)"
+        - "--output"
+        - "yaml=$(params.HOMEDIR)/report.yaml"
+        - "--output"
+        - "appstudio=$(results.TEST_OUTPUT.path)"
+        - "--output"
+        - "json=$(params.HOMEDIR)/report-json.json"
+      env:
+        - name: SSL_CERT_DIR
+          # The Tekton Operator automatically sets the SSL_CERT_DIR env to the value below but,
+          # of course, without the $(param.SSL_CERT_DIR) bit. When a Task Step sets it to a
+          # value, the Tekton Operator does not do any processing of the value. However, Tekton
+          # Pipelines will fail to execute because some of these values are required for its
+          # execution. As a workaround, append the SSL_CERT_DIR value from params to the default
+          # value expected by Tekton Pipelines. NOTE: If params.SSL_CERT_DIR is empty, the value
+          # will contain a trailing ":" - this is ok.
+          value: "/tekton-custom-certs:/etc/ssl/certs:/etc/pki/tls/certs:/system/etc/security/cacerts:$(params.SSL_CERT_DIR)"
+        # The EC cache is used to avoid fetching the same image layers from the registry more than
+        # once. However, this is not thread safe. This results in inconsistencies when extracting
+        # files from an image, see https://github.com/enterprise-contract/ec-cli/issues/1109
+        - name: EC_CACHE
+          value: "false"
+      computeResources:
+        requests:
+          cpu: 250m
+          memory: 2Gi
+        limits:
+          memory: 2Gi
+    - name: report
+      image: registry.redhat.io/rhtas/ec-rhel9:0.2
+      command: [cat]
+      args:
+        - "$(params.HOMEDIR)/report.yaml"
+    - name: report-json
+      image: registry.redhat.io/rhtas/ec-rhel9:0.2
+      command: [cat]
+      args:
+        - "$(params.HOMEDIR)/report-json.json"
+    - name: summary
+      image: registry.redhat.io/rhtas/ec-rhel9:0.2
+      command: [jq]
+      args:
+        - "."
+        - "$(results.TEST_OUTPUT.path)"
+    - name: assert
+      image: registry.redhat.io/rhtas/ec-rhel9:0.2
+      command: [jq]
+      args:
+        - "--argjson"
+        - "strict"
+        - "$(params.STRICT)"
+        - "-e"
+        - >
+          .result == "SUCCESS" or .result == "WARNING" or ($strict | not)
+        - "$(results.TEST_OUTPUT.path)"
