@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: update-fbc-catalog-task
   labels:
-    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/version: "1.1.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -38,6 +38,9 @@ spec:
     - name: iibServiceAccountSecret
       type: string
       description: Secret with IIB credentials to be used
+    - name: publishingCredentials
+      type: string
+      description: Secret containing the publishing credentials used to fetch the image config
     - name: hotfix
       type: string
       default: "false"
@@ -84,6 +87,12 @@ spec:
             secretKeyRef:
               name: iib-services-config
               key: krb5.conf
+        - name: TARGET_INDEX_CREDENTIAL
+          valueFrom:
+            secretKeyRef:
+              key: targetIndexCredential
+              name: $(params.publishingCredentials)
+              optional: true
       script: |
         #!/usr/bin/env bash
 
@@ -121,8 +130,18 @@ spec:
             indexImageResolved="$(jq -r '.index_image_resolved' <<<  "${build}")"
             newCatalogCreatedDate="$(date --date "$(skopeo inspect --config "docker://${indexImageResolved}" | \
               jq -r .created)" "+%s")"
-            upstreamCatalogCreatedDate="$(date --date "$(skopeo inspect --config "docker://$(params.targetIndex)" | \
-              jq -r .created)" "+%s")"
+
+            # authentication is only required for the targetIndex
+            create_auth_file
+            targetIndexCreated="$(skopeo inspect --config "docker://$(params.targetIndex)" | jq -r .created)"
+
+            if [ -z "${targetIndexCreated}" ]; then
+              # we cannot determine the target index created date, stop here. This causes the task to trigger
+              # a new build.
+              return 0
+            fi
+
+            upstreamCatalogCreatedDate="$(date --date "${targetIndexCreated}" "+%s")"
             # checks if the index_image_resolved in the previous completed build is newer
             # than the upstream catalog index.
             # in case the new catalog index is older than the upstream, a new build is
@@ -132,6 +151,19 @@ spec:
             fi
           fi
           echo "${build}"
+        }
+
+        create_auth_file() {
+          mkdir -p "${HOME}/.config/containers"
+          targetIndex="$(params.targetIndex)"
+          authName="${targetIndex%:*}"
+
+          # disabling debug to not leak the token
+          set +x
+          jq -n --arg authName "${authName}" \
+                --arg token "$(base64 -w 0 < <(printf %s "${TARGET_INDEX_CREDENTIAL}"))" \
+                '.auths[$authName].auth = $token' > "${HOME}/.config/containers/auth.json"
+          set -x
         }
 
         # performs kerberos authentication.

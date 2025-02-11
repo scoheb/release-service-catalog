@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: update-fbc-catalog
   labels:
-    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/version: "1.1.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: fbc
@@ -16,6 +16,9 @@ spec:
       type: string
       description: Secret containing the credentials for IIB service
       default: iib-service-account
+    - name: publishingCredentials
+      type: string
+      description: Secret containing the publishing credentials used to fetch the image config
     - name: fbcFragment
       type: string
       description: FBC fragment built by HACBS
@@ -69,6 +72,8 @@ spec:
       params:
         - name: iibServiceAccountSecret
           value: $(params.iibServiceAccountSecret)
+        - name: publishingCredentials
+          value: $(params.publishingCredentials)
         - name: fbcFragment
           value: $(params.fbcFragment)
         - name: fromIndex

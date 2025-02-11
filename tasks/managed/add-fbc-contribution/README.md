@@ -15,6 +15,9 @@ Task to create a internalrequest to add fbc contributions to index images
 | taskGitUrl      | The url to the git repo where the release-service-catalog tasks to be used are stored     | No       | -                    |
 | taskGitRevision | The revision in the taskGitUrl repo to be used                                            | No       | -                    |
 
+## Changes in 4.0.1
+* Adds the `publishingCredentials` parameter to the internal request call
+
 ## Changes in 4.0.0
 * Added taskGiturl and taskGitRevision parameters to be passed to the internalRequest
 * The pipeline is called via git resolver now instead of cluster resolver

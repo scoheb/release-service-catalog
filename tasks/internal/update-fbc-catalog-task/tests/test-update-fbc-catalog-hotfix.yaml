@@ -25,6 +25,8 @@ spec:
           value: "[]"
         - name: iibServiceAccountSecret
           value: "iib-service-account-secret"
+        - name: publishingCredentials
+          value: "publishing-credentials"
         - name: hotfix
           value: true
     - name: check-result

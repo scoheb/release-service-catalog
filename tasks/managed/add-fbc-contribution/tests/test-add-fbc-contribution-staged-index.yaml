@@ -39,6 +39,7 @@ spec:
               cat > "$(workspaces.data.path)/data.json" << EOF
               {
                 "fbc": {
+                  "fbcPublishingCredentials": "test-fbc-publishing-credentials",
                   "stagedIndex": true,
                   "buildTimeoutSeconds": 420
                 }

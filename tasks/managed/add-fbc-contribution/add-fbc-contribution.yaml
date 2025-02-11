@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: add-fbc-contribution
   labels:
-    app.kubernetes.io/version: "4.0.0"
+    app.kubernetes.io/version: "4.0.1"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -97,6 +97,7 @@ spec:
         else
           iib_service_account_secret="iib-service-account-prod"
         fi
+        publishing_credentials=$(jq -r '.fbc.publishingCredentials // "catalog-publishing-secret"' "$DATA_FILE")
 
         timestamp_format=$(jq -r '.fbc.timestampFormat // "%s"' "${DATA_FILE}")
         timestamp=$(date "+${timestamp_format}")
@@ -142,6 +143,7 @@ spec:
             -p targetIndex="${target_index}" \
             -p fbcFragment="${fbc_fragment}" \
             -p iibServiceAccountSecret="${iib_service_account_secret}" \
+            -p publishingCredentials="${publishing_credentials}" \
             -p buildTimeoutSeconds="${build_timeout_seconds}" \
             -p buildTags="${build_tags}" \
             -p addArches="${add_arches}" \

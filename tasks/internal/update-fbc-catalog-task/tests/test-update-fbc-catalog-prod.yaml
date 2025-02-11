@@ -23,6 +23,8 @@ spec:
           value: "[]"
         - name: iibServiceAccountSecret
           value: "iib-service-account-secret"
+        - name: publishingCredentials
+          value: "publishing-credentials"
     - name: check-result
       params:
         - name: jsonBuildInfo
