@@ -250,6 +250,33 @@ spec:
           workspace: release-workspace
       runAfter:
         - apply-mapping
+    - name: populate-release-notes
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/populate-release-notes/populate-release-notes.yaml
+        resolver: git
+      runAfter:
+        - apply-mapping
+      workspaces:
+        - name: data
+          workspace: release-workspace
     - name: collect-cosign-params
       taskRef:
         resolver: "git"
@@ -513,6 +540,7 @@ spec:
         - collect-data
         - collect-atlas-params
         - push-rpm-data-to-pyxis
+        - populate-release-notes
     - name: upload-component-sbom
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       when:
@@ -564,7 +592,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
       taskRef:
@@ -580,7 +608,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - apply-mapping
+        - populate-release-notes
     - name: collect-atlas-params
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       taskRef:
@@ -635,6 +663,7 @@ spec:
           workspace: release-workspace
       runAfter:
         - collect-atlas-params
+        - populate-release-notes
     - name: upload-product-sbom
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       when:
