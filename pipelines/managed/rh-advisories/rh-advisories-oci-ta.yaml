@@ -228,9 +228,8 @@ spec:
         - name: POLICY_CONFIGURATION
           value: $(params.enterpriseContractPolicy)
         - name: STRICT
-          # only set for development
-          # CHANGEME
-          value: "false"
+          # only set to false for development
+          value: "true"
           #value: "1"
         - name: IGNORE_REKOR
           value: "true"
@@ -481,6 +480,196 @@ spec:
           workspace: release-workspace
       runAfter:
         - create-pyxis-image
+    - name: update-component-sbom
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      when:
+        - input: "$(tasks.collect-atlas-params.results.secretName)"
+          operator: notin
+          values: [""]
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/update-component-sbom/update-component-sbom.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      params:
+        - name: sbomJsonPath
+          value: "$(tasks.populate-release-notes.results.sbomDataPath)"
+        - name: downloadedSbomPath
+          value: "$(tasks.push-rpm-data-to-pyxis.results.sbomPath)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      runAfter:
+        - collect-data
+        - collect-atlas-params
+        - push-rpm-data-to-pyxis
+    - name: upload-component-sbom
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      when:
+        - input: "$(tasks.collect-atlas-params.results.secretName)"
+          operator: notin
+          values: [""]
+      params:
+        - name: sbomDir
+          value: "$(tasks.push-rpm-data-to-pyxis.results.sbomPath)"
+        - name: atlasSecretName
+          value: "$(tasks.collect-atlas-params.results.secretName)"
+        - name: ssoTokenUrl
+          value: "$(tasks.collect-atlas-params.results.ssoTokenUrl)"
+        - name: bombasticApiUrl
+          value: "$(tasks.collect-atlas-params.results.bombasticApiUrl)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/upload-sbom-to-atlas/upload-sbom-to-atlas.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - update-component-sbom
+    - name: check-data-keys
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: schema
+          value:  $(params.taskGitUrl)/raw/$(params.taskGitRevision)/schema/dataKeys.json
+        - name: systems
+          value:
+            - releaseNotes
+            - pyxis
+            - mapping
+            - sign
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/check-data-keys/check-data-keys.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - apply-mapping
+    - name: collect-atlas-params
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/collect-atlas-params/collect-atlas-params.yaml
+      params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - collect-data
+    - name: create-product-sbom
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      when:
+        - input: "$(tasks.collect-atlas-params.results.secretName)"
+          operator: notin
+          values: [""]
+      params:
+        - name: dataJsonPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/create-product-sbom/create-product-sbom.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - collect-atlas-params
+    - name: upload-product-sbom
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      when:
+        - input: "$(tasks.collect-atlas-params.results.secretName)"
+          operator: notin
+          values: [""]
+      params:
+        - name: sbomDir
+          value: "$(tasks.create-product-sbom.results.productSBOMPath)"
+        - name: atlasSecretName
+          value: "$(tasks.collect-atlas-params.results.secretName)"
+        - name: ssoTokenUrl
+          value: "$(tasks.collect-atlas-params.results.ssoTokenUrl)"
+        - name: bombasticApiUrl
+          value: "$(tasks.collect-atlas-params.results.bombasticApiUrl)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/upload-sbom-to-atlas/upload-sbom-to-atlas.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - create-product-sbom
     - name: update-cr-status
       params:
         - name: resource
