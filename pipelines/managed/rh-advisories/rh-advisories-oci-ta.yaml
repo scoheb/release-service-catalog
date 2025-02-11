@@ -307,7 +307,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - verify-enterprise-contract
+        - rh-sign-image
     - name: collect-pyxis-params
       taskRef:
         resolver: "git"
@@ -332,6 +332,56 @@ spec:
           workspace: release-workspace
       runAfter:
         - collect-data
+    - name: rh-sign-image
+      timeout: "6h00m0s"
+      retries: 3
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/rh-sign-image/rh-sign-image.yaml
+      params:
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: releasePlanAdmissionPath
+          value: "$(tasks.collect-data.results.releasePlanAdmission)"
+        - name: requester
+          value: $(tasks.extract-requester-from-release.results.output-result)
+        - name: requestTimeout
+          # The RADAS timeout when it fails to receive a response is 5 mins.
+          # Give RADAS enough time to retry its request.
+          value: 1800
+        - name: pipelineRunUid
+          value: $(context.pipelineRun.uid)
+        - name: taskGitUrl
+          value: $(params.taskGitUrl)
+        - name: taskGitRevision
+          value: $(params.taskGitRevision)
+        - name: pyxisServer
+          value: $(tasks.collect-pyxis-params.results.server)
+        - name: pyxisSecret
+          value: $(tasks.collect-pyxis-params.results.secret)
+        - name: signRegistryAccessPath
+          value: $(tasks.publish-pyxis-repository.results.signRegistryAccessPath)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - verify-enterprise-contract
+        - publish-pyxis-repository
+        - extract-requester-from-release
     - name: create-pyxis-image
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       retries: 5
