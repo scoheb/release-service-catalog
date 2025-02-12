@@ -64,6 +64,10 @@ spec:
       default: "quay.io/scoheb/trusted-artifacts"
   workspaces:
     - name: release-workspace
+  results:
+    - name: advisory_url
+      type: string
+      value: $(tasks.create-advisory.results.advisory_url)
   tasks:
     - name: verify-access-to-resources
       taskRef:
@@ -699,6 +703,46 @@ spec:
           workspace: release-workspace
       runAfter:
         - create-product-sbom
+    - name: create-advisory
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      retries: 5
+      params:
+        - name: releasePlanAdmissionPath
+          value: "$(tasks.collect-data.results.releasePlanAdmission)"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: resultsDirPath
+          value: "$(tasks.collect-data.results.resultsDir)"
+        - name: pipelineRunUid
+          value: $(context.pipelineRun.uid)
+        - name: taskGitUrl
+          value: $(params.taskGitUrl)
+        - name: taskGitRevision
+          value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/create-advisory/create-advisory.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - check-data-keys
+        - push-rpm-data-to-pyxis
+        - rh-sign-image
     - name: update-cr-status
       params:
         - name: resource
@@ -713,6 +757,7 @@ spec:
           value:
             - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
             - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+            - "$(tasks.create-advisory.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
       taskRef:
@@ -728,6 +773,4 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - push-snapshot
-        - publish-pyxis-repository
-        - create-pyxis-image
+        - create-advisory
