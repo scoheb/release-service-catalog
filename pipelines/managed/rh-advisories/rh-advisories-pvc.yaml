@@ -64,6 +64,10 @@ spec:
       default: "empty"
   workspaces:
     - name: release-workspace
+  results:
+    - name: advisory_url
+      type: string
+      value: $(tasks.create-advisory.results.advisory_url)
   tasks:
     - name: verify-access-to-resources
       taskRef:
@@ -180,6 +184,7 @@ spec:
       runAfter:
         - verify-access-to-resources
     - name: apply-mapping
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       retries: 3
       taskRef:
         resolver: "git"
@@ -249,6 +254,33 @@ spec:
           workspace: release-workspace
       runAfter:
         - apply-mapping
+    - name: populate-release-notes
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/populate-release-notes/populate-release-notes.yaml
+        resolver: git
+      runAfter:
+        - apply-mapping
+      workspaces:
+        - name: data
+          workspace: release-workspace
     - name: collect-cosign-params
       taskRef:
         resolver: "git"
@@ -512,6 +544,7 @@ spec:
         - collect-data
         - collect-atlas-params
         - push-rpm-data-to-pyxis
+        - populate-release-notes
     - name: upload-component-sbom
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       when:
@@ -547,38 +580,6 @@ spec:
           workspace: release-workspace
       runAfter:
         - update-component-sbom
-    - name: run-file-updates
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
-      params:
-        - name: fileUpdatesPath
-          value: $(tasks.collect-data.results.data)
-        - name: jsonKey
-          value: ".fileUpdates"
-        - name: snapshotPath
-          value: "$(tasks.collect-data.results.snapshotSpec)"
-        - name: pipelineRunUid
-          value: $(context.pipelineRun.uid)
-        - name: resultsDirPath
-          value: "$(tasks.collect-data.results.resultsDir)"
-        - name: taskGitUrl
-          value: $(params.taskGitUrl)
-        - name: taskGitRevision
-          value: $(params.taskGitRevision)
-      runAfter:
-        - push-rpm-data-to-pyxis
-      taskRef:
-        kind: Task
-        params:
-          - name: url
-            value: $(params.taskGitUrl)
-          - name: revision
-            value: $(params.taskGitRevision)
-          - name: pathInRepo
-            value: tasks/managed/run-file-updates/run-file-updates.yaml
-        resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
     - name: check-data-keys
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       params:
@@ -592,6 +593,12 @@ spec:
             - pyxis
             - mapping
             - sign
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
       taskRef:
         params:
           - name: url
@@ -620,6 +627,12 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
       workspaces:
         - name: data
           workspace: release-workspace
@@ -634,6 +647,12 @@ spec:
       params:
         - name: dataJsonPath
           value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
       taskRef:
         params:
           - name: url
@@ -664,6 +683,12 @@ spec:
           value: "$(tasks.collect-atlas-params.results.ssoTokenUrl)"
         - name: bombasticApiUrl
           value: "$(tasks.collect-atlas-params.results.bombasticApiUrl)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
       taskRef:
         params:
           - name: url
@@ -696,6 +721,12 @@ spec:
           value: $(params.taskGitUrl)
         - name: taskGitRevision
           value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
       taskRef:
         params:
           - name: url
@@ -710,11 +741,8 @@ spec:
           workspace: release-workspace
       runAfter:
         - check-data-keys
-        - embargo-check
         - push-rpm-data-to-pyxis
-        - run-file-updates
         - rh-sign-image
-        - rh-sign-image-cosign
     - name: update-cr-status
       params:
         - name: resource
@@ -729,6 +757,7 @@ spec:
           value:
             - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
             - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+            - "$(tasks.create-advisory.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
       taskRef:
@@ -744,6 +773,4 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - push-snapshot
-        - publish-pyxis-repository
-        - create-pyxis-image
+        - create-advisory
