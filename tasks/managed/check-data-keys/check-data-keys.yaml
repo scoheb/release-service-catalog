@@ -81,6 +81,7 @@ spec:
             echo "No data JSON was provided."
             exit 1
         fi
+        cat "$(workspaces.data.path)/$(params.dataPath)"
 
         schema="${SCHEMA_FILE/\.git\///}"
         if ! curl -sL --fail-with-body "$schema" -o /tmp/schema ; then
@@ -94,6 +95,7 @@ spec:
             "$(workspaces.data.path)/$(params.dataPath)" > "/tmp/systems" 
         mv "/tmp/systems" "$(workspaces.data.path)/$(params.dataPath)"
 
+        cat "$(workspaces.data.path)/$(params.dataPath)"
         check-jsonschema --output-format=text --schemafile "/tmp/schema"  "$(workspaces.data.path)/$(params.dataPath)"
     - name: create-trusted-artifact
       args:
