@@ -569,7 +569,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.push-rpm-data-to-pyxis.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
       runAfter:
