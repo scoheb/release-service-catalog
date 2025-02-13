@@ -612,6 +612,44 @@ spec:
           workspace: release-workspace
       runAfter:
         - update-component-sbom
+    - name: run-file-updates
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      params:
+        - name: fileUpdatesPath
+          value: $(tasks.collect-data.results.data)
+        - name: jsonKey
+          value: ".fileUpdates"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: pipelineRunUid
+          value: $(context.pipelineRun.uid)
+        - name: resultsDirPath
+          value: "$(tasks.collect-data.results.resultsDir)"
+        - name: taskGitUrl
+          value: $(params.taskGitUrl)
+        - name: taskGitRevision
+          value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+      runAfter:
+        - push-rpm-data-to-pyxis
+      taskRef:
+        kind: Task
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/run-file-updates/run-file-updates.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
     - name: check-data-keys
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       params:
@@ -775,6 +813,7 @@ spec:
         - check-data-keys
         - embargo-check
         - push-rpm-data-to-pyxis
+        - run-file-updates
         - rh-sign-image
     - name: update-cr-status
       params:
@@ -791,6 +830,7 @@ spec:
             - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
             - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
             - "$(tasks.create-advisory.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+            - "$(tasks.run-file-updates.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
       taskRef:
