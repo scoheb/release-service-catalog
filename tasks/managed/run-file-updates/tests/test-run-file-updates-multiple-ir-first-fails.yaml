@@ -10,17 +10,31 @@ spec:
     request and that an error is surfaced for the failing one
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
     - name: setup
+      params:
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        params:
+          - name: subdirectory
+            type: string
         steps:
           - name: create-crs
             image: quay.io/konflux-ci/release-service-utils:0f82be4be43294b6a96846d87ef7f7c0b9e34267
             script: |
               #!/usr/bin/env sh
               set -eux
-              
-              yq -o json > "$(workspaces.data.path)/rpa.json" << EOF
+
+              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+              yq -o json > "$(workspaces.data.path)/$(params.subdirectory)/rpa.json" << EOF
               apiVersion: appstudio.redhat.com/v1alpha1
               kind: ReleasePlanAdmission
               metadata:
@@ -52,8 +66,8 @@ spec:
                               replacement: "|name:.*|name: myName|"
               EOF
 
-              mkdir "$(workspaces.data.path)/results"
-              yq -o json > "$(workspaces.data.path)/snapshot_spec.json" << EOF
+              mkdir "$(workspaces.data.path)/$(params.subdirectory)/results"
+              yq -o json > "$(workspaces.data.path)/$(params.subdirectory)/snapshot_spec.json" << EOF
               {
                   "application": "foo-app",
                   "artifacts": {},
@@ -73,6 +87,40 @@ spec:
                       }]
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
+          - name: create-trusted-artifact
+            args:
+              - create
+              - --store
+              - $(params.ociStorage)
+              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+            computeResources: { }
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            env:
+              - name: IMAGE_EXPIRES_AFTER
+                value: 1d
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+          - name: patch-source-data-artifact-result
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eu
+              
+              # this is needed to skip trusted-artifacts tasks
+              # when using PVC based workspaces.
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo -n "$(params.ociStorage)" > "$(results.sourceDataArtifact.path)"
+              fi
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -82,21 +130,27 @@ spec:
       onError: continue
       params:
         - name: fileUpdatesPath
-          value: "rpa.json"
+          value: "$(context.pipelineRun.uid)/rpa.json"
         - name: synchronously
           value: "false"
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
         - name: snapshotPath
-          value: snapshot_spec.json
+          value: $(context.pipelineRun.uid)/snapshot_spec.json
         - name: dataPath
           value: ""
         - name: resultsDirPath
-          value: results
+          value: $(context.pipelineRun.uid)/results
         - name: taskGitUrl
           value: "http://localhost"
         - name: taskGitRevision
           value: "main"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
       runAfter:
         - setup
       workspaces:
@@ -111,13 +165,30 @@ spec:
       params:
         - name: result
           value: $(tasks.run-task.results.mergeRequestUrl)
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
       taskSpec:
         params:
           - name: result
             type: string
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
         workspaces:
           - name: data
         steps:
+          - name: use-trusted-artifact
+            args:
+              - use
+              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+            env:
+              - name: "ORAS_OPTIONS"
+                value: "--insecure"
+            computeResources: {}
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:0f82be4be43294b6a96846d87ef7f7c0b9e34267
             script: |
