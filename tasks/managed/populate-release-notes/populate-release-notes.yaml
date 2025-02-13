@@ -190,10 +190,12 @@ spec:
             echo "No data JSON was provided."
             exit 1
         fi
+        cat "$(workspaces.data.path)/$(params.dataPath)"
 
         if [ "$(jq -r '.releaseNotes.type' "${DATA_FILE}")" != "RHSA" ] ; then
             echo "Type is not RHSA. Ensuring references key exists, but not adding any"
             jq '.releaseNotes.references += []' "${DATA_FILE}" > /tmp/data.tmp && mv /tmp/data.tmp "${DATA_FILE}"
+            cat "$(workspaces.data.path)/$(params.dataPath)"
             exit 0
         fi
 
@@ -212,6 +214,7 @@ spec:
 
         # Remove duplicate references
         jq '.releaseNotes.references |= unique' "${DATA_FILE}" > /tmp/data.tmp && mv /tmp/data.tmp "${DATA_FILE}"
+        cat "$(workspaces.data.path)/$(params.dataPath)"
     - name: create-trusted-artifact
       args:
         - create
@@ -227,6 +230,8 @@ spec:
           value: "--insecure"
         - name: "HOME"
           value: "/tekton/home"
+        - name: "DEBUG"
+          value: "1"
     - name: patch-source-data-artifact-result
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       script: |
