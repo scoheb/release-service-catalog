@@ -41,6 +41,9 @@ spec:
         OCI repository. An empty string means the artifacts do not expire.
       type: string
       default: "1d"
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   workspaces:
     - name: data
       description: Workspace to save the CR jsons to
@@ -87,6 +90,13 @@ spec:
     - description: Subdirectory inside the workspace to be used
       name: subdirectory
       type: string
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
   steps:
     - name: collect-data
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -110,10 +120,10 @@ spec:
 
         RESULTS_DIR_PATH="results"
         if [ -n "$(params.subdirectory)" ]; then
-          mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
           if [ "$(params.ociStorage)" == "empty" ]; then
             echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-            touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+            touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
 
             # this is needed to skip trusted-artifacts tasks
             # when using PVC based workspaces.
@@ -122,34 +132,34 @@ spec:
           RESULTS_DIR_PATH="$(params.subdirectory)/results"
         fi
 
-        mkdir -p "$(workspaces.data.path)/$RESULTS_DIR_PATH"
+        mkdir -p "$(params.dataDir)/$RESULTS_DIR_PATH"
         echo -n "$RESULTS_DIR_PATH" > "$(results.resultsDir.path)"
 
         RELEASE_PATH="$(params.subdirectory)/release.json"
         echo -n "$RELEASE_PATH" > "$(results.release.path)"
-        get-resource "release" "${RELEASE}" | tee "$(workspaces.data.path)/$RELEASE_PATH"
+        get-resource "release" "${RELEASE}" | tee "$(params.dataDir)/$RELEASE_PATH"
 
         RELEASEPLAN_PATH="$(params.subdirectory)/release_plan.json"
         echo -n "$RELEASEPLAN_PATH" > "$(results.releasePlan.path)"
-        get-resource "releaseplan" "${RELEASE_PLAN}" | tee "$(workspaces.data.path)/$RELEASEPLAN_PATH"
+        get-resource "releaseplan" "${RELEASE_PLAN}" | tee "$(params.dataDir)/$RELEASEPLAN_PATH"
 
         RELEASEPLANADMISSION_PATH="$(params.subdirectory)/release_plan_admission.json"
         echo -n "$RELEASEPLANADMISSION_PATH" > "$(results.releasePlanAdmission.path)"
         get-resource "releaseplanadmission" "${RELEASE_PLAN_ADMISSION}" \
-          | tee "$(workspaces.data.path)/$RELEASEPLANADMISSION_PATH"
+          | tee "$(params.dataDir)/$RELEASEPLANADMISSION_PATH"
 
         RELEASESERVICECONFIG_PATH="$(params.subdirectory)/release_service_config.json"
         echo -n "$RELEASESERVICECONFIG_PATH" > "$(results.releaseServiceConfig.path)"
         get-resource "releaseserviceconfig" "${RELEASE_SERVICE_CONFIG}" \
-          | tee "$(workspaces.data.path)/$RELEASESERVICECONFIG_PATH"
+          | tee "$(params.dataDir)/$RELEASESERVICECONFIG_PATH"
 
         echo -e "\nFetching Snapshot Spec"
         SNAPSHOTSPEC_PATH="$(params.subdirectory)/snapshot_spec.json"
         echo -n "$SNAPSHOTSPEC_PATH" > "$(results.snapshotSpec.path)"
-        get-resource "snapshot" "${SNAPSHOT}" "{.spec}" | tee "$(workspaces.data.path)/$SNAPSHOTSPEC_PATH"
+        get-resource "snapshot" "${SNAPSHOT}" "{.spec}" | tee "$(params.dataDir)/$SNAPSHOTSPEC_PATH"
 
         echo -e "\nFetching fbcFragment"
-        jq -cr '.components[0].containerImage' < "$(workspaces.data.path)/$SNAPSHOTSPEC_PATH" | tr -d "\n" \
+        jq -cr '.components[0].containerImage' < "$(params.dataDir)/$SNAPSHOTSPEC_PATH" | tr -d "\n" \
           | tee "$(results.fbcFragment.path)"
 
         echo -e "\nFetching merged data json"
@@ -168,7 +178,7 @@ spec:
 
         DATA_PATH="$(params.subdirectory)/data.json"
         echo -n "$DATA_PATH" > "$(results.data.path)"
-        echo "$merged_output" | tee "$(workspaces.data.path)/$DATA_PATH"
+        echo "$merged_output" | tee "$(params.dataDir)/$DATA_PATH"
     - name: collect-single-component-mode-data
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       env:
@@ -180,7 +190,7 @@ spec:
 
         # check if RP/RPA has a single-component mode
         DATA_PATH="$(params.subdirectory)/data.json"
-        SINGLE_COMPONENT_MODE=$(jq -r '.singleComponentMode // "false"' "$(workspaces.data.path)/$DATA_PATH")
+        SINGLE_COMPONENT_MODE=$(jq -r '.singleComponentMode // "false"' "$(params.dataDir)/$DATA_PATH")
         SNAPSHOT_NAME=$(echo "${SNAPSHOT}" | cut -f2 -d/)
         SNAPSHOT_NAMESPACE=$(echo "${SNAPSHOT}" | cut -f1 -d/)
 
@@ -224,10 +234,10 @@ spec:
             done
         }
 
-        check_source "Release" "$(workspaces.data.path)/$(params.subdirectory)/release.json"
-        check_source "ReleasePlan" "$(workspaces.data.path)/$(params.subdirectory)/release_plan.json"
+        check_source "Release" "$(params.dataDir)/$(params.subdirectory)/release.json"
+        check_source "ReleasePlan" "$(params.dataDir)/$(params.subdirectory)/release_plan.json"
         check_source "ReleasePlanAdmission" \
-            "$(workspaces.data.path)/$(params.subdirectory)/release_plan_admission.json"
+            "$(params.dataDir)/$(params.subdirectory)/release_plan_admission.json"
 
         exit $RC
     - name: print-pipeline-ref-info
@@ -237,7 +247,7 @@ spec:
         set -eu
 
         pipelineref=$(jq -c '.spec.pipeline.pipelineRef' \
-          "$(workspaces.data.path)/$(params.subdirectory)/release_plan_admission.json")
+          "$(params.dataDir)/$(params.subdirectory)/release_plan_admission.json")
         resolver=$(jq -r '.resolver // ""' <<< "${pipelineref}")
         if [ "${resolver}" == "git" ] ; then
           url=$(jq -r '.params[] | select(.name=="url") | .value' <<< "${pipelineref}")
@@ -277,7 +287,7 @@ spec:
         - create
         - --store
         - $(params.ociStorage)
-        - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
       env:
