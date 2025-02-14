@@ -52,6 +52,9 @@ spec:
       description: Subdirectory inside the workspace to be used
       type: string
       default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   workspaces:
     - name: data
       description: The workspace where the snapshot spec json file resides
@@ -65,6 +68,13 @@ spec:
     - description: Produced trusted data artifact
       name: sourceDataArtifact
       type: string
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
   steps:
     - name: skip-trusted-artifact-operations
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -74,12 +84,13 @@ spec:
 
         if [ "$(params.ociStorage)" == "empty" ]; then
           echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-          touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+          touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
         fi
     - name: use-trusted-artifact
       args:
         - use
-        - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
       env:
         - name: "ORAS_OPTIONS"
           value: "--insecure"
@@ -129,22 +140,22 @@ spec:
         echo "${PYXIS_KEY}" > /tmp/key
         set -x
 
-        SNAPSHOT_SPEC_FILE="$(workspaces.data.path)/$(params.snapshotPath)"
+        SNAPSHOT_SPEC_FILE="$(params.dataDir)/$(params.snapshotPath)"
         if [ ! -f "${SNAPSHOT_SPEC_FILE}" ] ; then
             echo "No valid snapshot file was provided."
             exit 1
         fi
 
-        DATA_FILE="$(workspaces.data.path)/$(params.dataPath)"
+        DATA_FILE="$(params.dataDir)/$(params.dataPath)"
         if [ ! -f "${DATA_FILE}" ] ; then
             echo "No data JSON was provided."
             exit 1
         fi
 
-        RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/publish-pyxis-repository-results.json"
+        RESULTS_FILE="$(params.dataDir)/$(params.resultsDirPath)/publish-pyxis-repository-results.json"
         SIGN_REGISTRY_ACCESS_PATH="$(dirname "$(params.dataPath)")/sign-registry-access.txt"
         echo -n "$SIGN_REGISTRY_ACCESS_PATH" > "$(results.signRegistryAccessPath.path)"
-        SIGN_REGISTRY_ACCESS_PATH="$(workspaces.data.path)/${SIGN_REGISTRY_ACCESS_PATH}"
+        SIGN_REGISTRY_ACCESS_PATH="$(params.dataDir)/${SIGN_REGISTRY_ACCESS_PATH}"
         touch "$SIGN_REGISTRY_ACCESS_PATH"
 
         # Use a unique key to avoid conflicts with other tasks
@@ -235,7 +246,7 @@ spec:
         - create
         - --store
         - $(params.ociStorage)
-        - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
       env:

@@ -69,6 +69,9 @@ spec:
       description: Subdirectory inside the workspace to be used
       type: string
       default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   workspaces:
     - name: data
       description: workspace to read and save files
@@ -76,6 +79,13 @@ spec:
     - description: Produced trusted data artifact
       name: sourceDataArtifact
       type: string
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
   steps:
     - name: skip-trusted-artifact-operations
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -85,12 +95,13 @@ spec:
 
         if [ "$(params.ociStorage)" == "empty" ]; then
           echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-          touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+          touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
         fi
     - name: use-trusted-artifact
       args:
         - use
-        - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
       env:
         - name: "ORAS_OPTIONS"
           value: "--insecure"
@@ -127,23 +138,23 @@ spec:
         CONCURRENT_LIMIT=$(params.concurrentLimit)
         REQUEST_COUNT=0
 
-        SNAPSHOT_PATH=$(workspaces.data.path)/$(params.snapshotPath)
+        SNAPSHOT_PATH=$(params.dataDir)/$(params.snapshotPath)
         TASK_LABEL="internal-services.appstudio.openshift.io/group-id"
         TASK_ID=$(context.taskRun.uid)
         PIPELINERUN_LABEL="internal-services.appstudio.openshift.io/pipelinerun-uid"
 
-        DATA_FILE="$(workspaces.data.path)/$(params.dataPath)"
+        DATA_FILE="$(params.dataDir)/$(params.dataPath)"
         if [ ! -f "${DATA_FILE}" ] ; then
             echo "No valid data file was provided."
             exit 1
         fi
-        RPA_FILE="$(workspaces.data.path)/$(params.releasePlanAdmissionPath)"
+        RPA_FILE="$(params.dataDir)/$(params.releasePlanAdmissionPath)"
         if [ ! -f "${RPA_FILE}" ] ; then
             echo "No valid rpa file was provided."
             exit 1
         fi
 
-        SIGN_REGISTRY_ACCESS_FILE=$(workspaces.data.path)/$(params.signRegistryAccessPath)
+        SIGN_REGISTRY_ACCESS_FILE=$(params.dataDir)/$(params.signRegistryAccessPath)
         if [ ! -f "${SIGN_REGISTRY_ACCESS_FILE}" ] ; then
             echo "No valid file was provided as signRegistryAccessPath."
             exit 1
@@ -348,7 +359,7 @@ spec:
         - create
         - --store
         - $(params.ociStorage)
-        - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
       env:

@@ -64,6 +64,9 @@ spec:
       description: Subdirectory inside the workspace to be used
       type: string
       default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   workspaces:
     - name: data
   results:
@@ -74,6 +77,12 @@ spec:
     - name: atlas-secret
       secret:
         secretName: $(params.atlasSecretName)
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
   steps:
     - name: skip-trusted-artifact-operations
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -83,12 +92,13 @@ spec:
 
         if [ "$(params.ociStorage)" == "empty" ]; then
           echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-          touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+          touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
         fi
     - name: use-trusted-artifact
       args:
         - use
-        - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
       env:
         - name: "ORAS_OPTIONS"
           value: "--insecure"
@@ -103,8 +113,8 @@ spec:
         set -o errexit -o pipefail -o nounset
 
         # creating working directory
-        workdir="$(workspaces.data.path)/$(params.subdirectory)/workdir"
-        sbomsDir="$(workspaces.data.path)/$(params.sbomDir)"
+        workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
+        sbomsDir="$(params.dataDir)/$(params.sbomDir)"
         mkdir -p "${workdir}"
         mkdir -p "${sbomsDir}"
 
@@ -184,8 +194,8 @@ spec:
         set -o errexit -o pipefail -o nounset
 
         # creating working directory
-        workdir="$(workspaces.data.path)/$(params.subdirectory)/workdir"
-        sbomsDir="$(workspaces.data.path)/$(params.sbomDir)"
+        workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
+        sbomsDir="$(params.dataDir)/$(params.sbomDir)"
         mkdir -p "${workdir}"
         mkdir -p "${sbomsDir}"
 
@@ -219,8 +229,8 @@ spec:
         set -o errexit -o pipefail -o nounset
 
         # creating working directory
-        workdir="$(workspaces.data.path)/$(params.subdirectory)/workdir"
-        sbomsDir="$(workspaces.data.path)/$(params.sbomDir)"
+        workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
+        sbomsDir="$(params.dataDir)/$(params.sbomDir)"
         mkdir -p "${workdir}"
         mkdir -p "${sbomsDir}"
 
@@ -283,7 +293,7 @@ spec:
         - create
         - --store
         - $(params.ociStorage)
-        - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
       env:
