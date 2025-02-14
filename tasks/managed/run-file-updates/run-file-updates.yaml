@@ -60,6 +60,9 @@ spec:
       description: Subdirectory inside the workspace to be used
       type: string
       default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   results:
     - name: mergeRequestUrl
       description: URL of MR that was created
@@ -69,6 +72,13 @@ spec:
   workspaces:
     - name: data
       description: Workspace where the file updates to apply are defined
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
   steps:
     - name: skip-trusted-artifact-operations
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -78,12 +88,13 @@ spec:
 
         if [ "$(params.ociStorage)" == "empty" ]; then
           echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-          touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+          touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
         fi
     - name: use-trusted-artifact
       args:
         - use
-        - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
       env:
         - name: "ORAS_OPTIONS"
           value: "--insecure"
@@ -109,27 +120,27 @@ spec:
             if [ "$err" -ne 0 ] ; then
                 echo -n \
                   "$0: ERROR '$command' failed at line $line - exited with status $err"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/error"
+                touch "$(params.dataDir)/$(params.subdirectory)/error"
             fi
             exit 0
         }
         # due to set -e, this catches all EXIT and ERR calls and the task should never fail with nonzero exit code
         trap 'exitfunc $? $LINENO "$BASH_COMMAND"' EXIT
 
-        rm -rf "$(workspaces.data.path)/$(params.subdirectory)/error"
+        rm -rf "$(params.dataDir)/$(params.subdirectory)/error"
         
         # Obtain application from snapshot
-        application=$(jq -rc .application "$(workspaces.data.path)/$(params.snapshotPath)")
+        application=$(jq -rc .application "$(params.dataDir)/$(params.snapshotPath)")
 
         # Extract the key from the JSON file
-        fileUpdates=$(jq -rc "$(params.jsonKey)" "$(workspaces.data.path)/$(params.fileUpdatesPath)")
+        fileUpdates=$(jq -rc "$(params.jsonKey)" "$(params.dataDir)/$(params.fileUpdatesPath)")
 
         TASK_LABEL="internal-services.appstudio.openshift.io/group-id"
         REQUEST_LABEL="internal-services.appstudio.openshift.io/request-id"
         TASK_ID=$(context.taskRun.uid)
         PIPELINERUN_LABEL="internal-services.appstudio.openshift.io/pipelinerun-uid"
 
-        RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/file-updates-results.json"
+        RESULTS_FILE="$(params.dataDir)/$(params.resultsDirPath)/file-updates-results.json"
         RESULTS_JSON='{"merge_requests":[]}'
 
         # empty result to start so result is available
@@ -149,7 +160,7 @@ spec:
           echo "=== Updates for repo: ${repo} ==="
 
           echo -en "  Evaluating '{{ }}' expressions..."
-          updatedPaths=$(update-paths -p "${paths}" -f "$(workspaces.data.path)/$(params.snapshotPath)")
+          updatedPaths=$(update-paths -p "${paths}" -f "$(params.dataDir)/$(params.snapshotPath)")
           echo "done"
 
           echo -en "  Creating InternalRequest to produce file-updates..."
@@ -202,7 +213,7 @@ spec:
         - create
         - --store
         - $(params.ociStorage)
-        - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
       env:
@@ -229,7 +240,7 @@ spec:
         #!/usr/bin/env bash
         set -eu
 
-        if [ -f "$(workspaces.data.path)/$(params.subdirectory)/error" ]; then
+        if [ -f "$(params.dataDir)/$(params.subdirectory)/error" ]; then
           echo "Errors encountered"
           exit 1
         fi

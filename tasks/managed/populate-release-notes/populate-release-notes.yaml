@@ -32,6 +32,9 @@ spec:
       description: Subdirectory inside the workspace to be used
       type: string
       default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   results:
     - name: sbomDataPath
       description: Path to data used in the component SBOM creation in the data workspace
@@ -41,6 +44,13 @@ spec:
   workspaces:
     - name: data
       description: The workspace where the data JSON file resides
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
   steps:
     - name: skip-trusted-artifact-operations
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -50,12 +60,13 @@ spec:
 
         if [ "$(params.ociStorage)" == "empty" ]; then
           echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-          touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+          touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
         fi
     - name: use-trusted-artifact
       args:
         - use
-        - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
       env:
         - name: "ORAS_OPTIONS"
           value: "--insecure"
@@ -69,13 +80,13 @@ spec:
         #!/usr/bin/env bash
         set -ex
 
-        DATA_FILE="$(workspaces.data.path)/$(params.dataPath)"
+        DATA_FILE="$(params.dataDir)/$(params.dataPath)"
         if [ ! -f "${DATA_FILE}" ] ; then
             echo "No data JSON was provided."
             exit 1
         fi
 
-        SNAPSHOT_FILE="$(workspaces.data.path)/$(params.snapshotPath)"
+        SNAPSHOT_FILE="$(params.dataDir)/$(params.snapshotPath)"
         if [ ! -f "${SNAPSHOT_FILE}" ] ; then
             echo "No valid snapshot file was provided."
             exit 1
@@ -85,7 +96,7 @@ spec:
 
         # Initialize the SBOM data result
         relativeDir=$(dirname "$(params.dataPath)")
-        sbomDataPath="$(workspaces.data.path)/${relativeDir}/sbom_data.json"
+        sbomDataPath="$(params.dataDir)/${relativeDir}/sbom_data.json"
         echo -n "${relativeDir}/sbom_data.json" > "$(results.sbomDataPath.path)"
         cp "${DATA_FILE}" "${sbomDataPath}"
 
@@ -185,17 +196,17 @@ spec:
         #!/usr/bin/env bash
         set -ex
 
-        DATA_FILE="$(workspaces.data.path)/$(params.dataPath)"
+        DATA_FILE="$(params.dataDir)/$(params.dataPath)"
         if [ ! -f "${DATA_FILE}" ] ; then
             echo "No data JSON was provided."
             exit 1
         fi
-        cat "$(workspaces.data.path)/$(params.dataPath)"
+        cat "$(params.dataDir)/$(params.dataPath)"
 
         if [ "$(jq -r '.releaseNotes.type' "${DATA_FILE}")" != "RHSA" ] ; then
             echo "Type is not RHSA. Ensuring references key exists, but not adding any"
             jq '.releaseNotes.references += []' "${DATA_FILE}" > /tmp/data.tmp && mv /tmp/data.tmp "${DATA_FILE}"
-            cat "$(workspaces.data.path)/$(params.dataPath)"
+            cat "$(params.dataDir)/$(params.dataPath)"
             exit 0
         fi
 
@@ -214,13 +225,13 @@ spec:
 
         # Remove duplicate references
         jq '.releaseNotes.references |= unique' "${DATA_FILE}" > /tmp/data.tmp && mv /tmp/data.tmp "${DATA_FILE}"
-        cat "$(workspaces.data.path)/$(params.dataPath)"
+        cat "$(params.dataDir)/$(params.dataPath)"
     - name: create-trusted-artifact
       args:
         - create
         - --store
         - $(params.ociStorage)
-        - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+        - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
       env:
