@@ -13,6 +13,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       params:
@@ -30,6 +33,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
@@ -37,8 +47,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/test_data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/test_data.json" << EOF
               {
                 "mapping": {
                   "defaults": {
@@ -101,7 +111,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/test_snapshot_spec.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -146,14 +156,14 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
             env:
@@ -183,9 +193,11 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       runAfter:
         - setup
       workspaces:
@@ -197,9 +209,11 @@ spec:
           workspace: tests-workspace
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       runAfter:
         - run-task
       taskSpec:
@@ -210,11 +224,31 @@ spec:
             type: string
           - name: subdirectory
             type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
           - name: use-trusted-artifact
             args:
               - use
-              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
             env:
               - name: "ORAS_OPTIONS"
                 value: "--insecure"
@@ -226,22 +260,22 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              cat "$(workspaces.data.path)/$(params.subdirectory)/test_snapshot_spec.json"
+              cat "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
 
               echo Test that comp1 has the correct contentGateway.productVersionName
               test "$(
                 jq -r '.components[] | select(.name=="comp1") | .contentGateway.productVersionName' \
-                < "$(workspaces.data.path)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
               )" == "comp1-1"
 
               echo Test that comp2 has the correct contentGateway.filePrefix
               test "$(
                 jq -r '.components[] | select(.name=="comp2") | .contentGateway.filePrefix' \
-                < "$(workspaces.data.path)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
               )" == "myapp-comp1-1"
 
               echo Test that comp3 has the correct contentGateway defaults
               test "$(
                 jq -c '.components[] | select(.name=="comp3") | .contentGateway' \
-                < "$(workspaces.data.path)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
               )" == '{"productName":"myapp","productCode":"MYAPP","productVersionName":"1.0","filePrefix":"myapp-1.3"}'
