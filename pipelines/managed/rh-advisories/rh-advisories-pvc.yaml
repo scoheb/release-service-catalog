@@ -62,6 +62,10 @@ spec:
     - name: ociStorage
       type: string
       default: "empty"
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
+      default: "/workspace/data"
   workspaces:
     - name: release-workspace
   tasks:
@@ -115,6 +119,8 @@ spec:
           value: $(context.pipelineRun.uid)
         - name: ociStorage
           value: $(params.ociStorage)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: release-workspace
@@ -132,7 +138,7 @@ spec:
             value: tasks/managed/reduce-snapshot/reduce-snapshot.yaml
       params:
         - name: SNAPSHOT
-          value: $(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)
+          value: $(params.dataDir)/$(tasks.collect-data.results.snapshotSpec)
         - name: SINGLE_COMPONENT
           value: $(tasks.collect-data.results.singleComponentMode)
         - name: SINGLE_COMPONENT_CUSTOM_RESOURCE
@@ -140,15 +146,76 @@ spec:
         - name: SINGLE_COMPONENT_CUSTOM_RESOURCE_NS
           value: $(tasks.collect-data.results.snapshotNamespace)
         - name: SNAPSHOT_PATH
-          value: $(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)
+          value: $(params.dataDir)/$(tasks.collect-data.results.snapshotSpec)
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.collect-data.results.sourceDataArtifact)=$(workspaces.data.path)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.collect-data.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: release-workspace
       runAfter:
         - collect-data
+    - name: extract-requester-from-release
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: hub/kubernetes-actions/kubernetes-actions.yaml
+      params:
+        - name: image
+          value: "quay.io/hacbs-release/cloud-builders-kubectl\
+            @sha256:8ab94be8b2b4f3d117f02d868b39540fddd225447abf4014f7ba4765cb39f753"
+        - name: script
+          value: |
+            set -x
+
+            NAMESPACE=$(echo $(params.release) | cut -d '/' -f 1)
+            NAME=$(echo $(params.release) | cut -d '/' -f 2)
+
+            AUTHOR=$(kubectl get release ${NAME} -n ${NAMESPACE} \
+            -o=jsonpath='{.status.attribution.author}' | tee $(results.output-result.path))
+
+            if [[ ${AUTHOR} == "" ]] ; then exit 1 ; fi
+      runAfter:
+        - verify-access-to-resources
+    - name: apply-mapping
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      retries: 3
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/apply-mapping/apply-mapping.yaml
+      params:
+        - name: failOnEmptyResult
+          value: "true"
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.reduce-snapshot.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - reduce-snapshot
