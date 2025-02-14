@@ -13,6 +13,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup-other-formats
       params:
@@ -32,6 +35,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: setup-other-formats-values
             image: quay.io/konflux-ci/release-service-utils:d320c36f3d707cd5bfe55fe783f70236c06cc2e5
@@ -39,8 +49,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/test_data_other_formats.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/test_data_other_formats.json" << EOF
               {
                 "mapping": {
                   "components": [
@@ -53,7 +63,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/test_snapshot_spec_other_formats.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec_other_formats.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -72,14 +82,14 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
             env:
@@ -109,9 +119,11 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.setup-other-formats.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup-other-formats.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       runAfter:
         - setup-other-formats
       workspaces:
@@ -123,18 +135,44 @@ spec:
           workspace: tests-workspace
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task-other-formats.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task-other-formats.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       taskSpec:
         workspaces:
           - name: data
         params:
           - name: sourceDataArtifact
             type: string
+          - name: subdirectory
+            type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
           - name: use-trusted-artifact
             args:
               - use
-              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)
+              - $(params.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)
             env:
               - name: "ORAS_OPTIONS"
                 value: "--insecure"
@@ -149,25 +187,25 @@ spec:
               echo Test that SNAPSHOT contains component comp1
               test "$(
                 jq -r '[ .components[] | select(.name=="comp1") ] | length' \
-                < "$(workspaces.data.path)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )" -eq 1
 
               echo Test that repository of component comp1 stayed intact
               test "$(
                 jq -r '.components[] | select(.name=="comp1") | .repository' \
-                < "$(workspaces.data.path)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )" == quay.io/my-sample/my-image
 
               echo Test that rh-registry-repo for comp1 is not set because it was not in a known format
               test -z "$(
                 jq -r '.components[] | select(.name=="comp1") | ."rh-registry-repo" // empty' \
-                < "$(workspaces.data.path)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )"
 
               echo Test that registry-access-repo for comp1 is not set because it was not in a known format
               test -z "$(
                 jq -r '.components[] | select(.name=="comp1") | ."registry-access-repo" // empty' \
-                < "$(workspaces.data.path)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )"
       runAfter:
         - run-task-other-formats
