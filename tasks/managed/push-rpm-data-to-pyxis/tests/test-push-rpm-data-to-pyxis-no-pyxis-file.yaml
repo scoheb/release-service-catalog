@@ -15,6 +15,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       params:
@@ -32,6 +35,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:34016ab5a3904257c198a12d1829b0093214b6ee
@@ -39,7 +49,7 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
           - name: skip-trusted-artifact-operations
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
@@ -48,7 +58,7 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
     - name: run-task
       taskRef:
@@ -66,6 +76,8 @@ spec:
           value: ""
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       runAfter:
         - setup
       workspaces:

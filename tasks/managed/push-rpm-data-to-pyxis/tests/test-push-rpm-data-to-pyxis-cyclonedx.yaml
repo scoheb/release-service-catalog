@@ -14,6 +14,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       params:
@@ -31,6 +34,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:34016ab5a3904257c198a12d1829b0093214b6ee
@@ -38,8 +48,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/pyxis_data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/pyxis_data.json" << EOF
               {
                 "components": [
                   {
@@ -77,14 +87,14 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
             env:
@@ -116,9 +126,11 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       runAfter:
         - setup
       workspaces:
@@ -130,9 +142,11 @@ spec:
           workspace: tests-workspace
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       taskSpec:
         workspaces:
           - name: data
@@ -141,11 +155,31 @@ spec:
             type: string
           - name: subdirectory
             type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
           - name: use-trusted-artifact
             args:
               - use
-              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
             env:
               - name: "ORAS_OPTIONS"
                 value: "--insecure"
@@ -157,22 +191,22 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              if [ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_cosign.txt")" != 2 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt")" != 2 ]; then
                 echo Error: cosign was expected to be called 2 times. Actual calls:
-                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_cosign.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt"
                 exit 1
               fi
 
               if [ "$(wc -l < \
-                "$(workspaces.data.path)/$(params.subdirectory)/mock_upload_rpm_data_cyclonedx.txt")" != 2 ]; then
+                "$(params.dataDir)/$(params.subdirectory)/mock_upload_rpm_data_cyclonedx.txt")" != 2 ]; then
                 echo Error: upload_rpm_data_cyclonedx was expected to be called 2 times. Actual calls:
-                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_upload_rpm_data_cyclonedx.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_upload_rpm_data_cyclonedx.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_select-oci-auth.txt")" != 2 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_select-oci-auth.txt")" != 2 ]; then
                 echo Error: select-oci-with was expected to be called 2 times. Actual calls:
-                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_select-oci-auth.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_select-oci-auth.txt"
                 exit 1
               fi
       runAfter:

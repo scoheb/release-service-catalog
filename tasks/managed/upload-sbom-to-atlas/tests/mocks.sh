@@ -5,7 +5,7 @@ set -eux
 curl() {
   # Output the call to stderr
   echo "Mock curl called with:" "$@" >&2
-  workdir="$(workspaces.data.path)/$(params.subdirectory)/workdir"
+  workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
   echo "$@" >> "$workdir/mock_curl.txt"
 
   # Throw a failure (which should be caught) for Atlas API calls in the curl fail test

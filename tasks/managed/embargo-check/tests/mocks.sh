@@ -4,8 +4,8 @@ set -eux
 # mocks to be injected into task step scripts
 function curl() {
   echo Mock curl called with: $* >&2
-  mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
-  echo $* >> "$(workspaces.data.path)/$(params.subdirectory)/mock_curl.txt"
+  mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt"
 
   if [[ "$*" == "--fail --output /dev/null https://jira.atlassian.com/rest/api/2/issue/ISSUE-123" ]]
   then

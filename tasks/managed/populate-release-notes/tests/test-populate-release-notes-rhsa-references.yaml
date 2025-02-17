@@ -13,6 +13,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       params:
@@ -30,6 +33,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: setup
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -37,8 +47,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/data.json" << EOF
               {
                 "releaseNotes": {
                   "cves": [
@@ -100,7 +110,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/snapshot.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -125,14 +135,14 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
             env:
@@ -162,9 +172,11 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -173,9 +185,11 @@ spec:
     - name: check-result
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -185,13 +199,33 @@ spec:
             type: string
           - name: subdirectory
             type: string
+          - name: dataDir
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
           - name: use-trusted-artifact
             args:
               - use
-              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
             env:
               - name: "ORAS_OPTIONS"
                 value: "--insecure"
@@ -206,19 +240,19 @@ spec:
               # There should be 4 references. The one provided (not duplicated), the generic classification one,
               # and ones for CVE-123 and CVE-456
               test "$(jq '.releaseNotes.references | length' \
-                "$(workspaces.data.path)/$(params.subdirectory)/data.json")" \
+                "$(params.dataDir)/$(params.subdirectory)/data.json")" \
                 == 4
               test "$(jq -jr '.releaseNotes.references[0]' \
-                "$(workspaces.data.path)/$(params.subdirectory)/data.json")" == \
+                "$(params.dataDir)/$(params.subdirectory)/data.json")" == \
                 "https://access.redhat.com/security/cve/CVE-123"
               test "$(jq -jr '.releaseNotes.references[1]' \
-                "$(workspaces.data.path)/$(params.subdirectory)/data.json")" == \
+                "$(params.dataDir)/$(params.subdirectory)/data.json")" == \
                 "https://access.redhat.com/security/cve/CVE-456"
               test "$(jq -jr '.releaseNotes.references[2]' \
-                "$(workspaces.data.path)/$(params.subdirectory)/data.json")" == \
+                "$(params.dataDir)/$(params.subdirectory)/data.json")" == \
                 "https://access.redhat.com/security/updates/classification/"
               test "$(jq -jr '.releaseNotes.references[3]' \
-                "$(workspaces.data.path)/$(params.subdirectory)/data.json")" == \
+                "$(params.dataDir)/$(params.subdirectory)/data.json")" == \
                 "https://docs.example.com/some/example/release-notes"
       runAfter:
         - run-task
