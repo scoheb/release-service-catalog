@@ -13,6 +13,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       params:
@@ -30,6 +33,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: setup
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
@@ -37,8 +47,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)/data.json" << EOF
               {
                 "releaseNotes": {
                   "product_id": [
@@ -71,7 +81,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/snapshot.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -96,14 +106,14 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
             env:
@@ -133,9 +143,11 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -146,9 +158,11 @@ spec:
         - name: sbomDataPath
           value: $(tasks.run-task.results.sbomDataPath)
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -159,13 +173,33 @@ spec:
             type: string
           - name: subdirectory
             type: string
+          - name: dataDir
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
           - name: use-trusted-artifact
             args:
               - use
-              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
             env:
               - name: "ORAS_OPTIONS"
                 value: "--insecure"
@@ -178,7 +212,7 @@ spec:
               set -eux
 
               imagearch1=$(jq '.releaseNotes.content.images[0]' \
-                "$(workspaces.data.path)/$(params.subdirectory)/data.json")
+                "$(params.dataDir)/$(params.subdirectory)/data.json")
               test "$(jq -r '.architecture' <<< "$imagearch1")" == "amd64"
               test "$(jq -r '.containerImage' <<< "$imagearch1")" == "registry.redhat.io/product/repo@sha256:abcdefg"
               test "$(jq -r '.purl' <<< "$imagearch1")" == \
@@ -188,7 +222,7 @@ spec:
               test "$(jq -rc '.component' <<< "$imagearch1")" == "comp"
 
               imagearch2=$(jq '.releaseNotes.content.images[1]' \
-                "$(workspaces.data.path)/$(params.subdirectory)/data.json")
+                "$(params.dataDir)/$(params.subdirectory)/data.json")
               test "$(jq -r '.architecture' <<< "$imagearch2")" == "s390x"
               test "$(jq -r '.containerImage' <<< "$imagearch2")" == "registry.redhat.io/product/repo@sha256:deadbeef"
               test "$(jq -r '.purl' <<< "$imagearch2")" == \
@@ -199,9 +233,9 @@ spec:
 
               # Test SBOM injection
               test "$(jq -r '.images[0].multiarch' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "true"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "true"
 
               test "$(jq -r '.images[0].imageSha' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "123456"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "123456"
       runAfter:
         - run-task

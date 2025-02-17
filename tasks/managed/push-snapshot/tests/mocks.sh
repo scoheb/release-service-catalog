@@ -5,12 +5,12 @@ set -eux
 
 function cosign() {
   echo Mock cosign called with: $*
-  echo $* >> "$(workspaces.data.path)/$(params.subdirectory)/mock_cosign.txt"
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt"
 
   # mock cosign failing the first 3x for the retry test
   if [[ "$*" == "copy -f registry.io/retry-image:tag "*":"* ]]
   then
-    if [[ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_cosign.txt")" -le 3 ]]
+    if [[ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt")" -le 3 ]]
     then
       echo Expected cosign call failure for retry test
       return 1
@@ -55,7 +55,7 @@ function get-image-architectures() {
 }
 
 function select-oci-auth() {
-  echo $* >> "$(workspaces.data.path)/$(params.subdirectory)/mock_select-oci-auth.txt"
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_select-oci-auth.txt"
 }
 
 function oras() {

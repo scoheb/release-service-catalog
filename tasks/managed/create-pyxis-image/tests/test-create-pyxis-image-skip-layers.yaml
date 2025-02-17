@@ -13,6 +13,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       params:
@@ -30,6 +33,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:d7e40d79fbf859d80d0d46bebe1a92f6895efc61
@@ -37,8 +47,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
-              cat > "$(workspaces.data.path)/$(params.subdirectory)"/mapped_snapshot.json << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              cat > "$(params.dataDir)/$(params.subdirectory)"/mapped_snapshot.json << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -54,7 +64,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/mydata.json" << EOF
+              cat > "$(params.dataDir)/$(params.subdirectory)/mydata.json" << EOF
               {
                 "pyxis": {
                   "skipLayers": true
@@ -69,14 +79,14 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.sourceDataArtifact.path)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
             env:
@@ -110,9 +120,11 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -123,9 +135,11 @@ spec:
         - name: pyxisDataPath
           value: $(tasks.run-task.results.pyxisDataPath)
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
           value: "$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -137,13 +151,33 @@ spec:
             type: string
           - name: subdirectory
             type: string
+          - name: dataDir
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
+          - name: skip-trusted-artifact-operations
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eo pipefail
+              
+              if [ "$(params.ociStorage)" == "empty" ]; then
+                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
+                mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
+              fi
           - name: use-trusted-artifact
             args:
               - use
-              - $(params.sourceDataArtifact)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
             env:
               - name: "ORAS_OPTIONS"
                 value: "--insecure"
@@ -156,24 +190,24 @@ spec:
               set -eux
 
               if [ "$(wc -l < \
-                "$(workspaces.data.path)/$(params.subdirectory)/mock_create_container_image.txt")" != 1 ]; then
+                "$(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt")" != 1 ]; then
                 echo Error: create_container_image was expected to be called 1 time. Actual calls:
-                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_create_container_image.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(workspaces.data.path)/$(params.subdirectory)/mock_oras.txt")" != 3 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt")" != 3 ]; then
                 echo Error: oras was expected to be called 3 times. Actual calls:
-                cat "$(workspaces.data.path)/$(params.subdirectory)/mock_oras.txt"
+                cat "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"
                 exit 1
               fi
 
-              [ "$(head -n 1 < "$(workspaces.data.path)/$(params.subdirectory)/mock_skopeo.txt")" \
+              [ "$(head -n 1 < "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt")" \
                 = "inspect --raw docker://registry.io/image-with-gzipped-layers@sha256:mydigest" ]
 
               # check that decompressed layers info is not included in the oras manifest fetch
               jq -e '. | has("uncompressed_layers") == false' \
-                "$(workspaces.data.path)/$(params.subdirectory)/oras-manifest-fetch.json"
+                "$(params.dataDir)/$(params.subdirectory)/oras-manifest-fetch.json"
 
       runAfter:
         - run-task

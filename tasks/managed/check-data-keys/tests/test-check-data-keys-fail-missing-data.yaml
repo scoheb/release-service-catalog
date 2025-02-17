@@ -14,6 +14,9 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: run-task
       taskRef:
@@ -27,6 +30,8 @@ spec:
           value: ""
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace

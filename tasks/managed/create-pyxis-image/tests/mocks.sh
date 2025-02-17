@@ -4,10 +4,10 @@ set -exo pipefail
 # mocks to be injected into task step scripts
 
 function create_container_image() {
-  echo $* >> $(workspaces.data.path)/$(params.subdirectory)/mock_create_container_image.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt
   # The image id is a 4 digit number with leading zeros calculated from the call number,
   # e.g. 0001, 0002, 0003...
-  echo The image id is $(awk 'END{printf("%04i", NR)}' $(workspaces.data.path)/$(params.subdirectory)/mock_create_container_image.txt)
+  echo The image id is $(awk 'END{printf("%04i", NR)}' $(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt)
 
   if [[ "$*" != "--pyxis-url https://pyxis.preprod.api.redhat.com/ --certified false --tags "*" --is-latest false --verbose --oras-manifest-fetch "*" --name "*" --media-type "*" --digest "*" --architecture-digest "*" --architecture "*" --rh-push "* ]]
   then
@@ -18,7 +18,7 @@ function create_container_image() {
 }
 
 function cleanup_tags() {
-  echo $* >> $(workspaces.data.path)/$(params.subdirectory)/mock_cleanup_tags.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_cleanup_tags.txt
 
   if [[ "$*" != "--verbose --retry --pyxis-graphql-api https://graphql-pyxis.preprod.api.redhat.com/graphql/ "00?? ]]
   then
@@ -29,7 +29,7 @@ function cleanup_tags() {
 }
 
 function skopeo() {
-  echo $* >> $(workspaces.data.path)/$(params.subdirectory)/mock_skopeo.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt
   if [[ "$*" == "inspect --raw docker://registry.io/oci-artifact"* ]]
   then
     echo '{"mediaType": "application/vnd.oci.image.index.v1+json"}'
@@ -59,11 +59,11 @@ function get-image-architectures() {
 }
 
 function select-oci-auth() {
-  echo $* >> $(workspaces.data.path)/$(params.subdirectory)/mock_select-oci-auth.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_select-oci-auth.txt
 }
 
 function oras() {
-  echo $* >> $(workspaces.data.path)/$(params.subdirectory)/mock_oras.txt
+  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_oras.txt
   if [[ "$*" == "manifest fetch --registry-config"*.dockerfile ]]
   then
     echo '{"layers": [{"annotations": {"org.opencontainers.image.title": "Dockerfile.custom"}}]}'
