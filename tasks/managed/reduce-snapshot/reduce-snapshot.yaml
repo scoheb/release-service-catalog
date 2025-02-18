@@ -37,6 +37,10 @@ spec:
         OCI repository. An empty string means the artifacts do not expire.
       type: string
       default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
     - name: sourceDataArtifact
       type: string
       default: ""
@@ -58,6 +62,13 @@ spec:
     volumeMounts:
       - mountPath: /var/workdir
         name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: "HOME"
+        value: "/tekton/home"
   steps:
     - name: skip-trusted-artifact-operations
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -74,11 +85,6 @@ spec:
       args:
         - use
         - $(params.sourceDataArtifact)=/var/workdir/$(params.subdirectory)
-      env:
-        - name: "ORAS_OPTIONS"
-          value: "--insecure"
-        - name: "HOME"
-          value: "/tekton/home"
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
     - name: reduce
@@ -104,13 +110,6 @@ spec:
         - $(results.sourceDataArtifact.path)=/var/workdir/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
-      env:
-        - name: IMAGE_EXPIRES_AFTER
-          value: $(params.ociArtifactExpiresAfter)
-        - name: "ORAS_OPTIONS"
-          value: "--insecure"
-        - name: "HOME"
-          value: "/tekton/home"
     - name: patch-source-data-artifact-result
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       script: |

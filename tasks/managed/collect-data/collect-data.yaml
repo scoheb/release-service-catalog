@@ -36,6 +36,10 @@ spec:
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
       default: "empty"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
     - name: ociArtifactExpiresAfter
       description: Expiration date for the trusted artifacts created in the
         OCI repository. An empty string means the artifacts do not expire.
@@ -97,6 +101,13 @@ spec:
     volumeMounts:
       - mountPath: /var/workdir
         name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: "HOME"
+        value: "/tekton/home"
   steps:
     - name: collect-data
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -290,10 +301,3 @@ spec:
         - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
-      env:
-        - name: IMAGE_EXPIRES_AFTER
-          value: $(params.ociArtifactExpiresAfter)
-        - name: "ORAS_OPTIONS"
-          value: "--insecure"
-        - name: "HOME"
-          value: "/tekton/home"
