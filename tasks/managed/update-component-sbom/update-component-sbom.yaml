@@ -27,6 +27,10 @@ spec:
         OCI repository. An empty string means the artifacts do not expire.
       type: string
       default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
     - name: orasOptions
       description: oras options to pass to Trusted Artifacts calls
       type: string
@@ -59,6 +63,8 @@ spec:
         value: $(params.ociArtifactExpiresAfter)
       - name: "ORAS_OPTIONS"
         value: "$(params.orasOptions)"
+      - name: "DEBUG"
+        value: "$(params.trustedArtifactsDebug)"
       - name: "HOME"
         value: "/tekton/home"
   steps:
@@ -78,7 +84,7 @@ spec:
         - use
         - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
-      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+      image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
     - name: update-component-sbom-purls
       image: quay.io/konflux-ci/release-service-utils:4a67d0c959e63cbb4bc0d37db1ce962091d6072a
       script: |
@@ -99,7 +105,7 @@ spec:
         - $(params.ociStorage)
         - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
-      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+      image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
     - name: patch-source-data-artifact-result
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       script: |

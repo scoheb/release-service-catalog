@@ -202,6 +202,11 @@ spec:
       type: string
       default: ""
 
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+
   workspaces:
     - name: data
       description: The workspace where the snapshot spec json file resides
@@ -220,6 +225,8 @@ spec:
         value: $(params.ociArtifactExpiresAfter)
       - name: "ORAS_OPTIONS"
         value: "$(params.orasOptions)"
+      - name: "DEBUG"
+        value: "$(params.trustedArtifactsDebug)"
       - name: HOME
         value: "$(params.HOMEDIR)"
 
@@ -239,13 +246,8 @@ spec:
       args:
         - use
         - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
-      env:
-        - name: "ORAS_OPTIONS"
-          value: "--insecure"
-        - name: "HOME"
-          value: "/tekton/home"
       computeResources: {}
-      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+      image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
     - name: initialize-tuf
       image: quay.io/enterprise-contract/ec-cli:snapshot
       script: |-
