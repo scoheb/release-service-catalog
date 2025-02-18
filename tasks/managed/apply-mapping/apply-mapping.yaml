@@ -31,6 +31,10 @@ spec:
         OCI repository. An empty string means the artifacts do not expire
       type: string
       default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
     - name: sourceDataArtifact
       type: string
       default: ""
@@ -62,7 +66,7 @@ spec:
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.ociArtifactExpiresAfter)
       - name: "ORAS_OPTIONS"
-        value: "--insecure"
+        value: "$(params.orasOptions)"
       - name: "HOME"
         value: "/tekton/home"
   steps:
@@ -81,11 +85,6 @@ spec:
       args:
         - use
         - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
-      env:
-        - name: "ORAS_OPTIONS"
-          value: "--insecure"
-        - name: "HOME"
-          value: "/tekton/home"
       computeResources: {}
       image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
     - name: apply-mapping

@@ -136,6 +136,11 @@ spec:
       description: The location where data will be stored
       type: string
 
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+
   workspaces:
     - name: data
       description: The workspace where the snapshot spec json file resides
@@ -149,12 +154,16 @@ spec:
     - name: workdir
       emptyDir: {}
   stepTemplate:
-    env:
-      - name: HOME
-        value: "$(params.HOMEDIR)"
     volumeMounts:
       - mountPath: /var/workdir
         name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: HOME
+        value: "$(params.HOMEDIR)"
 
   steps:
     - name: skip-trusted-artifact-operations

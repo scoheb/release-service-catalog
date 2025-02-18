@@ -29,6 +29,13 @@ spec:
           volumeMounts:
             - mountPath: /var/workdir
               name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: create-crs
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f

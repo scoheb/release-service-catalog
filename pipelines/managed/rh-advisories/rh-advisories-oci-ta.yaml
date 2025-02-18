@@ -62,6 +62,10 @@ spec:
     - name: ociStorage
       type: string
       default: "quay.io/scoheb/trusted-artifacts"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
     - name: dataDir
       description: The location where data will be stored
       type: string

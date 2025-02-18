@@ -14,6 +14,15 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
     - name: dataDir
       description: The location where data will be stored
       type: string
@@ -43,6 +52,13 @@ spec:
           volumeMounts:
             - mountPath: /var/workdir
               name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
@@ -99,11 +115,6 @@ spec:
               - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
-            env:
-              - name: IMAGE_EXPIRES_AFTER
-                value: 1d
-              - name: "ORAS_OPTIONS"
-                value: "--insecure"
           - name: patch-source-data-artifact-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
@@ -125,6 +136,8 @@ spec:
           value: "$(context.pipelineRun.uid)/data.json"
         - name: ociStorage
           value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
         - name: sourceDataArtifact
           value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: subdirectory
@@ -166,6 +179,13 @@ spec:
           volumeMounts:
             - mountPath: /var/workdir
               name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: skip-trusted-artifact-operations
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -182,9 +202,6 @@ spec:
             args:
               - use
               - $(params.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)
-            env:
-              - name: "ORAS_OPTIONS"
-                value: "--insecure"
             computeResources: {}
             image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: check-result
