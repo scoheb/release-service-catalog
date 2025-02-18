@@ -73,7 +73,7 @@ spec:
               - $(params.ociStorage)
               - $(results.resultArtifact1.path)=$(workspaces.data.path)/$(params.subdirectory)
             computeResources: { }
-            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: patch-source-data-artifact-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
@@ -102,8 +102,17 @@ spec:
           value: attribution
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
+      workspaces:
         - name: ociStorage
           value: $(params.ociStorage)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
         - name: resultArtifacts
           value:
             - "$(tasks.setup.results.resultArtifact1)=$(workspaces.data.path)/$(context.pipelineRun.uid)"

@@ -21,6 +21,10 @@ spec:
       description: oras options to pass to Trusted Artifacts calls
       type: string
       default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
     - name: dataDir
       description: The location where data will be stored
       type: string
@@ -53,6 +57,8 @@ spec:
               value: $(params.ociArtifactExpiresAfter)
             - name: "ORAS_OPTIONS"
               value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
             - name: "HOME"
               value: "/tekton/home"
         steps:
@@ -105,7 +111,7 @@ spec:
               - $(params.ociStorage)
               - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
-            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: patch-source-data-artifact-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
@@ -133,6 +139,8 @@ spec:
           value: $(context.pipelineRun.uid)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -175,6 +183,8 @@ spec:
               value: $(params.ociArtifactExpiresAfter)
             - name: "ORAS_OPTIONS"
               value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
             - name: "HOME"
               value: "/tekton/home"
         steps:
@@ -194,7 +204,7 @@ spec:
               - use
               - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
             computeResources: {}
-            image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:221d71a4f6b1a50b36b685aa20d86d7df9de33fc
             script: |

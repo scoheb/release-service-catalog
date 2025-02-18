@@ -19,6 +19,10 @@ spec:
       description: oras options to pass to Trusted Artifacts calls
       type: string
       default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
     - name: dataDir
       description: The location where data will be stored
       type: string
@@ -44,6 +48,8 @@ spec:
               value: $(params.ociArtifactExpiresAfter)
             - name: "ORAS_OPTIONS"
               value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
             - name: "HOME"
               value: "/tekton/home"
         workspaces:
@@ -158,6 +164,8 @@ spec:
           value: $(params.ociStorage)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
       workspaces:
         - name: data
           workspace: tests-workspace
