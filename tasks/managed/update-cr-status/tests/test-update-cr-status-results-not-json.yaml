@@ -13,6 +13,22 @@ spec:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   workspaces:
     - name: tests-workspace
   tasks:
@@ -27,6 +43,22 @@ spec:
         results:
           - name: resultArtifact1
             type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
+            - name: "HOME"
+              value: "/tekton/home"
         steps:
           - name: setup
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
@@ -34,8 +66,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(workspaces.data.path)/$(params.subdirectory)/results/"
-              cat > "$(workspaces.data.path)/$(params.subdirectory)/results/test.json" << EOF
+              mkdir -p "$(params.dataDir)/$(params.subdirectory)/results/"
+              cat > "$(params.dataDir)/$(params.subdirectory)/results/test.json" << EOF
               this
               is
                not
@@ -50,16 +82,16 @@ spec:
               
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(workspaces.data.path)/$(params.subdirectory)/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.resultArtifact1.path)=$(workspaces.data.path)/$(params.subdirectory)
+              - $(results.resultArtifact1.path)=$(params.dataDir)/$(params.subdirectory)
             computeResources: { }
-            image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+            image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
           - name: patch-source-data-artifact-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
@@ -86,20 +118,17 @@ spec:
           value: results
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: $(params.trustedArtifactsDebug)
-      workspaces:
         - name: ociStorage
           value: $(params.ociStorage)
-        - name: trustedArtifactsDebug
-          value: $(params.trustedArtifactsDebug)
+        - name: orasOptions
+          value: $(params.orasOptions)
         - name: resultArtifacts
           value:
-            - "$(tasks.setup.results.resultArtifact1)=$(workspaces.data.path)/$(context.pipelineRun.uid)"
+            - "$(tasks.setup.results.resultArtifact1)=$(params.dataDir)/$(context.pipelineRun.uid)"
       runAfter:
         - setup
       workspaces:
