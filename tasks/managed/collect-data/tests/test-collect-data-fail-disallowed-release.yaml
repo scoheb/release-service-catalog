@@ -44,12 +44,6 @@ spec:
             - mountPath: /var/workdir
               name: workdir
           env:
-            - name: IMAGE_EXPIRES_AFTER
-              value: $(params.ociArtifactExpiresAfter)
-            - name: "ORAS_OPTIONS"
-              value: "$(params.orasOptions)"
-            - name: "DEBUG"
-              value: "$(params.trustedArtifactsDebug)"
             - name: "HOME"
               value: "/tekton/home"
         workspaces:

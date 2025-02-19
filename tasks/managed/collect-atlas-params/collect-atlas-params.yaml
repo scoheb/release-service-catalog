@@ -89,7 +89,7 @@ spec:
         - use
         - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
       computeResources: {}
-      image: quay.io/scoheb/build-trusted-artifacts:debug9 #quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:ff35e09ff5c89e54538b50abae241a765b2b7868f05d62c4835bebf0978f3659
+      image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
     - name: collect-atlas-params
       image:
         quay.io/konflux-ci/release-service-utils:d320c36f3d707cd5bfe55fe783f70236c06cc2e5
