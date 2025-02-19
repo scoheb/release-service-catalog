@@ -227,20 +227,20 @@ spec:
           workspace: release-workspace
       runAfter:
         - reduce-snapshot
-    - name: verify-enterprise-contract
+    - name: verify-conforma
       timeout: "4h00m0s"
       taskRef:
         resolver: "git"
         params:
           - name: url
-            value: $(params.taskGitUrl)
+            value: https://github.com/scoheb/ec-cli #$(params.taskGitUrl)
           - name: revision
-            value: $(params.taskGitRevision)
+            value: RELEASE-1425 #$(params.taskGitRevision)
           - name: pathInRepo
-            value: tasks/managed/verify-enterprise-contract/verify-enterprise-contract.yaml
+            value: tasks/verify-conforma-konflux-ta/0.1/verify-conforma-konflux-ta.yaml #tasks/managed/verify-enterprise-contract/verify-enterprise-contract.yaml
       params:
-        - name: IMAGES
-          value: "$(params.dataDir)/$(tasks.collect-data.results.snapshotSpec)"
+        - name: SNAPSHOT_FILENAME
+          value: "snapshot_spec.json" # hardcoded in collect-data
         - name: SSL_CERT_DIR
           value: /var/run/secrets/kubernetes.io/serviceaccount
         - name: POLICY_CONFIGURATION
@@ -257,17 +257,10 @@ spec:
           value: $(params.enterpriseContractTimeout)
         - name: WORKERS
           value: $(params.enterpriseContractWorkerCount)
-        - name: ociStorage
-          value: $(params.ociStorage)
-        - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
-        - name: dataDir
-          value: $(params.dataDir)
-      workspaces:
-        - name: data
-          workspace: release-workspace
+        - name: SOURCE_DATA_ARTIFACT
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: TRUSTED_ARTIFACTS_DEBUG
+          value: "$(params.trustedArtifactsDebug)"
       runAfter:
         - apply-mapping
     - name: populate-release-notes
@@ -285,6 +278,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         params:
           - name: url
@@ -318,6 +313,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         params:
           - name: url
@@ -353,6 +350,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -388,6 +387,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -414,6 +415,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -464,12 +467,14 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
       runAfter:
         - embargo-check
-        - verify-enterprise-contract
+        - verify-conforma
         - publish-pyxis-repository
         - extract-requester-from-release
     - name: create-pyxis-image
@@ -503,6 +508,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -539,6 +546,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -572,6 +581,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -609,6 +620,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       runAfter:
         - collect-data
         - collect-atlas-params
@@ -638,6 +651,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         params:
           - name: url
@@ -677,6 +692,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       runAfter:
         - push-rpm-data-to-pyxis
       taskRef:
@@ -713,6 +730,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         params:
           - name: url
@@ -749,6 +768,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -772,6 +793,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         params:
           - name: url
@@ -811,6 +834,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         params:
           - name: url
@@ -851,6 +876,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         params:
           - name: url
@@ -889,6 +916,8 @@ spec:
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       taskRef:
         resolver: "git"
         params:
