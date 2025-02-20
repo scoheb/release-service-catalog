@@ -76,6 +76,10 @@ spec:
       default: "/var/workdir"
   workspaces:
     - name: release-workspace
+  results:
+    - name: advisory_url
+      type: string
+      value: $(tasks.create-advisory.results.advisory_url)
   tasks:
     - name: verify-access-to-resources
       taskRef:
@@ -329,6 +333,40 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/embargo-check/embargo-check.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - populate-release-notes
+    - name: set-advisory-severity
+      params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: pipelineRunUid
+          value: $(context.pipelineRun.uid)
+        - name: taskGitUrl
+          value: $(params.taskGitUrl)
+        - name: taskGitRevision
+          value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/set-advisory-severity/set-advisory-severity.yaml
         resolver: git
       workspaces:
         - name: data
@@ -902,6 +940,7 @@ spec:
         - push-rpm-data-to-pyxis
         - run-file-updates
         - rh-sign-image
+        - set-advisory-severity
     - name: update-cr-status
       params:
         - name: resource
