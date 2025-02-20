@@ -129,6 +129,8 @@ spec:
           value: $(params.ociStorage)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -158,11 +160,13 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.collect-data.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -217,11 +221,13 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.reduce-snapshot.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.reduce-snapshot.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -273,7 +279,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -308,7 +314,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -345,7 +351,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.collect-data.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -382,7 +388,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -410,7 +416,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.collect-data.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -462,7 +468,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -503,7 +509,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -541,7 +547,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -576,7 +582,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.create-pyxis-image.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.create-pyxis-image.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -615,7 +621,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.push-rpm-data-to-pyxis.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.push-rpm-data-to-pyxis.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -646,7 +652,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -687,7 +693,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -725,7 +731,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -763,7 +769,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.collect-data.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -788,7 +794,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -829,7 +835,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.create-product-sbom.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.create-product-sbom.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
@@ -871,7 +877,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.collect-data.results.subdirectory)"
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
