@@ -69,7 +69,7 @@ spec:
     - name: trustedArtifactsDebug
       description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
       type: string
-      default: ""
+      default: "true"
     - name: dataDir
       description: The location where data will be stored
       type: string
@@ -204,7 +204,6 @@ spec:
       runAfter:
         - verify-access-to-resources
     - name: apply-mapping
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       retries: 3
       taskRef:
         resolver: "git"
