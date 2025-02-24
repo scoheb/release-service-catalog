@@ -60,7 +60,9 @@ spec:
                 ARGS=("${ARGS[@]}" --"${arg_name}" "${arg_value}")
             done
             # Execute collector
-            timeout "$TIMEOUT" python3 "lib/${type}.py" "${ARGS[@]}" | tee "$RESULTS_DIR"/"$2"-"$name".json
+            # hard coding tenant now
+            mode="tenant"
+            timeout "$TIMEOUT" python3 "lib/${type}.py" "${ARGS[@]}" "${mode}" | tee "$RESULTS_DIR"/"$2"-"$name".json
         }
 
         if [ ! -d "${RESULTS_DIR}" ] ; then
