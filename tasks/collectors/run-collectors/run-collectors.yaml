@@ -28,12 +28,25 @@ spec:
       type: string
       default: main
       description: Git repository revision
+    - name: collectorsSecretsName
+      description: The name of the secret that contains various credentials to use for collecting metadata
+      type: string
+      default: "collectors-secret"
   workspaces:
     - name: data
       description: Workspace where the CRs are stored
+  volumes:
+    - name: collector-secrets-volume
+      secret:
+        secretName: $(params.collectorsSecretsName)
+        optional: true
   steps:
     - name: run-collectors
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+      volumeMounts:
+        - name: collector-secrets-volume
+          mountPath: "/etc/collectors-secrets"
+          readOnly: true
       script: |
         #!/usr/bin/env bash
         set -xeo pipefail
@@ -48,7 +61,17 @@ spec:
 
         execute_collector() { # Expected arguments are [collector json, type of collector]
             collector="$1"
+            mode="$2"
             name="$(jq -r '.name' <<< "$collector")"
+
+            # get secret for this collector
+            collectorSecret="/etc/collectors-secrets/${name}"
+            if [ -f "${collectorSecret}" ]; then
+              cat "${collectorSecret}" > /tmp/credentials.json
+            else
+              echo "no secret found"
+            fi
+
             type="$(jq -r '.type' <<< "$collector")"
             TIMEOUT="$(jq -r --arg default "$DEFAULT_TIMEOUT" '.timeout // $default' <<< "$collector")"
             ARGS=()
@@ -60,8 +83,6 @@ spec:
                 ARGS=("${ARGS[@]}" --"${arg_name}" "${arg_value}")
             done
             # Execute collector
-            # hard coding tenant now
-            mode="tenant"
             timeout "$TIMEOUT" python3 "lib/${type}.py" "${ARGS[@]}" "${mode}" | tee "$RESULTS_DIR"/"$2"-"$name".json
         }
 
