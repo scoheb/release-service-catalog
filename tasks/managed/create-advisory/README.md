@@ -7,18 +7,23 @@ Only all `redhat-pending` or all `redhat-prod` repositories may be specified in 
 
 ## Parameters
 
-| Name                     | Description                                                                               | Optional | Default value               |
-|--------------------------|-------------------------------------------------------------------------------------------|----------|-----------------------------|
-| jsonKey                  | The json key containing the advisory data                                                 | Yes      | .releaseNotes               |
-| releasePlanAdmissionPath | Path to the JSON file of the ReleasePlanAdmission in the data workspace                   | No       | -                           |
-| snapshotPath             | Path to the JSON file of the Snapshot spec in the data workspace                          | No       | -                           |
-| dataPath                 | Path to data JSON in the data workspace                                                   | No       | -                           |
-| resultsDirPath           | Path to results directory in the data workspace                                           | No       | -                           |
-| request                  | Type of request to be created                                                             | Yes      | create-advisory             |
-| synchronously            | Whether the task should wait for InternalRequests to complete                             | Yes      | true                        |
-| pipelineRunUid           | The uid of the current pipelineRun. Used as a label value when creating internal requests | No       | -                           |
-| taskGitUrl               | The url to the git repo where the release-service-catalog tasks to be used are stored     | No       | -                           |
-| taskGitRevision          | The revision in the taskGitUrl repo to be used                                            | No       | -                           |
+| Name                     | Description                                                                                                                | Optional | Default value           |
+|--------------------------|----------------------------------------------------------------------------------------------------------------------------|----------|-------------------------|
+| jsonKey                  | The json key containing the advisory data                                                                                  | Yes      | .releaseNotes           |
+| releasePlanAdmissionPath | Path to the JSON file of the ReleasePlanAdmission in the data workspace                                                    | No       | -                       |
+| snapshotPath             | Path to the JSON file of the Snapshot spec in the data workspace                                                           | No       | -                       |
+| dataPath                 | Path to data JSON in the data workspace                                                                                    | No       | -                       |
+| resultsDirPath           | Path to results directory in the data workspace                                                                            | No       | -                       |
+| request                  | Type of request to be created                                                                                              | Yes      | create-advisory         |
+| synchronously            | Whether the task should wait for InternalRequests to complete                                                              | Yes      | true                    |
+| pipelineRunUid           | The uid of the current pipelineRun. Used as a label value when creating internal requests                                  | No       | -                       |
+| taskGitUrl               | The url to the git repo where the release-service-catalog tasks to be used are stored                                      | No       | -                       |
+| taskGitRevision          | The revision in the taskGitUrl repo to be used                                                                             | No       | -                       |
+| ociStorage               | The OCI repository where the Trusted Artifacts are stored                                                                  | Yes      | empty                   |
+| ociArtifactExpiresAfter  | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire | Yes      | 1d                      |
+| sourceDataArtifact       | Location of trusted artifacts to be used to populate data directory                                                        | Yes      | ""                      |
+| subdirectory             | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
+| dataDir                  | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
 ## Changes in 5.1.0
 * Echo the internalRequestPipelineRunName and internalRequestTaskRunName in the log to help with debugging

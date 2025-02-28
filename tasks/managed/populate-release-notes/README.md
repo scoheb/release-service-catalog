@@ -7,10 +7,15 @@ path to a file containing data used in component SBOM generation.
 
 ## Parameters
 
-| Name         | Description                                                          | Optional | Default value |
-|--------------|----------------------------------------------------------------------|----------|---------------|
-| dataPath     | Path to the JSON string of the merged data to update                 | No       | -             |
-| snapshotPath | Path to the JSON string of the mapped Snapshot in the data workspace | No       | -             |
+| Name                    | Description                                                                                                                | Optional | Default value           |
+|-------------------------|----------------------------------------------------------------------------------------------------------------------------|----------|-------------------------|
+| dataPath                | Path to the JSON string of the merged data to update                                                                       | No       | -                       |
+| snapshotPath            | Path to the JSON string of the mapped Snapshot in the data workspace                                                       | No       | -                       |
+| ociStorage              | The OCI repository where the Trusted Artifacts are stored                                                                  | Yes      | empty                   |
+| ociArtifactExpiresAfter | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire | Yes      | 1d                      |
+| sourceDataArtifact      | Location of trusted artifacts to be used to populate data directory                                                        | Yes      | ""                      |
+| subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
+| dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
 ## Changes in 3.0.1
 * If type is RHBA or RHEA, the task will ensure the `references` key exists (although it will be empty)

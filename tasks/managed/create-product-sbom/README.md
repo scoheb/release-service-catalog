@@ -5,13 +5,17 @@ releaseNotes content.
 
 ## Parameters
 
-| Name         | Description                                                             | Optional | Default value |
-| ------------ | ----------------------------------------------------------------------- | -------- | ------------- |
-| dataJsonPath | Path to the JSON string of the merged data containing the release notes | No       | -             |
+| Name                    | Description                                                                                                                | Optional | Default value           |
+|-------------------------|----------------------------------------------------------------------------------------------------------------------------| -------- |-------------------------|
+| dataJsonPath            | Path to the JSON string of the merged data containing the release notes                                                    | No       | -                       |
+| ociStorage              | The OCI repository where the Trusted Artifacts are stored                                                                  | Yes      | empty                   |
+| ociArtifactExpiresAfter | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire | Yes      | 1d                      |
+| sourceDataArtifact      | Location of trusted artifacts to be used to populate data directory                                                        | Yes      | ""                      |
+| subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
+| dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
 ## Changes in 0.2.0
 * Output directory path instead of a file path.
 
 ## Changes in 0.1.1
 * The release-service-utils image was updated to include a fix when generating name of product level SBOM - it should be based on "{product name} {product version}"
-
