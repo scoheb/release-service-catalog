@@ -4,14 +4,19 @@ Tekton task to push snapshot images to an image registry using `cosign copy`.
 
 ## Parameters
 
-| Name                 | Description                                                               | Optional | Default value |
-|----------------------|---------------------------------------------------------------------------|----------|---------------|
-| snapshotPath         | Path to the JSON string of the mapped Snapshot spec in the data workspace | No       | -             |
-| dataPath             | Path to the JSON string of the merged data to use in the data workspace   | No       | -             |
-| resultsDirPath       | Path to results directory in the data workspace                           | No       | -             |
-| retries              | Retry copy N times                                                        | Yes      | 0             |
-| caTrustConfigMapName | The name of the ConfigMap to read CA bundle data from                     | Yes      | trusted-ca    |
-| caTrustConfigMapKey  | The name of the key in the ConfigMap that contains the CA bundle data     | Yes      | ca-bundle.crt |
+| Name                    | Description                                                                                                                | Optional | Default value           |
+|-------------------------|----------------------------------------------------------------------------------------------------------------------------|----------|-------------------------|
+| snapshotPath            | Path to the JSON string of the mapped Snapshot spec in the data workspace                                                  | No       | -                       |
+| dataPath                | Path to the JSON string of the merged data to use in the data workspace                                                    | No       | -                       |
+| resultsDirPath          | Path to results directory in the data workspace                                                                            | No       | -                       |
+| retries                 | Retry copy N times                                                                                                         | Yes      | 0                       |
+| caTrustConfigMapName    | The name of the ConfigMap to read CA bundle data from                                                                      | Yes      | trusted-ca              |
+| caTrustConfigMapKey     | The name of the key in the ConfigMap that contains the CA bundle data                                                      | Yes      | ca-bundle.crt           |
+| ociStorage              | The OCI repository where the Trusted Artifacts are stored                                                                  | Yes      | empty                   |
+| ociArtifactExpiresAfter | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire | Yes      | 1d                      |
+| sourceDataArtifact      | Location of trusted artifacts to be used to populate data directory                                                        | Yes      | ""                      |
+| subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
+| dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
 ## Changes in 6.5.0
 * Bump the utils image used in this task

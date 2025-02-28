@@ -47,6 +47,7 @@ spec:
       default: ""
     - name: sourceDataArtifact
       type: string
+      description: Location of trusted artifacts to be used to populate data directory
       default: ""
     - name: subdirectory
       description: Subdirectory inside the workspace to be used
