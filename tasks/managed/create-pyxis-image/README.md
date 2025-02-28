@@ -19,6 +19,11 @@ The relative path of the pyxis.json file in the data workspace is output as a ta
 | snapshotPath | Path to the JSON string of the mapped Snapshot spec in the data workspace                                                                                                                                                                                                                                                                                                                                   | No       | -             |
 | dataPath     | Path to the JSON string of the merged data to use in the data workspace                                                                                                                                                                                                                                                                                                                                     | No       |               |
 
+## Changes in 3.8.0
+* Bump the utils image used in this task
+  * Clair-wrapper is now ready to work with the changes introduced previously and
+    reverted in 3.7.0, so move back to the newer utils image
+
 ## Changes in 3.7.0
 * Revert image back to the version from 3.5.0
   * The new image contained two things:
