@@ -76,6 +76,10 @@ spec:
       default: "/workspace/data"
   workspaces:
     - name: release-workspace
+  results:
+    - name: advisory_url
+      type: string
+      value: $(tasks.create-advisory.results.advisory_url)
   tasks:
     - name: verify-access-to-resources
       taskRef:
@@ -228,6 +232,10 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
           workspace: release-workspace
