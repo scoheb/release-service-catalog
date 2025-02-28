@@ -101,6 +101,8 @@ spec:
           value: $(params.ociStorage)
         - name: subdirectory
           value: $(params.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
     - name: use-trusted-artifact
       ref:
 #        name: use-trusted-artifact
