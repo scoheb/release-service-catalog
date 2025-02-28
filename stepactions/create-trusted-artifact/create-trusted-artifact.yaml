@@ -1,0 +1,24 @@
+apiVersion: tekton.dev/v1beta1
+kind: StepAction
+metadata:
+  name: create-trusted-artifact
+spec:
+  image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+  params:
+    - name: ociStorage
+      type: string
+      default: "empty"
+    - name: dataDir
+      type: string
+    - name: subdirectory
+      description: Subdirectory inside the workspace to be used
+      type: string
+      default: ""
+    - name: sourceDataArtifact
+      type: string
+      default: ""
+  args:
+    - create
+    - --store
+    - $(params.ociStorage)
+    - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)

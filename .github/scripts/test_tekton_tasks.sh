@@ -76,6 +76,14 @@ do
   fi
 done
 
+# install step actions
+echo "Installing StepActions"
+STEPACTION_ROOT=${BASH_SOURCE%/*/*/*}/stepactions
+kubectl apply -f $STEPACTION_ROOT/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+kubectl apply -f $STEPACTION_ROOT/use-trusted-artifact/use-trusted-artifact.yaml
+kubectl apply -f $STEPACTION_ROOT/create-trusted-artifact/create-trusted-artifact.yaml
+kubectl apply -f $STEPACTION_ROOT/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
+
 for ITEM in $TEST_ITEMS
 do
   echo Task item: $ITEM
@@ -117,6 +125,13 @@ do
     echo Found pre-apply-task-hook.sh file in dir: $TESTS_DIR. Executing...
     ${TESTS_DIR}/pre-apply-task-hook.sh "$TASK_COPY"
   fi
+
+  # update stepation resolvers
+  echo "Updating StepAction resolvers"
+  yq -i '(.spec.steps[] | select(.name == "skip-trusted-artifact-operations") | .ref) = {"name": "skip-trusted-artifact-operations"}' $TASK_COPY
+  yq -i '(.spec.steps[] | select(.name == "use-trusted-artifact") | .ref) = {"name": "use-trusted-artifact"}' $TASK_COPY
+  yq -i '(.spec.steps[] | select(.name == "create-trusted-artifact") | .ref) = {"name": "create-trusted-artifact"}' $TASK_COPY
+  yq -i '(.spec.steps[] | select(.name == "patch-source-data-artifact-result") | .ref) = {"name": "patch-source-data-artifact-result"}' $TASK_COPY
 
   echo "  Installing task"
   kubectl apply -f "$TASK_COPY"
