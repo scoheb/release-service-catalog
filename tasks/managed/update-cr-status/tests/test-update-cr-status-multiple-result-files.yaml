@@ -103,18 +103,18 @@ spec:
                 releasePlan: foo
               EOF
               kubectl apply -f release
-          - name: skip-trusted-artifact-operations
+          - name: skip-trusted-artifact-operations-array
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
               #!/usr/bin/env bash
               set -eo pipefail
-              
+
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
                 touch "$(params.dataDir)/$(params.subdirectory)/1/.skip-trusted-artifacts"
                 touch "$(params.dataDir)/$(params.subdirectory)/2/.skip-trusted-artifacts"
               fi
-          - name: create-trusted-artifact
+          - name: create-trusted-artifact-array
             args:
               - create
               - --store
@@ -123,7 +123,7 @@ spec:
               - $(results.resultArtifact2.path)=$(params.dataDir)/$(params.subdirectory)/2
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
-          - name: patch-source-data-artifact-result
+          - name: patch-source-data-artifact-result-array
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
               #!/usr/bin/env bash

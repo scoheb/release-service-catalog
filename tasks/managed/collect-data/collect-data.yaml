@@ -52,6 +52,14 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
+    - name: stepActionGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog stepActions to be used are stored
+      default: https://github.com/konflux-ci/release-service-catalog.git
+    - name: stepActionGitRevision
+      type: string
+      description: The revision in the stepActionGitUrl repo to be used
+      default: production
   workspaces:
     - name: data
       description: Workspace to save the CR jsons to
@@ -300,10 +308,21 @@ spec:
         # pretty print for log message
         jq . <<< "$json"
     - name: create-trusted-artifact
-      args:
-        - create
-        - --store
-        - $(params.ociStorage)
-        - $(results.sourceDataArtifact.path)=$(params.dataDir)/$(params.subdirectory)
-      computeResources: {}
-      image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)

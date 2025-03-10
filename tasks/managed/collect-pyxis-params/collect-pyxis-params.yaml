@@ -43,6 +43,14 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
+    - name: stepActionGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog stepActions to be used are stored
+      default: https://github.com/konflux-ci/release-service-catalog.git
+    - name: stepActionGitRevision
+      type: string
+      description: The revision in the stepActionGitUrl repo to be used
+      default: production
   workspaces:
     - name: data
       description: The workspace where the snapshot spec json file resides
@@ -74,22 +82,39 @@ spec:
         value: "/tekton/home"
   steps:
     - name: skip-trusted-artifact-operations
-      image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
-      script: |
-        #!/usr/bin/env bash
-        set -eo pipefail
-
-        if [ "$(params.ociStorage)" == "empty" ]; then
-          echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-          touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
-        fi
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
     - name: use-trusted-artifact
-      args:
-        - use
-        - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
-      computeResources: {}
-      image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.stepActionGitUrl)
+          - name: revision
+            value: $(params.stepActionGitRevision)
+          - name: pathInRepo
+            value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
+      params:
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: subdirectory
+          value: $(params.subdirectory)
+        - name: sourceDataArtifact
+          value: $(params.sourceDataArtifact)
     - name: collect-pyxis-params
       image:
         quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f

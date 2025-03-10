@@ -35,7 +35,7 @@ function cosign() {
 
 function skopeo() {
   echo Mock skopeo called with: $* >&2
-  echo $* >> "$(workspaces.data.path)/$(params.subdirectory)/mock_skopeo.txt"
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt"
   if [[ "$*" == "inspect --raw docker://reg.io/test@sha256:abcdefg" ]]; then
     echo '{"mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [{"platform":{"os":"linux","architecture":"amd64"}}, {"platform":{"os":"linux","architecture":"ppc64le"}}]}'
     return
@@ -59,7 +59,7 @@ function select-oci-auth() {
 }
 
 function oras() {
-  echo $* >> "$(workspaces.data.path)/$(params.subdirectory)/mock_oras.txt"
+  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"
   if [[ "$*" == "resolve --registry-config "*" "* ]]; then
     if [[ "$*" =~ "--platform" && "$4" =~ ".src" ]]; then
       echo "Error: .src images should not use --platform" >&2

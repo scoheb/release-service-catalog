@@ -202,22 +202,25 @@ spec:
               value: "/tekton/home"
         steps:
           - name: skip-trusted-artifact-operations
-            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
-            script: |
-              #!/usr/bin/env bash
-              set -eo pipefail
-              
-              if [ "$(params.ociStorage)" == "empty" ]; then
-                echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-                touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
-              fi
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: dataDir
+                value: $(params.dataDir)
           - name: use-trusted-artifact
-            args:
-              - use
-              - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
-            computeResources: {}
-            image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: dataDir
+                value: $(params.dataDir)
+              - name: subdirectory
+                value: $(params.subdirectory)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             env:
