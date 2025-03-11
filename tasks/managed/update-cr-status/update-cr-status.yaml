@@ -34,6 +34,7 @@ spec:
         Name of possible directories in subdirectory containing the result files in the data workspace 
         which will be added to the resource's status
       type: string
+      default: "results"
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
@@ -54,6 +55,7 @@ spec:
     - name: resultArtifacts
       type: array
       description: Array of artifacts to use to obtain results
+      default: []
     - name: subdirectory
       description: Subdirectory inside the workspace to be used
       type: string
@@ -61,6 +63,7 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
+      default: $(workspaces.data.path)
     - name: stepActionGitUrl
       type: string
       description: The url to the git repo where the release-service-catalog stepActions to be used are stored

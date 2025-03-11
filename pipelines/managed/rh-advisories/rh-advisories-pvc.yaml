@@ -104,8 +104,6 @@ spec:
           value: $(params.snapshot)
         - name: requireInternalServices
           value: "true"
-        - name: ociStorage
-          value: $(params.ociStorage)
     - name: collect-data
       taskRef:
         resolver: "git"
@@ -129,16 +127,6 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: ociStorage
-          value: $(params.ociStorage)
-        - name: dataDir
-          value: $(params.dataDir)
-        - name: trustedArtifactsDebug
-          value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
-          value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
-          value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
           workspace: release-workspace

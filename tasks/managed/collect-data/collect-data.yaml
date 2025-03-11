@@ -52,6 +52,7 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
+      default: $(workspaces.data.path)
     - name: stepActionGitUrl
       type: string
       description: The url to the git repo where the release-service-catalog stepActions to be used are stored
@@ -312,9 +313,9 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: $(params.stepActionGitUrl)
+            value: "$(params.stepActionGitUrl)"
           - name: revision
-            value: $(params.stepActionGitRevision)
+            value: "$(params.stepActionGitRevision)"
           - name: pathInRepo
             value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
       params:
