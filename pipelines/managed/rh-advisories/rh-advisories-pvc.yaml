@@ -466,7 +466,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.collect-data.results.sourceDataArtifact)"
+          value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir

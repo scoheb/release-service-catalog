@@ -450,11 +450,11 @@ spec:
         - name: secretName
           value: "$(tasks.collect-cosign-params.results.cosign-secret-name)"
         - name: signRegistryAccessPath
-          value: $(tasks.publish-pyxis-repository.results.signRegistryAccessPath)
+          value: "$(tasks.publish-pyxis-repository.results.signRegistryAccessPath)"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+          value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)"
         - name: subdirectory
           value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
