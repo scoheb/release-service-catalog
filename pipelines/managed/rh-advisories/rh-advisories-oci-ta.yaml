@@ -469,7 +469,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - verify-enterprise-contract
+        - verify-conforma
         - push-snapshot
         - collect-cosign-params
     - name: push-snapshot
