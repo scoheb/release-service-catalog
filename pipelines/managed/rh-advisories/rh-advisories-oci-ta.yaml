@@ -357,6 +357,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
+        - check-data-keys
         - populate-release-notes
     - name: set-advisory-severity
       params:
@@ -428,6 +429,49 @@ spec:
           workspace: release-workspace
       runAfter:
         - collect-data
+    - name: rh-sign-image-cosign
+      timeout: "6h00m0s"
+      when:
+        - input: $(tasks.collect-cosign-params.results.cosign-secret-name)
+          operator: notin
+          values: [""]
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/rh-sign-image-cosign/rh-sign-image-cosign.yaml
+      params:
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: secretName
+          value: "$(tasks.collect-cosign-params.results.cosign-secret-name)"
+        - name: signRegistryAccessPath
+          value: $(tasks.publish-pyxis-repository.results.signRegistryAccessPath)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - verify-enterprise-contract
+        - push-snapshot
+        - collect-cosign-params
     - name: push-snapshot
       retries: 5
       when:
@@ -1023,7 +1067,43 @@ spec:
         - push-rpm-data-to-pyxis
         - run-file-updates
         - rh-sign-image
+        - rh-sign-image-cosign
         - set-advisory-severity
+    - name: close-advisory-issues
+      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
+      params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: advisoryUrl
+          value: "$(tasks.create-advisory.results.advisory_url)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
+      taskRef:
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/close-advisory-issues/close-advisory-issues.yaml
+        resolver: git
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - create-advisory
     - name: update-cr-status
       params:
         - name: resource
