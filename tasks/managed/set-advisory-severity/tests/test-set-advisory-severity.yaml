@@ -230,4 +230,5 @@ spec:
               #!/usr/bin/env bash
               set -ex
 
-              test "$(jq -r '.releaseNotes.severity' "$(params.dataDir)/$(params.subdirectory)/data.json")" == "IMPORTANT"
+              test "$(jq -r '.releaseNotes.severity' "$(params.dataDir)/$(params.subdirectory)/data.json")" \
+                == "IMPORTANT"

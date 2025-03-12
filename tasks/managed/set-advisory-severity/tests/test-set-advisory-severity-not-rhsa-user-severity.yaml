@@ -203,4 +203,5 @@ spec:
               #!/usr/bin/env bash
               set -ex
 
-              test "$(jq '.releaseNotes | has("severity")' "$(params.dataDir)/$(params.subdirectory)/data.json")" == "false"
+              test "$(jq '.releaseNotes | has("severity")' "$(params.dataDir)/$(params.subdirectory)/data.json")" \
+                == "false"

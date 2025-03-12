@@ -1,3 +1,4 @@
+---
 apiVersion: tekton.dev/v1beta1
 kind: StepAction
 metadata:
@@ -12,10 +13,10 @@ spec:
       type: string
       default: ""
   env:
-  - name: ociStorage
-    value: $(params.ociStorage)
-  - name: sourceDataArtifact
-    value: $(params.sourceDataArtifact)
+    - name: ociStorage
+      value: $(params.ociStorage)
+    - name: sourceDataArtifact
+      value: $(params.sourceDataArtifact)
   script: |
     #!/usr/bin/env bash
     set -eo pipefail
