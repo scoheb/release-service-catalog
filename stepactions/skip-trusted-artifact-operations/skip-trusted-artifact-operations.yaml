@@ -26,8 +26,8 @@ spec:
     #!/usr/bin/env bash
     set -eo pipefail
     
-    if [ "${ociStorage}" == "empty" ]; then
+    if [ "${ociStorage:?}" == "empty" ]; then
       echo "oci storage not detected via ociStorage ... skipping trusted artifacts tasks"
-      mkdir -p "${dataDir}/${subdirectory}"
-      touch "${dataDir}/${subdirectory}/.skip-trusted-artifacts"
+      mkdir -p "${dataDir:?}/${subdirectory:?}"
+      touch "${dataDir:?}/${subdirectory:?}/.skip-trusted-artifacts"
     fi

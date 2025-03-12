@@ -22,6 +22,6 @@ spec:
     
     # this is needed to skip trusted-artifacts tasks
     # when using PVC based workspaces.
-    if [ "${ociStorage}" == "empty" ]; then
-      echo -n "${ociStorage}" > "${sourceDataArtifact}"
+    if [ "${ociStorage:?}" == "empty" ]; then
+      echo -n "${ociStorage:?}" > "${sourceDataArtifact:?}"
     fi
