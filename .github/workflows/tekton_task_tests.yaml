@@ -83,6 +83,9 @@ jobs:
 
           kubectl get pods --namespace tekton-pipelines
 
+          # let tekton controllers startup...
+          sleep 10
+
           # enable stepActions
           echo "Updating feature-flags"
           kubectl get cm feature-flags -n tekton-pipelines -o yaml | \
