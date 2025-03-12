@@ -82,6 +82,13 @@ jobs:
           done
 
           kubectl get pods --namespace tekton-pipelines
+
+          # enable stepActions
+          echo "Updating feature-flags"
+          kubectl get cm feature-flags -n tekton-pipelines -o yaml | \
+            sed -e 's|enable-step-actions: "false"|enable-step-actions: "true"|' > /tmp/ff.yaml
+          kubectl apply -f /tmp/ff.yaml -n tekton-pipelines
+
       - name: Install tkn
         if: |
           steps.changed-dirs.outputs.any_changed == 'true'
