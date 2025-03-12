@@ -262,7 +262,6 @@ spec:
         - name: STRICT
           # only set to false for development
           value: "true"
-          #value: "1"
         - name: IGNORE_REKOR
           value: "true"
         - name: EXTRA_RULE_DATA

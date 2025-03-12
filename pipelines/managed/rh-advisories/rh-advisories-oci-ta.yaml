@@ -261,7 +261,8 @@ spec:
             value: tasks/verify-conforma-konflux-ta/0.1/verify-conforma-konflux-ta.yaml
       params:
         - name: SNAPSHOT_FILENAME
-          value: "snapshot_spec.json" # hardcoded in collect-data
+          # hardcoded in collect-data
+          value: "snapshot_spec.json"
         - name: SSL_CERT_DIR
           value: /var/run/secrets/kubernetes.io/serviceaccount
         - name: POLICY_CONFIGURATION
@@ -269,7 +270,6 @@ spec:
         - name: STRICT
           # only set to false for development
           value: "true"
-          #value: "1"
         - name: IGNORE_REKOR
           value: "true"
         - name: EXTRA_RULE_DATA
