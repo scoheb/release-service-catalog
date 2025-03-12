@@ -78,7 +78,8 @@ done
 
 # install step actions
 echo "Installing StepActions"
-STEPACTION_ROOT=${BASH_SOURCE%/*/*/*}/stepactions
+SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
+STEPACTION_ROOT=${SCRIPT_DIR}/../../../stepactions
 kubectl apply -f $STEPACTION_ROOT/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
 kubectl apply -f $STEPACTION_ROOT/use-trusted-artifact/use-trusted-artifact.yaml
 kubectl apply -f $STEPACTION_ROOT/create-trusted-artifact/create-trusted-artifact.yaml
