@@ -104,8 +104,6 @@ spec:
           value: $(params.snapshot)
         - name: requireInternalServices
           value: "true"
-        - name: ociStorage
-          value: $(params.ociStorage)
     - name: collect-data
       taskRef:
         resolver: "git"
