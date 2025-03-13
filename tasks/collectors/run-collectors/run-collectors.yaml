@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: run-collectors
   labels:
-    app.kubernetes.io/version: "0.3.0"
+    app.kubernetes.io/version: "1.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -28,6 +28,10 @@ spec:
       type: string
       default: main
       description: Git repository revision
+    - name: previousReleasePath
+      type: string
+      description:  >-
+        Path to the json data file of the previous successful Release prior to the current one
   workspaces:
     - name: data
       description: Workspace where the CRs are stored
@@ -45,6 +49,7 @@ spec:
         COLLECTORS_RESOURCE_TYPE="$(params.collectorsResourceType)"
         RESULTS_DIR="$(workspaces.data.path)/$(params.resultsDir)"
         CONCURRENT_LIMIT=4
+        PREVIOUS_RELEASE_FILE="$(workspaces.data.path)/$(params.previousReleasePath)"
 
         execute_collector() { # Expected arguments are [collector json, type of collector]
             collector="$1"
@@ -60,6 +65,8 @@ spec:
                 arg_value="$(jq -r '.value' <<< "$param")"
                 ARGS=("${ARGS[@]}" --"${arg_name}" "${arg_value}")
             done
+            # add the previous release json path as an arg
+            ARGS=("${ARGS[@]}" --previousRelease "${PREVIOUS_RELEASE_FILE}")
             # Execute collector
             timeout "$TIMEOUT" python3 "lib/${type}.py" "${ARGS[@]}" "${collector_type}" | tee \
               "$RESULTS_DIR"/"$2"-"$name".json

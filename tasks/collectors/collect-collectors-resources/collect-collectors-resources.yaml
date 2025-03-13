@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: collect-collectors-resources
   labels:
-    app.kubernetes.io/version: "0.2.0"
+    app.kubernetes.io/version: "0.3.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -72,7 +72,11 @@ spec:
 
         PREVIOUS_RELEASE_PATH="$(params.subdirectory)/previous_release.json"
         echo -n "$PREVIOUS_RELEASE_PATH" > "$(results.previousRelease.path)"
-        get-resource "release" "${PREVIOUS_RELEASE}" | tee "$(workspaces.data.path)/$PREVIOUS_RELEASE_PATH"
+        if [ -z "${PREVIOUS_RELEASE}" ]; then
+          echo -n "{}" | tee "$(workspaces.data.path)/$PREVIOUS_RELEASE_PATH"
+        else
+          get-resource "release" "${PREVIOUS_RELEASE}" | tee "$(workspaces.data.path)/$PREVIOUS_RELEASE_PATH"
+        fi
         
         RELEASE_PATH="$(params.subdirectory)/release.json"
         echo -n "$RELEASE_PATH" > "$(results.release.path)"

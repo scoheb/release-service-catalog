@@ -1,0 +1,112 @@
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: test-collect-collectors-data-empty-previous-release-value
+spec:
+  description: |
+    Run the collect-collectors-resources task without a value for the PreviousRelease cr and verify that
+    the task succeeds as expected by producing an empty valid json file.
+  workspaces:
+    - name: tests-workspace
+  tasks:
+    - name: setup
+      taskSpec:
+        steps:
+          - name: create-crs
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+              
+              cat > release << EOF
+              apiVersion: appstudio.redhat.com/v1alpha1
+              kind: Release
+              metadata:
+                name: release-missing-cr-sample
+                namespace: default
+              spec:
+                snapshot: foo
+                releasePlan: foo
+              EOF
+              kubectl apply -f release
+
+              cat > releaseplan << EOF
+              apiVersion: appstudio.redhat.com/v1alpha1
+              kind: ReleasePlan
+              metadata:
+                name: releaseplan-missing-cr-sample
+                namespace: default
+              spec:
+                application: foo
+                target: foo
+              EOF
+              kubectl apply -f releaseplan
+    - name: run-task
+      taskRef:
+        name: collect-collectors-resources
+      params:
+        - name: previousRelease
+          value: ""
+        - name: release
+          value: default/release-missing-cr-sample
+        - name: collectorsResourceType
+          value: releaseplan
+        - name: collectorsResource
+          value: default/releaseplan-missing-cr-sample
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+      runAfter:
+        - setup
+      workspaces:
+        - name: data
+          workspace: tests-workspace
+    - name: check-result
+      params:
+        - name: resultsDir
+          value: $(tasks.run-task.results.resultsDir)
+        - name: previousRelease
+          value: $(tasks.run-task.results.previousRelease)
+        - name: release
+          value: $(tasks.run-task.results.release)
+        - name: collectorsResource
+          value: $(tasks.run-task.results.collectorsResource)
+      workspaces:
+        - name: data
+          workspace: tests-workspace
+      runAfter:
+        - run-task
+      taskSpec:
+        params:
+          - name: resultsDir
+            type: string
+          - name: previousRelease
+            type: string
+          - name: release
+            type: string
+          - name: collectorsResource
+            type: string
+        workspaces:
+          - name: data
+        steps:
+          - name: check-result
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+
+              echo Test that previous Release CR json file is empty and saved workspace
+              test "$(jq -r '.' < "$(workspaces.data.path)/$(params.previousRelease)")" == "{}"
+
+  finally:
+    - name: cleanup
+      taskSpec:
+        steps:
+          - name: delete-crs
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+
+              kubectl delete release release-missing-cr-sample
+              kubectl delete releaseplan releaseplan-missing-cr-sample

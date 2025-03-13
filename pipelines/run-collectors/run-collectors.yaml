@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: run-collectors
   labels:
-    app.kubernetes.io/version: "0.3.0"
+    app.kubernetes.io/version: "0.4.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -94,6 +94,8 @@ spec:
           value: $(params.collectorsRepositoryRevision)
         - name: resultsDir
           value: $(tasks.collect-collectors-resources.results.resultsDir)
+        - name: previousReleasePath
+          value: $(tasks.collect-collectors-resources.results.previousRelease)
       workspaces:
         - name: data
           workspace: release-workspace
