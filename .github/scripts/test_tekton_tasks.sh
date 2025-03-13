@@ -209,6 +209,7 @@ do
         if [ -z "$TASKRUN" ]
         then
           echo "    Unable to find task $ASSERT_TASK_FAILURE in childReferences of pipelinerun $PIPELINERUN. Pipelinerun failed earlier?"
+          kubectl get pr $PIPELINERUN -o json
           exit 1
         else
           echo "    Found taskrun $TASKRUN"
@@ -216,6 +217,7 @@ do
         if [ $(kubectl get tr $TASKRUN -o=jsonpath='{.status.conditions[0].status}') != "False" ]
         then
           echo "    Taskrun did not fail - pipelinerun failed later on?"
+          kubectl get tr $TASKRUN -o json
           exit 1
         else
           echo "    Taskrun failed as expected"
