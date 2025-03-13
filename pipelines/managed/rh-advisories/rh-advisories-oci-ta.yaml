@@ -61,7 +61,7 @@ spec:
       description: The revision in the taskGitUrl repo to be used
     - name: ociStorage
       type: string
-      default: "quay.io/scoheb/trusted-artifacts"
+      default: "quay.io/konflux-ci/release-service-trusted-artifacts"
     - name: orasOptions
       description: oras options to pass to Trusted Artifacts calls
       type: string
