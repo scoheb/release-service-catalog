@@ -80,10 +80,14 @@ done
 echo "Installing StepActions"
 SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
 STEPACTION_ROOT=${SCRIPT_DIR}/../../stepactions
-kubectl apply -f $STEPACTION_ROOT/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
-kubectl apply -f $STEPACTION_ROOT/use-trusted-artifact/use-trusted-artifact.yaml
-kubectl apply -f $STEPACTION_ROOT/create-trusted-artifact/create-trusted-artifact.yaml
-kubectl apply -f $STEPACTION_ROOT/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
+stepActionFiles=$(find $STEPACTION_ROOT -maxdepth 2 -name "*.yaml")
+
+for stepAction in ${stepActionFiles};
+do
+  name=$(yq ".metadata.name" "${stepAction}")
+  echo "  Installing StepAction $name"
+  kubectl apply -f $stepAction
+done
 
 for ITEM in $TEST_ITEMS
 do
@@ -130,10 +134,12 @@ do
   # Update stepaction resolvers
   # - we want to remove the git resolver params so we can use the StepAction on cluster
   echo "Updating StepAction resolvers"
-  yq -i '(.spec.steps[] | select(.name == "skip-trusted-artifact-operations") | .ref) = {"name": "skip-trusted-artifact-operations"}' $TASK_COPY
-  yq -i '(.spec.steps[] | select(.name == "use-trusted-artifact") | .ref) = {"name": "use-trusted-artifact"}' $TASK_COPY
-  yq -i '(.spec.steps[] | select(.name == "create-trusted-artifact") | .ref) = {"name": "create-trusted-artifact"}' $TASK_COPY
-  yq -i '(.spec.steps[] | select(.name == "patch-source-data-artifact-result") | .ref) = {"name": "patch-source-data-artifact-result"}' $TASK_COPY
+  for stepAction in ${stepActionFiles};
+  do
+    name=$(yq ".metadata.name" "${stepAction}")
+    echo "  Update resolver for $name"
+    yq -i "(.spec.steps[] | select(.name == \"$name\") | .ref) = {\"name\": \"$name\"}" $TASK_COPY
+  done
 
   echo "  Installing task"
   kubectl apply -f "$TASK_COPY"
