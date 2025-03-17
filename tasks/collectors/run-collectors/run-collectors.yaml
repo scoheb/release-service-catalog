@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: run-collectors
   labels:
-    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/version: "1.1.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -28,6 +28,10 @@ spec:
       type: string
       default: main
       description: Git repository revision
+    - name: releasePath
+      type: string
+      description:  >-
+        Path to the json data file of the current in-progress Release
     - name: previousReleasePath
       type: string
       description:  >-
@@ -49,6 +53,7 @@ spec:
         COLLECTORS_RESOURCE_TYPE="$(params.collectorsResourceType)"
         RESULTS_DIR="$(workspaces.data.path)/$(params.resultsDir)"
         CONCURRENT_LIMIT=4
+        RELEASE_FILE="$(workspaces.data.path)/$(params.releasePath)"
         PREVIOUS_RELEASE_FILE="$(workspaces.data.path)/$(params.previousReleasePath)"
 
         execute_collector() { # Expected arguments are [collector json, type of collector]
@@ -65,6 +70,8 @@ spec:
                 arg_value="$(jq -r '.value' <<< "$param")"
                 ARGS=("${ARGS[@]}" --"${arg_name}" "${arg_value}")
             done
+            # add the current release json path as an arg
+            ARGS=("${ARGS[@]}" --release "${RELEASE_FILE}")
             # add the previous release json path as an arg
             ARGS=("${ARGS[@]}" --previousRelease "${PREVIOUS_RELEASE_FILE}")
             # Execute collector
