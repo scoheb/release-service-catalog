@@ -9,7 +9,7 @@
 install_appstudio_repo_crds () {
     git clone https://github.com/$1/$2
     pushd $2
-    kubectl apply -f config/crd/bases
+    kubectl create -f config/crd/bases
     popd
 }
 

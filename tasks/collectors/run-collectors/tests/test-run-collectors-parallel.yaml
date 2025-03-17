@@ -50,6 +50,10 @@ spec:
                 }
               }
               EOF
+
+              cat > "$(workspaces.data.path)"/previous_release.json << EOF
+              {}
+              EOF
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -65,6 +69,8 @@ spec:
           value: releaseplan
         - name: resultsDir
           value: results
+        - name: previousReleasePath
+          value: previous_release.json
       runAfter:
         - setup
       workspaces:

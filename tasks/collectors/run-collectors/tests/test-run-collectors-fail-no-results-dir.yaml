@@ -23,6 +23,8 @@ spec:
           value: releaseplan
         - name: resultsDir
           value: results
+        - name: previousReleasePath
+          value: previous_release.json
       workspaces:
         - name: data
           workspace: tests-workspace
