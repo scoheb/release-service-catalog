@@ -11,8 +11,12 @@ do
     ociStageParam=$(yq '.spec.params[] | select(.name == "ociStorage") | .name' "${taskFile}")
     if [ -z "${ociStageParam}" ]; then
       echo "X - $(basename ${dir})"
-      nonCompatibleTrustedArtifactsBasedTasks+=($dir)
+      nonCompatibleTrustedArtifactsBasedTasks+=(tasks/managed/$(basename ${dir}))
     fi
   fi
 done
-#echo "nonCompatibleTrustedArtifactsBasedTasks: ${nonCompatibleTrustedArtifactsBasedTasks[@]}"
+
+echo ""
+echo "nonCompatibleTrustedArtifactsBasedTasks:"
+echo ""
+echo "${nonCompatibleTrustedArtifactsBasedTasks[@]}"
