@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: rh-advisories
   labels:
-    app.kubernetes.io/version: "1.10.0"
+    app.kubernetes.io/version: "1.13.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -726,7 +726,6 @@ spec:
       runAfter:
         - create-pyxis-image
     - name: update-component-sbom
-      retries: 3
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       when:
         - input: "$(tasks.collect-atlas-params.results.secretName)"
@@ -769,7 +768,6 @@ spec:
         - push-rpm-data-to-pyxis
         - populate-release-notes
     - name: upload-component-sbom
-      retries: 3
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       when:
         - input: "$(tasks.collect-atlas-params.results.secretName)"
@@ -933,7 +931,6 @@ spec:
       runAfter:
         - collect-data
     - name: create-product-sbom
-      retries: 3
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       when:
         - input: "$(tasks.collect-atlas-params.results.secretName)"
@@ -972,7 +969,6 @@ spec:
         - collect-atlas-params
         - populate-release-notes
     - name: upload-product-sbom
-      retries: 3
       timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       when:
         - input: "$(tasks.collect-atlas-params.results.secretName)"

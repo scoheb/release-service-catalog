@@ -117,6 +117,10 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -129,9 +133,13 @@ spec:
         - name: schema
           value: $(params.taskGitUrl)/raw/$(params.taskGitRevision)/schema/dataKeys.json
         - name: systems
-          value: 
+          value:
             - fbc
             - sign
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
       taskRef:
         params:
           - name: url
@@ -159,6 +167,10 @@ spec:
       params:
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -248,6 +260,10 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
       runAfter:
         - verify-enterprise-contract
     - name: add-fbc-contribution-to-index-image
@@ -409,6 +425,10 @@ spec:
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
+        - name: stepActionGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: stepActionGitRevision
+          value: "$(params.taskGitRevision)"
       taskRef:
         resolver: "git"
         params:
