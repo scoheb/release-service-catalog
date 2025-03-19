@@ -12,6 +12,9 @@ Tekton task to sign container images in snapshot by cosign.
 | retries                | Retry cosign N times                                                                                                                                                                                                                              | Yes      | 3             |
 | concurrentLimit       | Number of concurrent cosign operations                                                                                                                                                                                                            | Yes      | 5             |
 
+## Changes in 1.4.0
+* fix to ensure that the auth file used by cosign contains credentials for the registry
+
 ## Changes in 1.3.0
 * Containers are signed only if the signature doesn't exist in the destination image
 * Existing signature validation and signing are done in parallel now controlled by concurrencyLimit paremeter
