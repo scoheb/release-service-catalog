@@ -51,7 +51,7 @@ spec:
       description: Name of this Task Run to be made available to caller
   steps:
     - name: create-advisory
-      image: quay.io/konflux-ci/release-service-utils:0b2f257d7a5c2a881c36c23f8ae3cd5e89db593a
+      image: quay.io/scoheb/release-service-utils:2 #quay.io/konflux-ci/release-service-utils:0b2f257d7a5c2a881c36c23f8ae3cd5e89db593a
       env:
         - name: GITLAB_HOST
           valueFrom:
@@ -179,6 +179,7 @@ spec:
           /home/utils/apply_template.py -o "$ADVISORY_FILEPATH" --data "$DATA" \
             --template /home/templates/advisory.yaml.jinja
 
+          cat "$ADVISORY_FILEPATH"
           # Ensure the created advisory file passes the advisory schema
           check-jsonschema --schemafile schema/advisory.json "$ADVISORY_FILEPATH" 2> "$STDERR_FILE"
 
