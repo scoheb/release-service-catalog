@@ -127,18 +127,37 @@ spec:
           | tee "$(results.fbcFragment.path)"
   
         echo -e "\nGenerating collectors data"
-        collectors=$(get-resource "release" "${RELEASE}" "{.status.collectors}")
-        collectors_result=$(echo "$collectors" | jq -cr '
-          def extract(key):
-            [ .managed[]?, .tenant[]? ]
-            | map(.[]? | select(type == "object" and has(key)) | .[key] // [])
-            | flatten;
-      
-          { cves: extract("cves"), issues: extract("issues") }
-          | with_entries(select(.value != []))
-          | if length > 0 then { releaseNotes: . } else {} end
-        ')
+        collectors_status=$(get-resource "release" "${RELEASE}" "{.status.collectors}")
+        echo "***collectors status"
+        echo "${collectors_status}"
+        echo "***"
+
+        collectors_result=$(jq -c '
+          def deepmerge(a; b):
+            reduce b[] as $item (a;
+            reduce ($item | keys_unsorted[]) as $key (.;
+            $item[$key] as $val | ($val | type) as $type | .[$key] = if ($type == "object") then
+            deepmerge({}; [if .[$key] == null then {} else .[$key] end, $val])
+            elif ($type == "array") then
+            (.[$key] + $val | unique)
+            else
+            $val
+            end)
+            );
         
+          # Ensure we safely handle missing collectors
+          (.? // {}) as $collectors |
+        
+          # Flatten and combine the managed and tenant sections
+          [($collectors.managed? // {} | to_entries | map(.value)) +
+           ($collectors.tenant? // {} | to_entries | map(.value))] |
+           flatten |
+           deepmerge({}; .)
+        ' <<< "${collectors_status}")
+        echo "***collectors"
+        echo "${collectors_result}"
+        echo "***"
+
         echo -e "\nFetching merged data json"
         release_result=$(get-resource "release" "${RELEASE}" "{.spec.data}")
 
