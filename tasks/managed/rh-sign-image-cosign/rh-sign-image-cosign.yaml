@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: rh-sign-image-cosign
   labels:
-    app.kubernetes.io/version: "1.3.0"
+    app.kubernetes.io/version: "1.4.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -143,6 +143,13 @@ spec:
           local identity=$1
           local reference=$2
           local digest=$3
+
+          # cosign has very limited support for selecting the right auth entry,
+          # so create a custom auth file with just one entry.
+          DOCKER_CONFIG="$(mktemp -d)"
+          export DOCKER_CONFIG
+          select-oci-auth "${reference}" > "${DOCKER_CONFIG}/config.json"
+
           declare -a COSIGN_REKOR_ARGS=()
           found_signatures=$(check_existing_signatures "$identity" "$reference@$digest" "$digest")
           if [ -z "$found_signatures" ]; then

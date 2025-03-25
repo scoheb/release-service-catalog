@@ -137,7 +137,15 @@ function skopeo() {
   fi
 }
 function mktemp() {
-  echo "temp_key_file"
+  if [[ "${1:-}" == "-d" ]]; then
+    /usr/bin/mktemp -d
+  else
+    echo "temp_key_file"
+  fi
+}
+
+function select-oci-auth() {
+    echo "mock select-oci-auth called with: $*"
 }
 
 function cosign () {
