@@ -148,7 +148,7 @@ do
     workSpaceParams="volumeClaimTemplateFile=$WORKSPACE_TEMPLATE"
     dataDir=/workspace/data
   else
-    workSpaceParams="emptyDir="""
+    workSpaceParams="emptyDir="
     dataDir=/var/workdir
   fi
 
@@ -187,7 +187,8 @@ do
     else
       workSpaceParams="emptyDir="
     fi
-    PIPELINERUN=$(tkn p start --use-param-defaults $TEST_NAME -p ociStorage=${TRUSTED_ARTIFACT_OCI_STORAGE} -p dataDir=${dataDir} -w "name=tests-workspace,${workSpaceParams}" -o json | jq -r '.metadata.name')
+    PIPELINERUNJSON=$(tkn p start --use-param-defaults $TEST_NAME ${ociStorageParam} ${dataDirParam} -w "name=tests-workspace,${workSpaceParams}" -o json)
+    PIPELINERUN=$(jq -r '.metadata.name' <<< "${PIPELINERUNJSON}")
 
     echo "  Started pipelinerun $PIPELINERUN"
     sleep 1  # allow a second for the pr object to appear (including a status condition)
