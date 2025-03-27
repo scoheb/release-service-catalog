@@ -26,7 +26,9 @@ spec:
               cat > "$(workspaces.data.path)/data.json" << EOF
               {
                 "releaseNotes": {
-                  "product_id": 123,
+                  "product_id": [
+                    123
+                  ],
                   "product_name": "Red Hat Openstack Product",
                   "product_version": "1.2.3",
                   "product_stream": "rhtas-tp1",
