@@ -12,6 +12,9 @@ Tekton task to sign container images in snapshot by cosign.
 | retries                | Retry cosign N times                                                                                                                                                                                                                              | Yes      | 3             |
 | concurrentLimit       | Number of concurrent cosign operations                                                                                                                                                                                                            | Yes      | 5             |
 
+## Changes in 2.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 1.4.0
 * fix to ensure that the auth file used by cosign contains credentials for the registry
 

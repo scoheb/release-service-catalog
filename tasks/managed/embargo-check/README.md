@@ -23,6 +23,9 @@ based on the issues visibility
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 2.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 1.1.0
 * The task injects the `public` key to each issue for the `issues.redhat.com` server based on if the issue is
   publicly visible

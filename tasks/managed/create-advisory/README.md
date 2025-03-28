@@ -25,6 +25,9 @@ Only all `redhat-pending` or all `redhat-prod` repositories may be specified in 
 | subdirectory             | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                  | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 6.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 5.1.1
 * This task no longer changes the type to RHSA if CVEs are provided
   * It will be done in `populate-release-notes` instead

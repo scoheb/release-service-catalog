@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: populate-release-notes
   labels:
-    app.kubernetes.io/version: "3.0.3"
+    app.kubernetes.io/version: "4.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release

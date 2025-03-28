@@ -14,6 +14,9 @@ Tekton task to update component-level SBOMs with purls containing release-time i
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 1.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 0.2.0
 - Rename dataPath parameter to sbomJsonPath to better reflect usage
 

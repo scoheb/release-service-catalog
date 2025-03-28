@@ -17,6 +17,9 @@ path to a file containing data used in component SBOM generation.
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 4.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 3.0.3
 * This task now overrides the releaseNotes.type field to `RHSA` if CVEs are provided
 

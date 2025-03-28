@@ -18,6 +18,9 @@ OSIDB for each CVE present. If the type is not RHSA, no action will be performed
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 1.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 0.1.2
 * Update the task to fail if the type is RHSA and no CVEs are provided
 

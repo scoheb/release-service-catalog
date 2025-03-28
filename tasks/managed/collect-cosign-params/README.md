@@ -13,5 +13,8 @@ Tekton task that collects cosign options from the data file.
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 1.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 0.1.1
   * Fix linting issues in this task

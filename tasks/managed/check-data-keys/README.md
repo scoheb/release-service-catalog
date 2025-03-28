@@ -20,6 +20,9 @@ Currently, `releaseNotes`, and `cdn` are the only supported systems.
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                                                                                                               |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path)                                                                                          |
 
+## Changes in 2.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 1.0.2
 * Strip the `.git/` suffix from the `schema` value if present. Some `taskGitUrl`s add this suffix which results in invalid schema files being passed
 

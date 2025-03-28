@@ -22,6 +22,9 @@ the field `spec.data.fileUpdates` in the ReleasePlanAdmission resource.
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                       |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path)  |
 
+## Changes in 4.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 3.0.0
 * Added taskGiturl and taskGitRevision parameters to be passed to the internalRequest
 * The pipeline is called via git resolver now instead of cluster resolver

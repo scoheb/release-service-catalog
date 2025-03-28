@@ -40,6 +40,9 @@ shouldn't cause any problems, because RHEC will ignore repos with no published i
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 4.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 3.0.1
 * Fix shellcheck/checkton linting issues in the task and tests
 

@@ -18,6 +18,9 @@ Tekton task to push snapshot images to an image registry using `cosign copy`.
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 7.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 6.5.0
 * Bump the utils image used in this task
   * The `select-oci-auth` script now supports docker.io

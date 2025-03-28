@@ -24,6 +24,9 @@ The relative path of the pyxis.json file in the data workspace is output as a ta
 | subdirectory            | Subdirectory inside the workspace to be used                                                                                                                                                                                                                                                                                                                                                                | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                                                                                                                                                                                                                                                                                                      | Yes      | $(workspaces.data.path) |
 
+## Changes in 4.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 3.8.4
 * Bump the utils image used in this task
   * Fix an error if there are no tags for a repository in an existing

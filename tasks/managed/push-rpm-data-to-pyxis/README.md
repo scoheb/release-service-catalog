@@ -18,6 +18,9 @@ all repository_id strings found in rpm purl strings in the sboms.
 | subdirectory            | Subdirectory inside the workspace to be used                                                                               | Yes      | ""                      |
 | dataDir                 | The location where data will be stored                                                                                     | Yes      | $(workspaces.data.path) |
 
+## Changes in 2.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 1.4.0
 * Updated the base image used in this task
   * The new image supports extracting rpm summaries from sbom annotations

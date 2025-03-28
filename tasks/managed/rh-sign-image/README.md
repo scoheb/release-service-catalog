@@ -24,6 +24,8 @@ Task to create internalrequests or pipelineruns to sign snapshot components
 | subdirectory             | Subdirectory inside the workspace to be used                                                                                                                                                                                                      | Yes      | ""                      |
 | dataDir                  | The location where data will be stored                                                                                                                                                                                                            | Yes      | $(workspaces.data.path) |
 
+## Changes in 6.0.0
+* This task now supports Trusted artifacts
 
 ## Changes in 5.1.0
 * The pipeline is called via git resolver now instead of cluster resolver

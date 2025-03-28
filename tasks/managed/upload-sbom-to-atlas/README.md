@@ -19,6 +19,9 @@ Supports both CycloneDX and SPDX format.
 | subdirectory              | Subdirectory inside the workspace to be used                                                                                                                                                                                         | Yes      | ""                                                                            |
 | dataDir                   | The location where data will be stored                                                                                                                                                                                               | Yes      | $(workspaces.data.path)                                                       |
 
+## Changes in 1.0.0
+* This task now supports Trusted artifacts
+
 ## Changes in 0.2.1
 Ignore error (but output a message) if upload request to Atlas fails.
 
