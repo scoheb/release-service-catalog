@@ -181,12 +181,6 @@ do
       sleep 5
     done
 
-    if [ -z "${USE_TRUSTED_ARTIFACTS}" ]; then
-      workSpaceParams="volumeClaimTemplateFile=$WORKSPACE_TEMPLATE"
-      dataDir=/workspace/data
-    else
-      workSpaceParams="emptyDir="
-    fi
     PIPELINERUNJSON=$(tkn p start --use-param-defaults $TEST_NAME ${ociStorageParam} ${dataDirParam} -w "name=tests-workspace,${workSpaceParams}" -o json)
     PIPELINERUN=$(jq -r '.metadata.name' <<< "${PIPELINERUNJSON}")
 
