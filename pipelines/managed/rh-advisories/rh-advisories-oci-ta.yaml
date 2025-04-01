@@ -2,7 +2,7 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: rh-advisories
+  name: rh-advisories-oci-ta
   labels:
     app.kubernetes.io/version: "1.13.0"
   annotations:
@@ -52,9 +52,6 @@ spec:
     - name: verify_ec_task_bundle
       type: string
       description: The location of the bundle containing the verify-enterprise-contract task
-    - name: verify_ec_task_git_revision
-      type: string
-      description: The git revision to be used when consuming the verify-conforma task
     - name: taskGitUrl
       type: string
       description: The url to the git repo where the release-service-catalog tasks to be used are stored
@@ -64,7 +61,7 @@ spec:
       description: The revision in the taskGitUrl repo to be used
     - name: ociStorage
       type: string
-      default: "empty"
+      default: "quay.io/konflux-ci/release-service-trusted-artifacts"
     - name: orasOptions
       description: oras options to pass to Trusted Artifacts calls
       type: string
@@ -76,7 +73,7 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
-      default: "/workspace/data"
+      default: "/var/workdir"
   workspaces:
     - name: release-workspace
   results:
@@ -108,7 +105,6 @@ spec:
         - name: requireInternalServices
           value: "true"
     - name: collect-data
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       taskRef:
         resolver: "git"
         params:
@@ -131,6 +127,12 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -141,7 +143,6 @@ spec:
       runAfter:
         - verify-access-to-resources
     - name: reduce-snapshot
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       taskRef:
         resolver: "git"
         params:
@@ -162,6 +163,16 @@ spec:
           value: $(tasks.collect-data.results.snapshotNamespace)
         - name: SNAPSHOT_PATH
           value: $(params.dataDir)/$(tasks.collect-data.results.snapshotSpec)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -199,7 +210,6 @@ spec:
       runAfter:
         - verify-access-to-resources
     - name: apply-mapping
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       retries: 3
       taskRef:
         resolver: "git"
@@ -217,6 +227,16 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.reduce-snapshot.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -226,26 +246,28 @@ spec:
           workspace: release-workspace
       runAfter:
         - reduce-snapshot
-    - name: verify-enterprise-contract
+    - name: verify-conforma
       timeout: "4h00m0s"
       taskRef:
-        resolver: "bundles"
+        resolver: "git"
         params:
-          - name: bundle
-            value: $(params.verify_ec_task_bundle)
-          - name: kind
-            value: task
-          - name: name
-            value: verify-enterprise-contract
+          - name: url
+            value: https://github.com/enterprise-contract/ec-cli
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/verify-conforma-konflux-ta/0.1/verify-conforma-konflux-ta.yaml
       params:
-        - name: IMAGES
-          value: "$(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)"
+        - name: SNAPSHOT_FILENAME
+          # hardcoded in collect-data
+          value: "snapshot_spec.json"
         - name: SSL_CERT_DIR
           value: /var/run/secrets/kubernetes.io/serviceaccount
         - name: POLICY_CONFIGURATION
           value: $(params.enterpriseContractPolicy)
         - name: STRICT
-          value: "1"
+          # only set to false for development
+          value: "true"
         - name: IGNORE_REKOR
           value: "true"
         - name: EXTRA_RULE_DATA
@@ -254,9 +276,10 @@ spec:
           value: $(params.enterpriseContractTimeout)
         - name: WORKERS
           value: $(params.enterpriseContractWorkerCount)
-      workspaces:
-        - name: data
-          workspace: release-workspace
+        - name: SOURCE_DATA_ARTIFACT
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: TRUSTED_ARTIFACTS_DEBUG
+          value: "$(params.trustedArtifactsDebug)"
       runAfter:
         - apply-mapping
     - name: populate-release-notes
@@ -266,6 +289,16 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -295,6 +328,16 @@ spec:
           value: $(params.taskGitUrl)
         - name: taskGitRevision
           value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -315,7 +358,6 @@ spec:
         - check-data-keys
         - populate-release-notes
     - name: set-advisory-severity
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
@@ -325,6 +367,16 @@ spec:
           value: $(params.taskGitUrl)
         - name: taskGitRevision
           value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -344,7 +396,6 @@ spec:
       runAfter:
         - populate-release-notes
     - name: collect-cosign-params
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       taskRef:
         resolver: "git"
         params:
@@ -357,6 +408,16 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -388,6 +449,16 @@ spec:
           value: "$(tasks.collect-cosign-params.results.cosign-secret-name)"
         - name: signRegistryAccessPath
           value: "$(tasks.publish-pyxis-repository.results.signRegistryAccessPath)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -396,11 +467,10 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - verify-enterprise-contract
+        - verify-conforma
         - push-snapshot
         - collect-cosign-params
     - name: push-snapshot
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       retries: 5
       when:
         - input: "$(tasks.apply-mapping.results.mapped)"
@@ -422,6 +492,16 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: resultsDirPath
           value: "$(tasks.collect-data.results.resultsDir)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -432,7 +512,6 @@ spec:
       runAfter:
         - rh-sign-image
     - name: collect-pyxis-params
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       taskRef:
         resolver: "git"
         params:
@@ -445,6 +524,16 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -491,6 +580,16 @@ spec:
           value: $(tasks.collect-pyxis-params.results.secret)
         - name: signRegistryAccessPath
           value: $(tasks.publish-pyxis-repository.results.signRegistryAccessPath)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -500,7 +599,7 @@ spec:
           workspace: release-workspace
       runAfter:
         - embargo-check
-        - verify-enterprise-contract
+        - verify-conforma
         - publish-pyxis-repository
         - extract-requester-from-release
     - name: create-pyxis-image
@@ -526,6 +625,16 @@ spec:
           value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -558,6 +667,16 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: resultsDirPath
           value: "$(tasks.collect-data.results.resultsDir)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -587,6 +706,16 @@ spec:
           value: $(tasks.collect-pyxis-params.results.server)
         - name: pyxisSecret
           value: $(tasks.collect-pyxis-params.results.secret)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.create-pyxis-image.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -619,6 +748,16 @@ spec:
           value: "$(tasks.populate-release-notes.results.sbomDataPath)"
         - name: downloadedSbomPath
           value: "$(tasks.push-rpm-data-to-pyxis.results.sbomPath)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.push-rpm-data-to-pyxis.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -643,6 +782,16 @@ spec:
           value: "$(tasks.collect-atlas-params.results.ssoTokenUrl)"
         - name: bombasticApiUrl
           value: "$(tasks.collect-atlas-params.results.bombasticApiUrl)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -678,6 +827,16 @@ spec:
           value: $(params.taskGitUrl)
         - name: taskGitRevision
           value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -710,6 +869,16 @@ spec:
             - pyxis
             - mapping
             - sign
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -742,6 +911,16 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -760,6 +939,16 @@ spec:
       params:
         - name: dataJsonPath
           value: "$(tasks.collect-data.results.data)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -794,6 +983,16 @@ spec:
           value: "$(tasks.collect-atlas-params.results.ssoTokenUrl)"
         - name: bombasticApiUrl
           value: "$(tasks.collect-atlas-params.results.bombasticApiUrl)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.create-product-sbom.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -830,6 +1029,16 @@ spec:
           value: $(params.taskGitUrl)
         - name: taskGitRevision
           value: $(params.taskGitRevision)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -861,6 +1070,16 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: advisoryUrl
           value: "$(tasks.create-advisory.results.advisory_url)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -880,12 +1099,27 @@ spec:
       runAfter:
         - create-advisory
     - name: update-cr-status
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       params:
         - name: resource
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
+        - name: resultsDirName
+          value: "results"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: resultArtifacts
+          value:
+            - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+            - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+            - "$(tasks.create-advisory.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+            - "$(tasks.run-file-updates.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: subdirectory
+          value: $(tasks.collect-data.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
         - name: stepActionGitUrl
           value: "$(params.taskGitUrl)"
         - name: stepActionGitRevision
@@ -904,27 +1138,3 @@ spec:
           workspace: release-workspace
       runAfter:
         - create-advisory
-  finally:
-    - name: cleanup
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
-      taskRef:
-        resolver: "git"
-        params:
-          - name: url
-            value: $(params.taskGitUrl)
-          - name: revision
-            value: $(params.taskGitRevision)
-          - name: pathInRepo
-            value: tasks/managed/cleanup-workspace/cleanup-workspace.yaml
-      when:
-        - input: $(params.postCleanUp)
-          operator: in
-          values: ["true"]
-      params:
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
-        - name: pipelineRunUid
-          value: $(context.pipelineRun.uid)
-      workspaces:
-        - name: input
-          workspace: release-workspace
