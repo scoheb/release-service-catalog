@@ -5,7 +5,7 @@ Tekton release pipeline to release maven artifacts extracted from the maven repo
 ## Parameters
 
 | Name                            | Description                                                                                                                        | Optional | Default value                                             |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |----------|-----------------------------------------------------------|
 | release                         | The namespaced name (namespace/name) of the Release custom resource initiating this pipeline execution                             | No       | -                                                         |
 | releasePlan                     | The namespaced name (namespace/name) of the releasePlan                                                                            | No       | -                                                         |
 | releasePlanAdmission            | The namespaced name (namespace/name) of the releasePlanAdmission                                                                   | No       | -                                                         |
@@ -16,8 +16,13 @@ Tekton release pipeline to release maven artifacts extracted from the maven repo
 | enterpriseContractTimeout       | Timeout setting for `ec validate`                                                                                                  | Yes      | 40m0s                                                     |
 | postCleanUp                     | Cleans up workspace after finishing executing the pipeline                                                                         | Yes      | true                                                      |
 | verify_ec_task_bundle           | The location of the bundle containing the verify-enterprise-contract task                                                          | No       | -                                                         |
+| verify_ec_task_git_revision     | The git revision to be used when consuming the verify-conforma task                                                                | No       | -                                                         |
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | Yes      | production                                                |
+
+## Changes in 0.4.0
+* Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task
+  via git resolver
 
 ## Changes in 0.3.0
 * Update all task pathInRepo values as they are now in `tasks/managed`

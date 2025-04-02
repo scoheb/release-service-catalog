@@ -17,8 +17,13 @@ Tekton pipeline to release content to registry.redhat.io registry.
 | enterpriseContractWorkerCount   | Number of parallel workers to use for policy evaluation.                                                                           | Yes      | 4                                                         |
 | postCleanUp                     | Cleans up workspace after finishing executing the pipeline                                                                         | Yes      | true                                                      |
 | verify_ec_task_bundle           | The location of the bundle containing the verify-enterprise-contract task                                                          | No       | -                                                         |
+| verify_ec_task_git_revision     | The git revision to be used when consuming the verify-conforma task                                                                | No       | -                                                         |
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | -                                                         |
+
+## Changes in 4.8.0
+* Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task
+  via git resolver
 
 ## Changes in 4.7.2
 * Pass taskGitUrl and taskGitRevision to run-file-updates task
