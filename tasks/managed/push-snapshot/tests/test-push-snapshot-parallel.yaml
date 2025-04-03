@@ -246,10 +246,10 @@ spec:
                 exit 1
               fi
 
-              if ! grep -q '5' "$(workspaces.data.path)"/*.count; then
+              if ! grep -q '5' "$(params.dataDir)/$(params.subdirectory)"/*.count; then
                 echo "Error: Expected to see 5 parallel runs of push_image at some point."
                 echo "Actual counts:"
-                cat "$(workspaces.data.path)"/*.count
+                cat "$(params.dataDir)/$(params.subdirectory)"/*.count
                 exit 1
               fi
       runAfter:

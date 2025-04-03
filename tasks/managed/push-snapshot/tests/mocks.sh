@@ -8,18 +8,18 @@ function cosign() {
   echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt"
 
   if [[ "$*" == "copy -f registry.io/parallel-image:tag"*" "*":"* ]]
-  then 
-    LOCk_FILE="$(workspaces.data.path)/${RANDOM}.lock"
-    touch $LOCk_FILE
+  then
+    LOCK_FILE="$(params.dataDir)/$(params.subdirectory)/${RANDOM}.lock"
+    touch $LOCK_FILE
     sleep 1
-    LOCK_FILE_COUNT=$(ls $(workspaces.data.path)/*.lock | wc -l)
+    LOCK_FILE_COUNT="$(ls "$(params.dataDir)/$(params.subdirectory)/"*.lock | wc -l)"
     # Create a .count file to log the number of parallel cosign calls currently running.
-    echo $LOCK_FILE_COUNT > $(workspaces.data.path)/${RANDOM}.count
+    echo $LOCK_FILE_COUNT > "$(params.dataDir)/$(params.subdirectory)/${RANDOM}.count"
     sleep 1
-    rm $LOCk_FILE
+    rm $LOCK_FILE
   fi
 
-  # mock cosign failing for the no-permission test 
+  # mock cosign failing for the no-permission test
   if [[ "$*" == "copy -f registry.io/no-permmission:tag "*":"* ]]
   then
     echo Invalid credentials for registry.io/no-permmission:tag

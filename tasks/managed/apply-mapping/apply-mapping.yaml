@@ -66,9 +66,9 @@ spec:
     - name: mapped
       type: string
       description: A true/false value depicting whether or not the snapshot was mapped.
-    - description: Produced trusted data artifact
-      name: sourceDataArtifact
+    - name: sourceDataArtifact
       type: string
+      description: Produced trusted data artifact
   volumes:
     - name: workdir
       emptyDir: {}
@@ -83,8 +83,6 @@ spec:
         value: "$(params.orasOptions)"
       - name: "DEBUG"
         value: "$(params.trustedArtifactsDebug)"
-      - name: "HOME"
-        value: "/tekton/home"
   steps:
     - name: skip-trusted-artifact-operations
       ref:

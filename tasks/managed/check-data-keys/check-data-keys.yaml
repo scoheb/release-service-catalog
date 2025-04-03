@@ -82,8 +82,6 @@ spec:
         value: "$(params.orasOptions)"
       - name: "DEBUG"
         value: "$(params.trustedArtifactsDebug)"
-      - name: "HOME"
-        value: "/tekton/home"
   steps:
     - name: skip-trusted-artifact-operations
       ref:
@@ -133,7 +131,6 @@ spec:
             echo "No data JSON was provided."
             exit 1
         fi
-        cat "$(params.dataDir)/$(params.dataPath)"
 
         schema="${SCHEMA_FILE/\.git\///}"
         if ! curl -sL --fail-with-body "$schema" -o /tmp/schema ; then
@@ -147,7 +144,6 @@ spec:
             "$(params.dataDir)/$(params.dataPath)" > "/tmp/systems" 
         mv "/tmp/systems" "$(params.dataDir)/$(params.dataPath)"
 
-        cat "$(params.dataDir)/$(params.dataPath)"
         check-jsonschema --output-format=text --schemafile "/tmp/schema"  "$(params.dataDir)/$(params.dataPath)"
     - name: create-trusted-artifact
       ref:

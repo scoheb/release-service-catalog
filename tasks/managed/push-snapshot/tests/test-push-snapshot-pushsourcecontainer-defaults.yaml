@@ -239,7 +239,7 @@ spec:
               sort "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt" > \
               "$(params.dataDir)/$(params.subdirectory)/mock_cosign_sorted.txt"
 
-              if [ "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls_sorted.txt)" \
+              if [ "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls_sorted.txt")" \
                 != "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/mock_cosign_sorted.txt")" ]; then
                 echo "Error: Expected cosign calls do not match actual calls"
                 echo Actual calls:

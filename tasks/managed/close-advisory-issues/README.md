@@ -8,12 +8,13 @@ Issues in other servers will be skipped without the task failing.
 
 ## Parameters
 
-| Name        | Description                                                                               | Optional | Default value |
-|-------------|-------------------------------------------------------------------------------------------|----------|---------------|
-| dataPath    | Path to data JSON in the data workspace                                                   | No       | -             |
-| advisoryUrl | The url of the advisory the issues were fixed in. This is added in a comment on the issue | No       | -             |
+| Name                  | Description                                                                                 | Optional | Default value                                             |
+|-----------------------|---------------------------------------------------------------------------------------------|----------|-----------------------------------------------------------|
+| dataPath              | Path to data JSON in the data workspace                                                     | No       | -                                                         |
+| advisoryUrl           | The url of the advisory the issues were fixed in. This is added in a comment on the issue   | No       | -                                                         |
+| stepActionGitUrl      | The url to the git repo where the release-service-catalog stepActions to be used are stored | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
+| stepActionGitRevision | The revision in the stepActionGitUrl repo to be used                                        | Yes      | production                                                |
 
-=======
 ## Changes in 1.0.0
 * This task now supports Trusted artifacts
 

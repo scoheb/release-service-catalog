@@ -18,16 +18,18 @@ should not be present in the Release data section).
 
 ## Parameters
 
-| Name                    | Description                                                                                                                 | Optional | Default value |
-|-------------------------|-----------------------------------------------------------------------------------------------------------------------------|----------|---------------|
-| release                 | Namespaced name of the Release                                                                                              | No       | -             |
-| releasePlan             | Namespaced name of the ReleasePlan                                                                                          | No       | -             |
-| releasePlanAdmission    | Namespaced name of the ReleasePlanAdmission                                                                                 | No       | -             |
-| releaseServiceConfig    | Namespaced name of the ReleaseServiceConfig                                                                                 | No       | -             |
-| snapshot                | Namespaced name of the Snapshot                                                                                             | No       | -             |
-| subdirectory            | Subdirectory inside the workspace to be used                                                                                | Yes      | ""            |
-| ociStorage              | The OCI repository where the Trusted Artifacts are stored                                                                   | Yes      | empty         |
-| ociArtifactExpiresAfter | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire  | Yes      | 1d            |
+| Name                    | Description                                                                                                                 | Optional   | Default value                                             |
+|-------------------------|-----------------------------------------------------------------------------------------------------------------------------|------------|-----------------------------------------------------------|
+| release                 | Namespaced name of the Release                                                                                              | No         | -                                                         |
+| releasePlan             | Namespaced name of the ReleasePlan                                                                                          | No         | -                                                         |
+| releasePlanAdmission    | Namespaced name of the ReleasePlanAdmission                                                                                 | No         | -                                                         |
+| releaseServiceConfig    | Namespaced name of the ReleaseServiceConfig                                                                                 | No         | -                                                         |
+| snapshot                | Namespaced name of the Snapshot                                                                                             | No         | -                                                         |
+| subdirectory            | Subdirectory inside the workspace to be used                                                                                | Yes        | ""                                                        |
+| ociStorage              | The OCI repository where the Trusted Artifacts are stored                                                                   | Yes        | empty                                                     |
+| ociArtifactExpiresAfter | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expir e | Yes        | 1d                                                        |
+| stepActionGitUrl        | The url to the git repo where the release-service-catalog stepActions to be used are stored                                 | Yes        | https://github.com/konflux-ci/release-service-catalog.git |
+| stepActionGitRevision   | The revision in the stepActionGitUrl repo to be used                                                                        | Yes        | production                                                |
 
 ## Changes in 5.0.0
 * This task now supports Trusted artifacts

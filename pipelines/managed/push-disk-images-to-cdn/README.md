@@ -28,7 +28,7 @@ Tekton Pipeline to push disk images to a cdn using pulp
 * Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task
   via git resolver
 
-## Changes in 1.5.0
+## Changes in 1.5.1
 * Update the pipeline to add taskGiturl and taskGitRevison parameters to
   push-disk-images task.
 

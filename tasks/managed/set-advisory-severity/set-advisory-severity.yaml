@@ -4,11 +4,7 @@ kind: Task
 metadata:
   name: set-advisory-severity
   labels:
-<<<<<<< HEAD
-    app.kubernetes.io/version: "0.1.3"
-=======
     app.kubernetes.io/version: "1.0.0"
->>>>>>> 198aabc7 (feat(RELEASE-1387): use trusted artifacts)
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -92,8 +88,6 @@ spec:
         value: "$(params.orasOptions)"
       - name: "DEBUG"
         value: "$(params.trustedArtifactsDebug)"
-      - name: "HOME"
-        value: "/tekton/home"
   steps:
     - name: skip-trusted-artifact-operations
       ref:

@@ -86,8 +86,6 @@ spec:
         value: "$(params.orasOptions)"
       - name: "DEBUG"
         value: "$(params.trustedArtifactsDebug)"
-      - name: "HOME"
-        value: "/tekton/home"
   steps:
     - name: skip-trusted-artifact-operations
       ref:
