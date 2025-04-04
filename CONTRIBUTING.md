@@ -278,11 +278,17 @@ Requirements:
 * A k8s cluster running and kubectl default context pointing to it (e.g. [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation))
 * Tekton installed in the cluster ([docs](https://tekton.dev/docs/pipelines/install/))
 
-    ```kubectl apply --filename https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml```
+```
+kubectl apply --filename https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
+```
 
 * Local Registry is installed in the Cluster
 
-    ```.github/scripts/deploy_registry.sh```
+```
+. .github/scripts/deploy_registry.sh
+```
+
+**NOTE: This above command must be sourced.**
 
 * tkn cli installed ([docs](https://tekton.dev/docs/cli/))
 

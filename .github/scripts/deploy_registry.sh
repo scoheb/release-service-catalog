@@ -1,5 +1,12 @@
 #!/bin/bash
 
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+if [ "${sourced}" -eq 0 ]; then
+  echo "ERROR: This script must be sourced since it needs to be able to export environment variables"
+  echo "% . ./deploy_registry.sh"
+  exit 1
+fi
+
 script_path="$(dirname -- "${BASH_SOURCE[0]}")"
 
 retry() {
@@ -33,6 +40,7 @@ deploy_trust_manager() {
 
 deploy_registry() {
   kubectl apply -k "${script_path}/../resources/registry"
+  sleep 5
   retry "kubectl wait --for=condition=Ready --timeout=240s -n kind-registry -l run=registry pod" \
         "The local registry did not become available within the allocated time"
 }
@@ -49,7 +57,8 @@ port_forward() {
 
 prepare_docker_config() {
   authString=$(echo -n "root:root" | base64 -w0)
-  cat > "/tmp/.dockerconfig.json" <<EOF
+  dockerconfigFile="$(mktemp -d)/.dockerconfig.json"
+  cat > "${dockerconfigFile}" <<EOF
   {
     "auths": {
       "registry-service.kind-registry": {
@@ -58,7 +67,7 @@ prepare_docker_config() {
     }
   }
 EOF
-  cat "/tmp/.dockerconfig.json"
+  export DOCKER_CONFIG_JSON=${dockerconfigFile}
 }
 
 deploy_cert_manager

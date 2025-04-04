@@ -233,12 +233,7 @@ spec:
                   exit 1
               fi
 
-<<<<<<< HEAD
-              [[ $(head -n 1 "$(workspaces.data.path)/mock_curl.txt") == *"VULN-123"* ]]
-              [[ $(tail -n 1 "$(workspaces.data.path)/mock_curl.txt") == *"12345"* ]]
-=======
-              [[ $(head -n 1 "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt") == *"CVE-123"* ]]
+              [[ $(head -n 1 "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt") == *"VULN-123"* ]]
               [[ $(tail -n 1 "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt") == *"12345"* ]]
->>>>>>> 198aabc7 (feat(RELEASE-1387): use trusted artifacts)
       runAfter:
         - run-task

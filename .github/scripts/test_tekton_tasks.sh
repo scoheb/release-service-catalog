@@ -32,8 +32,9 @@ else
 
   echo "Using Trusted Artifacts for workspaces..."
   export TRUSTED_ARTIFACT_OCI_STORAGE=registry-service.kind-registry/trusted-artifacts
-  export TRUSTED_ARTIFACT_OCI_DOCKER_CONFIG_JSON_PATH=/tmp/.dockerconfig.json
+  export TRUSTED_ARTIFACT_OCI_DOCKER_CONFIG_JSON_PATH=${DOCKER_CONFIG_JSON}
 
+  echo "Using docker config stored in ${DOCKER_CONFIG_JSON}"
   kubectl create secret generic docker-config \
     --from-file=.dockerconfigjson="${TRUSTED_ARTIFACT_OCI_DOCKER_CONFIG_JSON_PATH}" \
     --type=kubernetes.io/dockerconfigjson --dry-run=client -o yaml | kubectl apply -f -
