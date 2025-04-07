@@ -73,6 +73,28 @@ spec:
       workspaces:
         - name: data
           workspace: release-workspace
+    - name: collect-collectors-secret
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/collectors/collect-collectors-secrets/collect-collectors-secrets.yaml
+      params:
+        - name: collectorsPath
+          value: $(tasks.collect-collectors-resources.results.collectorsResource)
+        - name: collectorsResourceType
+          value: $(params.collectorsResourceType)
+        - name: subdirectory
+          value: $(context.pipelineRun.uid)
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - collect-collectors-resources
     - name: run-collectors
       taskRef:
         resolver: "git"
@@ -102,7 +124,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - collect-collectors-resources
+        - collect-collectors-secret
     - name: save-collectors-results
       taskRef:
         resolver: "git"
