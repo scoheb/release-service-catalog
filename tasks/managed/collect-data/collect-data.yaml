@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: collect-data
   labels:
-    app.kubernetes.io/version: "4.5.3"
+    app.kubernetes.io/version: "5.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -125,6 +125,38 @@ spec:
         echo -e "\nFetching fbcFragment"
         jq -cr '.components[0].containerImage' < "$(workspaces.data.path)/$SNAPSHOTSPEC_PATH" | tr -d "\n" \
           | tee "$(results.fbcFragment.path)"
+  
+        echo -e "\nGenerating collectors data"
+        collectors_status=$(get-resource "release" "${RELEASE}" "{.status.collectors}")
+        echo "***collectors status"
+        echo "${collectors_status}"
+        echo "***"
+
+        collectors_result=$(jq -c '
+          def deepmerge(a; b):
+            reduce b[] as $item (a;
+            reduce ($item | keys_unsorted[]) as $key (.;
+            $item[$key] as $val | ($val | type) as $type | .[$key] = if ($type == "object") then
+            deepmerge({}; [if .[$key] == null then {} else .[$key] end, $val])
+            elif ($type == "array") then
+            (.[$key] + $val | unique)
+            else
+            $val
+            end)
+            );
+        
+          # Ensure we safely handle missing collectors
+          (.? // {}) as $collectors |
+        
+          # Flatten and combine the managed and tenant sections
+          [($collectors.managed? // {} | to_entries | map(.value)) +
+           ($collectors.tenant? // {} | to_entries | map(.value))] |
+           flatten |
+           deepmerge({}; .)
+        ' <<< "${collectors_status}")
+        echo "***collectors"
+        jq <<< "$collectors_result"
+        echo "***"
 
         echo -e "\nFetching merged data json"
         release_result=$(get-resource "release" "${RELEASE}" "{.spec.data}")
@@ -134,10 +166,13 @@ spec:
         release_plan_admission_result=$(get-resource "releaseplanadmission" "${RELEASE_PLAN_ADMISSION}" \
             "{.spec.data}")
 
-        # Merge Release and ReleasePlan keys. ReleasePlan has higher priority
-        merged_output=$(merge-json "$release_result" "$release_plan_result")
+        # Merge collectors and Release keys. Release has higher priority
+        merged_output=$(merge-json "$collectors_result" "$release_result")
+        
+        # Merge now with ReleasePlan keys. ReleasePlan has higher priority
+        merged_output=$(merge-json "$merged_output" "$release_plan_result")
 
-        # Merge now with ReleasePlanAdmission keys. ReleasePlanAdmission has higher priority
+        # Finally merge with ReleasePlanAdmission keys. ReleasePlanAdmission has higher priority
         merged_output=$(merge-json "$merged_output" "$release_plan_admission_result")
 
         DATA_PATH="$(params.subdirectory)/data.json"
