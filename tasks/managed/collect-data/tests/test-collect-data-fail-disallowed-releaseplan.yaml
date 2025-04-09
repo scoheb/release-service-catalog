@@ -44,8 +44,6 @@ spec:
             - mountPath: /var/workdir
               name: workdir
           env:
-            - name: "HOME"
-              value: "/tekton/home"
         workspaces:
           - name: data
         steps:

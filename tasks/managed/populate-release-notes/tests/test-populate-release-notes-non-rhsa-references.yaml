@@ -59,8 +59,6 @@ spec:
               value: "$(params.orasOptions)"
             - name: "DEBUG"
               value: "$(params.trustedArtifactsDebug)"
-            - name: "HOME"
-              value: "/tekton/home"
         steps:
           - name: setup
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
@@ -206,8 +204,6 @@ spec:
               value: "$(params.orasOptions)"
             - name: "DEBUG"
               value: "$(params.trustedArtifactsDebug)"
-            - name: "HOME"
-              value: "/tekton/home"
         steps:
           - name: skip-trusted-artifact-operations
             ref:
