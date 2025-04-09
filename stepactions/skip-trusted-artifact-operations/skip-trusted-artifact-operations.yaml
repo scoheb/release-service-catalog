@@ -22,16 +22,14 @@ spec:
   env:
     - name: ociStorage
       value: $(params.ociStorage)
-    - name: subdirectory
-      value: $(params.subdirectory)
-    - name: dataDir
-      value: $(params.dataDir)
+    - name: workDir
+      value: $(params.workDir)
   script: |
     #!/usr/bin/env bash
     set -eo pipefail
     
     if [ "${ociStorage:?}" == "empty" ]; then
       echo "oci storage not detected via ociStorage...skipping trusted artifacts tasks"
-      mkdir -p "${dataDir:?}/${subdirectory?}"
-      touch "${dataDir:?}/${subdirectory?}/.skip-trusted-artifacts"
+      mkdir -p "${workDir:?}"
+      touch "${workDir:?}/.skip-trusted-artifacts"
     fi

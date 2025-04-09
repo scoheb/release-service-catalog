@@ -118,10 +118,8 @@ spec:
       params:
         - name: ociStorage
           value: $(params.ociStorage)
-        - name: subdirectory
-          value: $(params.subdirectory)
-        - name: dataDir
-          value: $(params.dataDir)
+        - name: workDir
+          value: $(params.dataDir)/$(params.subdirectory)
     - name: use-trusted-artifact
       ref:
         resolver: "git"
@@ -133,10 +131,8 @@ spec:
           - name: pathInRepo
             value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
       params:
-        - name: dataDir
-          value: $(params.dataDir)
-        - name: subdirectory
-          value: $(params.subdirectory)
+        - name: workDir
+          value: $(params.dataDir)/$(params.subdirectory)
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: sign-image
@@ -389,18 +385,16 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: $(params.taskGitUrl)
+            value: "$(params.taskGitUrl)"
           - name: revision
-            value: $(params.taskGitRevision)
+            value: "$(params.taskGitRevision)"
           - name: pathInRepo
             value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
       params:
         - name: ociStorage
           value: $(params.ociStorage)
-        - name: dataDir
-          value: $(params.dataDir)
-        - name: subdirectory
-          value: $(params.subdirectory)
+        - name: workDir
+          value: $(params.dataDir)/$(params.subdirectory)
         - name: sourceDataArtifact
           value: $(results.sourceDataArtifact.path)
     - name: patch-source-data-artifact-result

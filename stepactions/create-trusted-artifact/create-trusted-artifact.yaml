@@ -16,12 +16,8 @@ spec:
     - name: ociStorage
       type: string
       default: "empty"
-    - name: dataDir
+    - name: workDir
       type: string
-    - name: subdirectory
-      description: Subdirectory inside the workspace to be used
-      type: string
-      default: ""
     - name: sourceDataArtifact
       type: string
       default: ""
@@ -29,4 +25,4 @@ spec:
     - create
     - --store
     - $(params.ociStorage)
-    - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
+    - $(params.sourceDataArtifact)=$(params.workDir)

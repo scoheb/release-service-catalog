@@ -12,15 +12,11 @@ spec:
     - name: HOME
       value: /tekton/home
   params:
-    - name: dataDir
+    - name: workDir
       type: string
-    - name: subdirectory
-      description: Subdirectory inside the workspace to be used
-      type: string
-      default: ""
     - name: sourceDataArtifact
       type: string
       default: ""
   args:
     - use
-    - $(params.sourceDataArtifact)=$(params.dataDir)/$(params.subdirectory)
+    - $(params.sourceDataArtifact)=$(params.workDir)

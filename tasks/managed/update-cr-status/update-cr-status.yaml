@@ -101,10 +101,8 @@ spec:
       params:
         - name: ociStorage
           value: $(params.ociStorage)
-        - name: subdirectory
-          value: $(params.subdirectory)
-        - name: dataDir
-          value: $(params.dataDir)
+        - name: workDir
+          value: $(params.dataDir)/$(params.subdirectory)
     - name: use-trusted-artifact-array
       args: ["use", "$(params.resultArtifacts[*])"]
       computeResources: {}
