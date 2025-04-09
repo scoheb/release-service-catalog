@@ -76,10 +76,8 @@ spec:
             params:
               - name: ociStorage
                 value: $(params.ociStorage)
-              - name: subdirectory
-                value: $(params.subdirectory)
-              - name: dataDir
-                value: $(params.dataDir)
+              - name: workDir
+                value: $(params.dataDir)/$(params.subdirectory)
     - name: run-task
       taskRef:
         name: publish-pyxis-repository
@@ -104,6 +102,10 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       workspaces:
         - name: data
           workspace: tests-workspace

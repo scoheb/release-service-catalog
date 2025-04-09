@@ -12,11 +12,7 @@ spec:
     - name: ociStorage
       type: string
       default: "empty"
-    - name: subdirectory
-      description: Subdirectory inside the workspace to be used
-      type: string
-      default: ""
-    - name: dataDir
+    - name: workDir
       type: string
       default: "/workspace/data"
   env:

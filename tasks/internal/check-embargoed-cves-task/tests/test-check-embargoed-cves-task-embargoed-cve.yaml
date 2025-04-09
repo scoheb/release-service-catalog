@@ -14,6 +14,12 @@ spec:
       params:
         - name: cves
           value: "CVE-123 CVE-embargo"
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
+      runAfter:
+        - setup
     - name: check-result
       runAfter:
         - run-task

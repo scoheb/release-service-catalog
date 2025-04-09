@@ -158,6 +158,10 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       workspaces:
         - name: data
           workspace: tests-workspace

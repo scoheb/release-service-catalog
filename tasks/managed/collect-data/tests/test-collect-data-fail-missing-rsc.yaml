@@ -94,6 +94,10 @@ spec:
           value: $(params.ociStorage)
         - name: dataDir
           value: $(params.dataDir)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       runAfter:
         - setup
       workspaces:

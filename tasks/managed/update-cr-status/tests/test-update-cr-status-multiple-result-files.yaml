@@ -160,6 +160,10 @@ spec:
           value:
             - "$(tasks.setup.results.resultArtifact1)=$(params.dataDir)/$(context.pipelineRun.uid)"
             - "$(tasks.setup.results.resultArtifact2)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       runAfter:
         - setup
       workspaces:

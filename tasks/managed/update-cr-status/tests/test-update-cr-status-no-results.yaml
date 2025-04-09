@@ -81,20 +81,16 @@ spec:
             params:
               - name: ociStorage
                 value: $(params.ociStorage)
-              - name: subdirectory
-                value: $(params.subdirectory)
-              - name: dataDir
-                value: $(params.dataDir)
+              - name: workDir
+                value: $(params.dataDir)/$(params.subdirectory)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
             params:
               - name: ociStorage
                 value: $(params.ociStorage)
-              - name: dataDir
-                value: $(params.dataDir)
-              - name: subdirectory
-                value: $(params.subdirectory)
+              - name: workDir
+                value: $(params.dataDir)/$(params.subdirectory)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -131,6 +127,10 @@ spec:
         - name: resultArtifacts
           value:
             - "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       workspaces:
         - name: data
           workspace: tests-workspace

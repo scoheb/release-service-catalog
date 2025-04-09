@@ -27,6 +27,8 @@ spec:
           value: release.json
         - name: previousReleasePath
           value: previous_release.json
+      runAfter:
+        - setup
       workspaces:
         - name: data
           workspace: tests-workspace
