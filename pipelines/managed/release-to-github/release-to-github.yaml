@@ -108,9 +108,9 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -127,9 +127,9 @@ spec:
           value:
             - github
             - sign
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         params:
@@ -341,9 +341,9 @@ spec:
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         resolver: "git"

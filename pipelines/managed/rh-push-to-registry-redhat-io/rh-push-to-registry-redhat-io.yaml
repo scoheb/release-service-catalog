@@ -112,9 +112,9 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -133,9 +133,9 @@ spec:
             - pyxis
             - mapping
             - sign
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         params:
@@ -173,9 +173,9 @@ spec:
           value: $(tasks.collect-data.results.snapshotNamespace)
         - name: SNAPSHOT_PATH
           value: $(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -228,9 +228,9 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -284,9 +284,9 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -315,9 +315,9 @@ spec:
           value: "$(tasks.collect-cosign-params.results.cosign-secret-name)"
         - name: signRegistryAccessPath
           value: $(tasks.publish-pyxis-repository.results.signRegistryAccessPath)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -348,9 +348,9 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: resultsDirPath
           value: "$(tasks.collect-data.results.resultsDir)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -371,9 +371,9 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -417,9 +417,9 @@ spec:
           value: $(tasks.collect-pyxis-params.results.secret)
         - name: signRegistryAccessPath
           value: $(tasks.publish-pyxis-repository.results.signRegistryAccessPath)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -452,9 +452,9 @@ spec:
           value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -484,9 +484,9 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: resultsDirPath
           value: "$(tasks.collect-data.results.resultsDir)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -513,9 +513,9 @@ spec:
           value: $(tasks.collect-pyxis-params.results.server)
         - name: pyxisSecret
           value: $(tasks.collect-pyxis-params.results.secret)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -539,9 +539,9 @@ spec:
           value: $(params.taskGitUrl)
         - name: taskGitRevision
           value: $(params.taskGitRevision)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       runAfter:
         - push-rpm-data-to-pyxis
@@ -565,9 +565,9 @@ spec:
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         resolver: "git"

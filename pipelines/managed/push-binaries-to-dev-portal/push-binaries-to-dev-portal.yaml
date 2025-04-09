@@ -107,9 +107,9 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -126,9 +126,9 @@ spec:
           value:
             - cdn
             - contentGateway
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         params:
@@ -165,9 +165,9 @@ spec:
           value: $(tasks.collect-data.results.snapshotNamespace)
         - name: SNAPSHOT_PATH
           value: $(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data

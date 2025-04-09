@@ -9,7 +9,7 @@ result will be the list of embargoed CVEs.
 | Name            | Description                                                                                | Optional | Default value                                             |
 |-----------------|--------------------------------------------------------------------------------------------|----------|-----------------------------------------------------------|
 | cves            | String containing a space separated list of CVEs to check (e.g. 'CVE-123 CVE-234 CVE-345') | No       | -                                                         |
-| taskGitUrl      | The url to the git repo where the release-service-catalog tasks to be used are stored      | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
+| taskGitUrl      | The url to the git repo where the release-service-catalog tasks to be used are stored      | No        | "" |
 | taskGitRevision | The revision in the taskGitUrl repo to be used                                             | No       | -                                                         |
 
 ## Changes in 1.0.0

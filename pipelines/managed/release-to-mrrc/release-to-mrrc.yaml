@@ -105,9 +105,9 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -123,9 +123,9 @@ spec:
         - name: systems
           value:
             - mrrc
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         params:

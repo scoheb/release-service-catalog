@@ -53,14 +53,12 @@ spec:
       description: The location where data will be stored
       type: string
       default: $(workspaces.data.path)
-    - name: stepActionGitUrl
+    - name: taskGitUrl
       type: string
-      description: The url to the git repo where the release-service-catalog stepActions to be used are stored
-      default: https://github.com/konflux-ci/release-service-catalog.git
-    - name: stepActionGitRevision
+      description: The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored
+    - name: taskGitRevision
       type: string
-      description: The revision in the stepActionGitUrl repo to be used
-      default: production
+      description: The revision in the taskGitUrl repo to be used
   workspaces:
     - name: data
       description: The workspace where the data JSON file resides
@@ -88,9 +86,9 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: $(params.stepActionGitUrl)
+            value: $(params.taskGitUrl)
           - name: revision
-            value: $(params.stepActionGitRevision)
+            value: $(params.taskGitRevision)
           - name: pathInRepo
             value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
       params:
@@ -105,9 +103,9 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: $(params.stepActionGitUrl)
+            value: $(params.taskGitUrl)
           - name: revision
-            value: $(params.stepActionGitRevision)
+            value: $(params.taskGitRevision)
           - name: pathInRepo
             value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
       params:
@@ -150,9 +148,9 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: $(params.stepActionGitUrl)
+            value: $(params.taskGitUrl)
           - name: revision
-            value: $(params.stepActionGitRevision)
+            value: $(params.taskGitRevision)
           - name: pathInRepo
             value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
       params:
@@ -169,9 +167,9 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: $(params.stepActionGitUrl)
+            value: $(params.taskGitUrl)
           - name: revision
-            value: $(params.stepActionGitRevision)
+            value: $(params.taskGitRevision)
           - name: pathInRepo
             value: stepactions/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
       params:

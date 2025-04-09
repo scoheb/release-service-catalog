@@ -108,9 +108,9 @@ spec:
           value: $(params.snapshot)
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -138,9 +138,9 @@ spec:
           value: $(tasks.collect-data.results.snapshotNamespace)
         - name: SNAPSHOT_PATH
           value: $(workspaces.data.path)/$(tasks.collect-data.results.snapshotSpec)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -164,9 +164,9 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -212,9 +212,9 @@ spec:
         - name: systems
           value:
             - cdn
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         params:
@@ -260,9 +260,9 @@ spec:
           value: $(params.taskGitUrl)
         - name: taskGitRevision
           value: $(params.taskGitRevision)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -275,9 +275,9 @@ spec:
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         resolver: "git"

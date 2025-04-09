@@ -133,9 +133,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -164,9 +164,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         params:
@@ -213,9 +213,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -277,9 +277,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -345,9 +345,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -386,9 +386,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -428,9 +428,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -460,9 +460,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -516,9 +516,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -561,9 +561,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -603,9 +603,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -642,9 +642,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
@@ -678,9 +678,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       runAfter:
         - push-rpm-data-to-pyxis
@@ -719,9 +719,9 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-        - name: stepActionGitUrl
+        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
-        - name: stepActionGitRevision
+        - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       taskRef:
         resolver: "git"

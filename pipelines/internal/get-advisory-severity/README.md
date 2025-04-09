@@ -8,5 +8,5 @@ for an advisory.
 | Name              | Description                                                                           | Optional | Default value                                             |
 |-------------------|---------------------------------------------------------------------------------------|----------|-----------------------------------------------------------|
 | releaseNoteImages | Json array of image specific details for the advisory                                 | No       | -                                                         |
-| taskGitUrl        | The url to the git repo where the release-service-catalog tasks to be used are stored | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
+| taskGitUrl        | The url to the git repo where the release-service-catalog tasks to be used are stored | No        | "" |
 | taskGitRevision   | The revision in the taskGitUrl repo to be used                                        | No       | -                                                         |
