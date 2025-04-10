@@ -13,7 +13,7 @@ save the required resources to the workspace, execute the collectors, then updat
 | collectorsResource           | The namespaced name of the resource that contains the collectors                                                  | No       | -                                                            |
 | collectorsRepository         | Git repository where the collectors will be defined                                                               | Yes      | https://github.com/konflux-ci/release-service-collectors.git |
 | collectorsRepositoryRevision | Git repository revision                                                                                           | Yes      | main                                                         |
-| taskGitUrl                   | The url to the git repo where the release-service-catalog tasks to be used are stored                             | No        | ""    |
+| taskGitUrl                   | The url to the git repo where the release-service-catalog tasks to be used are stored                             | Yes      | https://github.com/konflux-ci/release-service-catalog.git    |
 | taskGitRevision              | The revision in the taskGitUrl repo to be used                                                                    | No       | -                                                            |
 
 ## Changes in 0.5.0

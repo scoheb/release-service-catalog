@@ -21,7 +21,7 @@ Tekton pipeline to sign and release Red Hat binaries to the Red Hat Developer Po
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | -                                                         |
 
 ## Changes in 1.8.0
-* Update all tasks that now support trusted artifacts to specify the stepAction* parameters
+* Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers
 
 ## Changes in 1.7.0
 * Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task

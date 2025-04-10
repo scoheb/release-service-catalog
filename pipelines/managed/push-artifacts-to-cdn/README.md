@@ -22,7 +22,7 @@ It uses InternalRequests so that it can be run on both public and private cluste
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                      | No       | -                                                         |
 
 ## Changes in 0.2.0
-* Update all tasks that now support trusted artifacts to specify the stepAction* parameters
+* Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers
 * Align workspace name with changes in the apply-mapping task
 
 ## Changes in 0.1.0

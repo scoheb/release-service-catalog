@@ -17,11 +17,11 @@ Tekton release pipeline to release maven artifacts extracted from the maven repo
 | postCleanUp                     | Cleans up workspace after finishing executing the pipeline                                                                         | Yes      | true                                                      |
 | verify_ec_task_bundle           | The location of the bundle containing the verify-enterprise-contract task                                                          | No       | -                                                         |
 | verify_ec_task_git_revision     | The git revision to be used when consuming the verify-conforma task                                                                | No       | -                                                         |
-| taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | No        | "" |
-| taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No        | ""                                                |
+| taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
+| taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | ""                                                        |
 
 ## Changes in 0.5.0
-* Update all tasks that now support trusted artifacts to specify the stepAction* parameters
+* Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers
 
 ## Changes in 0.4.0
 * Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task

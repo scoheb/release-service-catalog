@@ -21,12 +21,12 @@ affected by RHTAP services or which results could affect the RHTAP workflow.
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | No        | "" |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | -                                                         |
 
+## Changes in 3.3.0
+* Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers
+
 ## Changes in 3.2.0
 * Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task
   via git resolver
-
-## Changes in 3.2.0
-* Update all tasks that now support trusted artifacts to specify the stepAction* parameters
 
 ## Changes in 3.1.0
 * Update all task pathInRepo values as they are now in `tasks/managed`
