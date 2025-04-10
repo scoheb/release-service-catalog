@@ -257,10 +257,6 @@ spec:
         - name: resultsDirPath
           value: "$(tasks.collect-data.results.resultsDir)"
         - name: taskGitUrl
-          value: $(params.taskGitUrl)
-        - name: taskGitRevision
-          value: $(params.taskGitRevision)
-        - name: taskGitUrl
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"

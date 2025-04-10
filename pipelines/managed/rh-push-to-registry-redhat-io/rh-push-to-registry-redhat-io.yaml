@@ -407,10 +407,6 @@ spec:
           value: 1800
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
-        - name: taskGitUrl
-          value: $(params.taskGitUrl)
-        - name: taskGitRevision
-          value: $(params.taskGitRevision)
         - name: pyxisServer
           value: $(tasks.collect-pyxis-params.results.server)
         - name: pyxisSecret
@@ -535,10 +531,6 @@ spec:
           value: $(context.pipelineRun.uid)
         - name: resultsDirPath
           value: "$(tasks.collect-data.results.resultsDir)"
-        - name: taskGitUrl
-          value: $(params.taskGitUrl)
-        - name: taskGitRevision
-          value: $(params.taskGitRevision)
         - name: taskGitUrl
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
