@@ -31,18 +31,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         results:
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         workspaces:
           - name: data
@@ -67,7 +61,7 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
           - name: skip-trusted-artifact-operations
             ref:
               name: skip-trusted-artifact-operations
@@ -75,7 +69,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -83,7 +77,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -107,9 +101,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug

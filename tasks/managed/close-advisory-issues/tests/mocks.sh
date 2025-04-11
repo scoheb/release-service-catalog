@@ -4,7 +4,7 @@ set -eux
 # mocks to be injected into task step scripts
 function curl-with-retry() {
   echo Mock curl called with: $* >&2
-  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt"
+  echo $* >> "$(params.dataDir)/mock_curl.txt"
 
   if [[ "$*" == *"Content-Type"*"https://issues.redhat.com/rest/api/2/issue/ISSUE-123/transitions" ]]
   then

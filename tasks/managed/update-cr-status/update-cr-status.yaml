@@ -56,10 +56,6 @@ spec:
       type: array
       description: Array of artifacts to use to obtain results
       default: []
-    - name: subdirectory
-      description: Subdirectory inside the workspace to be used
-      type: string
-      default: ""
     - name: dataDir
       description: The location where data will be stored
       type: string
@@ -102,7 +98,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: workDir
-          value: $(params.dataDir)/$(params.subdirectory)
+          value: $(params.dataDir)
     - name: use-trusted-artifact-array
       args: ["use", "$(params.resultArtifacts[*])"]
       computeResources: {}
@@ -114,7 +110,7 @@ spec:
         set -ex
 
         RESULTS_JSON="{}"
-        resultPaths=$(find "$(params.dataDir)/$(params.subdirectory)" \
+        resultPaths=$(find "$(params.dataDir)/$(context.pipelineRun.uid)" \
           -name "$(params.resultsDirName)" -type d)
         for resultsPath in ${resultPaths}; do
           if [ -d "$resultsPath" ]; then

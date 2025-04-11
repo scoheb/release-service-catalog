@@ -147,10 +147,10 @@ spec:
           value: default/snapshot-sample
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-        - name: ociStorage
-          value: $(params.ociStorage)
         - name: orasOptions
           value: $(params.orasOptions)
+        - name: ociStorage
+          value: $(params.ociStorage)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -169,7 +169,7 @@ spec:
         - name: releasePipelineMetadata
           value: "$(tasks.run-task.results.releasePipelineMetadata)"
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(tasks.run-task.results.subdirectory)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: subdirectory
           value: $(tasks.run-task.results.subdirectory)
         - name: dataDir
@@ -213,13 +213,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -231,11 +231,11 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-              touch "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt"
-              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt")" != 0 ]; then
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              touch "$(params.dataDir)/mock_curl.txt"
+              if [ "$(wc -l < "$(params.dataDir)/mock_curl.txt")" != 0 ]; then
                 echo Error: curl was expected to be called 0 times. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt"
+                cat "$(params.dataDir)/mock_curl.txt"
                 exit 1
               fi
               

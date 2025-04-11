@@ -31,18 +31,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         results:
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         workspaces:
           - name: data
@@ -67,8 +61,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-              cat > "$(params.dataDir)/$(params.subdirectory)"/mapped_snapshot.json << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)"/mapped_snapshot.json << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -100,7 +94,7 @@ spec:
               }
               EOF
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/mydata.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/mydata.json" << EOF
               {
               }
               EOF
@@ -111,7 +105,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -119,7 +113,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -147,9 +141,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -168,9 +160,7 @@ spec:
         - name: pyxisDataPath
           value: $(tasks.run-task.results.pyxisDataPath)
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       workspaces:
@@ -181,8 +171,6 @@ spec:
           - name: pyxisDataPath
             type: string
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
             type: string
           - name: dataDir
             type: string
@@ -210,13 +198,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -226,39 +214,39 @@ spec:
               set -eux
 
               if [ "$(wc -l < \
-                "$(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt")" != 3 ]; then
+                "$(params.dataDir)/mock_create_container_image.txt")" != 3 ]; then
                 echo Error: create_container_image was expected to be called 3 times. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt"
+                cat "$(params.dataDir)/mock_create_container_image.txt"
                 exit 1
               fi
 
-              if [ -f "$(params.dataDir)/$(params.subdirectory)/mock_cleanup_tags.txt" ]; then
+              if [ -f "$(params.dataDir)/mock_cleanup_tags.txt" ]; then
                 echo Error: cleanup_tags was not expected to be called. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_cleanup_tags.txt"
+                cat "$(params.dataDir)/mock_cleanup_tags.txt"
                 exit 1
               fi
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/skopeo_expected_calls.txt" << EOF
+              cat > "$(params.dataDir)/skopeo_expected_calls.txt" << EOF
               inspect --raw docker://registry.io/image1@sha256:mydigest1
               inspect --raw docker://registry.io/image2@sha256:mydigest2
               inspect --raw docker://registry.io/image3@sha256:mydigest3
               EOF
 
               # check that the actual calls match the expected calls
-              if [ "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/skopeo_expected_calls.txt")" \
-                != "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt")" ]
+              if [ "$(md5sum < "$(params.dataDir)/skopeo_expected_calls.txt")" \
+                != "$(md5sum < "$(params.dataDir)/mock_skopeo.txt")" ]
               then
                 echo "Error: Actual skopeo calls do not match expected calls."
                 echo Expected calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/skopeo_expected_calls.txt"
+                cat "$(params.dataDir)/skopeo_expected_calls.txt"
                 echo Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt"
+                cat "$(params.dataDir)/mock_skopeo.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt")" != 9 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/mock_oras.txt")" != 9 ]; then
                 echo Error: oras was expected to be called 9 times. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"
+                cat "$(params.dataDir)/mock_oras.txt"
                 exit 1
               fi
 

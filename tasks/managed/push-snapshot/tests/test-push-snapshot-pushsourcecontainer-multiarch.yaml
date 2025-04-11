@@ -31,18 +31,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         workspaces:
           - name: data
-        params:
-          - name: subdirectory
-            type: string
         results:
           - name: sourceDataArtifact
             type: string
@@ -67,8 +61,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)/results"
-              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/results"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/snapshot.json" << EOF
               {
                 "application": "multiarch-app",
                 "components": [
@@ -82,7 +76,7 @@ spec:
                 ]
               }
               EOF
-              cat > "$(params.dataDir)/$(params.subdirectory)/data.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/data.json" << EOF
               {
                 "mapping": {}
               }
@@ -94,7 +88,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -102,7 +96,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -125,14 +119,12 @@ spec:
           value: 0
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/results
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
         - name: ociStorage
           value: $(params.ociStorage)
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -152,9 +144,7 @@ spec:
           workspace: tests-workspace
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       taskSpec:
@@ -162,8 +152,6 @@ spec:
           - name: data
         params:
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
             type: string
           - name: dataDir
             type: string
@@ -189,13 +177,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -204,48 +192,48 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls.txt" << EOF
+              cat > "$(params.dataDir)/cosign_expected_calls.txt" << EOF
               copy -f reg.io/test@sha256:abcdefg prod.io/loc:multi-tag
               EOF
 
-              if [ "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls.txt")" \
-                != "$(md5sum < "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt")" ]; then
+              if [ "$(md5sum < "$(params.dataDir)/cosign_expected_calls.txt")" \
+                != "$(md5sum < "$(params.dataDir)/mock_cosign.txt")" ]; then
                 echo "Error: Expected cosign calls do not match actual calls"
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt"
+                cat "$(params.dataDir)/mock_cosign.txt"
                 echo "Expected:"
-                cat "$(params.dataDir)/$(params.subdirectory)/cosign_expected_calls.txt"
+                cat "$(params.dataDir)/cosign_expected_calls.txt"
                 exit 1
               fi
 
               grep "resolve --registry-config .* reg.io/test:sha256-abcdefg.src$" \
-                "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt" || {
+                "$(params.dataDir)/mock_oras.txt" || {
                 echo "Error: Source .src resolution call missing or incorrect"
                 exit 1
               }
               if grep "resolve --registry-config .* --platform .* reg.io/test:sha256-abcdefg.src" \
-                "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"; then
+                "$(params.dataDir)/mock_oras.txt"; then
                 echo "Error: Source .src resolution should not use --platform"
                 exit 1
               fi
 
               grep "resolve --registry-config .* prod.io/loc:sha256-abcdefg.src$" \
-                "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt" || {
+                "$(params.dataDir)/mock_oras.txt" || {
                 echo "Error: Initial .src push call missing or incorrect"
                 exit 1
               }
               if grep "resolve --registry-config .* --platform .* prod.io/loc:sha256-abcdefg.src" \
-                "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"; then
+                "$(params.dataDir)/mock_oras.txt"; then
                 echo "Error: Initial .src push should not use --platform"
                 exit 1
               fi
 
               grep "resolve --registry-config .* prod.io/loc:multi-tag-source$" \
-                "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt" || {
+                "$(params.dataDir)/mock_oras.txt" || {
                 echo "Error: Tagged .src push call missing or incorrect"
                 exit 1
               }
               if grep "resolve --registry-config .* --platform .* prod.io/loc:multi-tag-source" \
-                "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"; then
+                "$(params.dataDir)/mock_oras.txt"; then
                 echo "Error: Tagged .src push should not use --platform"
                 exit 1
               fi

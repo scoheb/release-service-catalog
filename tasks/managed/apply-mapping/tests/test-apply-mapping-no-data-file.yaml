@@ -31,9 +31,6 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -42,9 +39,6 @@ spec:
           - name: snapshot
             type: string
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         workspaces:
           - name: data
@@ -69,8 +63,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot_spec.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -104,7 +98,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -112,7 +106,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -136,9 +130,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -147,20 +139,18 @@ spec:
           value: "http://localhost"
         - name: taskGitRevision
           value: "main"
+      runAfter:
+        - setup
       workspaces:
         - name: data
           workspace: tests-workspace
-      runAfter:
-        - setup
     - name: check-result
       workspaces:
         - name: data
           workspace: tests-workspace
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       runAfter:
@@ -170,8 +160,6 @@ spec:
           - name: data
         params:
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
             type: string
           - name: dataDir
             type: string
@@ -197,17 +185,19 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
-            args:
-              - use
-              - $(params.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)
-            computeResources: {}
-            image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               # The resulting JSON is exactly the same as the original one (since no mapping was used)

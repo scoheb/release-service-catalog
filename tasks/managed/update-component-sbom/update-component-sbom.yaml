@@ -41,6 +41,7 @@ spec:
       description: Location of trusted artifacts to be used to populate data directory
       default: ""
     - name: subdirectory
+      # subdirectory is only needed for testing purposes
       description: Subdirectory inside the workspace to be used
       type: string
       default: ""

@@ -31,18 +31,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         results:
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         workspaces:
           - name: data
@@ -67,9 +61,9 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)/results"
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/results"
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/snapshot_spec.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/snapshot_spec.json" << EOF
               {
                 "application": "my-app",
                 "components": [
@@ -80,7 +74,7 @@ spec:
               }
               EOF
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/mydata.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/mydata.json" << EOF
               {
                 "mapping": {
                 }
@@ -93,7 +87,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -101,7 +95,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -129,9 +123,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -148,9 +140,7 @@ spec:
     - name: check-result
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       workspaces:
@@ -159,8 +149,6 @@ spec:
       taskSpec:
         params:
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
             type: string
           - name: dataDir
             type: string
@@ -188,13 +176,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)/
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -203,13 +191,13 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt")" != 1 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/mock_curl.txt")" != 1 ]; then
                   echo Error: curl was expected to be called 1 time. Actual calls:
-                  cat "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt"
+                  cat "$(params.dataDir)/mock_curl.txt"
                   exit 1
               fi
 
-              [[ "$(head -n 1 "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt")" \
+              [[ "$(head -n 1 "$(params.dataDir)/mock_curl.txt")" \
                   == *"/my-product/my-image0 "* ]]
       runAfter:
         - run-task

@@ -43,13 +43,9 @@ spec:
       type: string
       description: Location of trusted artifacts to be used to populate data directory
       default: ""
-    - name: subdirectory
-      description: Subdirectory inside the workspace to be used
-      type: string
-      default: ""
     - name: dataDir
       description: The location where data will be stored
-      default: $(workspaces.data.path)
+      #default: $(workspaces.data.path)
       type: string
     - name: taskGitUrl
       type: string
@@ -96,7 +92,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: workDir
-          value: $(params.dataDir)/$(params.subdirectory)
+          value: $(params.dataDir)
     - name: use-trusted-artifact
       ref:
         resolver: "git"
@@ -109,7 +105,7 @@ spec:
             value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
       params:
         - name: workDir
-          value: $(params.dataDir)/$(params.subdirectory)
+          value: $(params.dataDir)
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: apply-mapping
@@ -449,7 +445,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: workDir
-          value: $(params.dataDir)/$(params.subdirectory)
+          value: $(params.dataDir)
         - name: sourceDataArtifact
           value: $(results.sourceDataArtifact.path)
     - name: patch-source-data-artifact-result

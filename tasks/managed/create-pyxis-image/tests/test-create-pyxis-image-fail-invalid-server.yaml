@@ -33,18 +33,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         results:
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         workspaces:
           - name: data
@@ -69,7 +63,7 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
           - name: skip-trusted-artifact-operations
             ref:
               name: skip-trusted-artifact-operations
@@ -77,7 +71,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -85,7 +79,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -105,17 +99,15 @@ spec:
         - name: pyxisSecret
           value: test-create-pyxis-image-cert
         - name: snapshotPath
-          value: ""
+          value: $(context.pipelineRun.uid)/snapshot.json
         - name: dataPath
-          value: ""
+          value: $(context.pipelineRun.uid)/mydata.json
         - name: ociStorage
           value: $(params.ociStorage)
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
           value: ""
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug

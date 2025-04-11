@@ -31,18 +31,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         workspaces:
           - name: data
-        params:
-          - name: subdirectory
-            type: string
         results:
           - name: sourceDataArtifact
             type: string
@@ -67,8 +61,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)/results"
-              cat > "$(params.dataDir)/$(params.subdirectory)/mapped_snapshot.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/results"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/mapped_snapshot.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -84,7 +78,7 @@ spec:
               }
               EOF
 
-              echo '{}' > "$(params.dataDir)/$(params.subdirectory)/data.json"
+              echo '{}' > "$(params.dataDir)/$(context.pipelineRun.uid)/data.json"
           - name: skip-trusted-artifact-operations
             ref:
               name: skip-trusted-artifact-operations
@@ -92,7 +86,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -100,7 +94,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -121,14 +115,12 @@ spec:
           value: $(context.pipelineRun.uid)/data.json
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/results
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
         - name: ociStorage
           value: $(params.ociStorage)
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -148,9 +140,7 @@ spec:
           workspace: tests-workspace
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       taskSpec:
@@ -158,8 +148,6 @@ spec:
           - name: data
         params:
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
             type: string
           - name: dataDir
             type: string
@@ -185,13 +173,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -200,35 +188,35 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              if [ -f "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt" ]; then
+              if [ -f "$(params.dataDir)/mock_cosign.txt" ]; then
                 echo Error: cosign was not expected to be called. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_cosign.txt"
+                cat "$(params.dataDir)/mock_cosign.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt")" != 1 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/mock_skopeo.txt")" != 1 ]; then
                 echo Error: skopeo was expected to be called 1 time. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt"
+                cat "$(params.dataDir)/mock_skopeo.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt")" != 2 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/mock_oras.txt")" != 2 ]; then
                 echo Error: oras was expected to be called 2 times. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"
+                cat "$(params.dataDir)/mock_oras.txt"
                 exit 1
               fi
 
               echo Make sure the results file was still written even though no push happened
               test "$(jq -r '.images[0].name' \
-                "$(params.dataDir)/$(params.subdirectory)/results/push-snapshot-results.json")" == "comp"
+                "$(params.dataDir)/$(context.pipelineRun.uid)/results/push-snapshot-results.json")" == "comp"
               test "$(jq -r '.images[0].shasum' \
-                "$(params.dataDir)/$(params.subdirectory)/results/push-snapshot-results.json")" == \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/results/push-snapshot-results.json")" == \
                 "sha256:0b770b6ec5414e841167266c96af42404e9f7049f72c21d0ab312e07c9403197"
               test "$(jq -r '.images[0].urls | length' \
-                "$(params.dataDir)/$(params.subdirectory)/results/push-snapshot-results.json")" \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/results/push-snapshot-results.json")" \
                 == "1"
               test "$(jq -r '.images[0].arches | length' \
-                "$(params.dataDir)/$(params.subdirectory)/results/push-snapshot-results.json")" \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/results/push-snapshot-results.json")" \
                 == "2"
       runAfter:
         - run-task

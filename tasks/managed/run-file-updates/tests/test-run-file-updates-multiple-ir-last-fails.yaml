@@ -33,14 +33,9 @@ spec:
   tasks:
     - name: setup
       params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       taskSpec:
         results:
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         volumes:
           - name: workdir
@@ -63,8 +58,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-              yq -o json > "$(params.dataDir)/$(params.subdirectory)/rpa.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              yq -o json > "$(params.dataDir)/$(context.pipelineRun.uid)/rpa.json" << EOF
               apiVersion: appstudio.redhat.com/v1alpha1
               kind: ReleasePlanAdmission
               metadata:
@@ -96,8 +91,8 @@ spec:
                               replacement: "|name:.*|name: myName|"
               EOF
 
-              mkdir "$(params.dataDir)/$(params.subdirectory)/results"
-              yq -o json > "$(params.dataDir)/$(params.subdirectory)/snapshot_spec.json" << EOF
+              mkdir "$(params.dataDir)/$(context.pipelineRun.uid)/results"
+              yq -o json > "$(params.dataDir)/$(context.pipelineRun.uid)/snapshot_spec.json" << EOF
               {
                   "application": "foo-app",
                   "artifacts": {},
@@ -124,7 +119,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -132,7 +127,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -168,9 +163,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -194,20 +187,12 @@ spec:
         - name: result
           value: $(tasks.run-task.results.mergeRequestUrl)
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
-        - name: dataDir
-          value: $(params.dataDir)
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
       taskSpec:
         params:
           - name: result
             type: string
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
-            type: string
-          - name: dataDir
             type: string
         workspaces:
           - name: data
@@ -233,13 +218,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -249,7 +234,7 @@ spec:
               set -ex
 
               # Parse the input json file
-              fileUpdates=$(jq -r '.spec.data.fileUpdates | length' "$(params.dataDir)/$(params.subdirectory)/rpa.json")
+              fileUpdates=$(jq -r '.spec.data.fileUpdates | length' "$(params.dataDir)/$(context.pipelineRun.uid)/rpa.json")
 
               # Fetch all the InternalRequest resources
               allRequests=$(kubectl get InternalRequest -o json)

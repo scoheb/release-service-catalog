@@ -43,8 +43,6 @@ spec:
           value: $(params.orasOptions)
         - name: sourceDataArtifact
           value: ""
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug

@@ -33,13 +33,7 @@ spec:
     - name: tests-workspace
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       taskSpec:
-        params:
-          - name: subdirectory
-            type: string
         results:
           - name: sourceDataArtifact
             type: string
@@ -64,8 +58,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)/results/"
-              cat > "$(params.dataDir)/$(params.subdirectory)/results/test.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/results/"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/results/test.json" << EOF
               this
               is
                not
@@ -79,7 +73,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -87,7 +81,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -111,19 +105,17 @@ spec:
           value: $(context.pipelineRun.uid)/results
         - name: resultsDirName
           value: results
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
         - name: dataDir
           value: $(params.dataDir)
-        - name: trustedArtifactsDebug
-          value: $(params.trustedArtifactsDebug)
         - name: ociStorage
           value: $(params.ociStorage)
         - name: orasOptions
           value: $(params.orasOptions)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
         - name: resultArtifacts
           value:
-            - "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+            - "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: taskGitUrl
           value: "http://localhost"
         - name: taskGitRevision

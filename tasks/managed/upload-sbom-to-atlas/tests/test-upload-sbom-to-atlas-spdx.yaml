@@ -30,11 +30,6 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
-        - name: sbomDir
-          value: $(context.pipelineRun.uid)/sboms
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -44,12 +39,6 @@ spec:
             type: string
         workspaces:
           - name: data
-        params:
-          - name: sbomDir
-            description: Directory containing generated SBOM files.
-            type: string
-          - name: subdirectory
-            type: string
         volumes:
           - name: workdir
             emptyDir: {}
@@ -72,12 +61,11 @@ spec:
               set -eux
 
               # creating directory for generated SBOM-s
-              mkdir -p "$(params.dataDir)/$(params.sbomDir)"
+              sbomsDir="$(params.dataDir)/$(context.pipelineRun.uid)/sboms"
+              mkdir -p "${sbomsDir}"
               # creating working directory
-              workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
+              workdir="$(params.dataDir)/$(context.pipelineRun.uid)/workdir"
               mkdir -p "${workdir}"
-
-              sbomsDir="$(params.dataDir)/$(params.sbomDir)"
 
               # minimal SPDX SBOM 2.2 - no need for conversion
               cat > "$sbomsDir/spdx_minimal_2_2.json" << EOF
@@ -123,7 +111,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -131,7 +119,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -155,7 +143,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: subdirectory
           value: $(context.pipelineRun.uid)
         - name: dataDir
@@ -179,24 +167,11 @@ spec:
       params:
         - name: sourceDataArtifact
           value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
-        - name: sbomDir
-          value: "$(context.pipelineRun.uid)/sboms"
-        - name: dataDir
-          value: $(params.dataDir)
       runAfter:
         - run-task
       taskSpec:
         params:
-          - name: sbomDir
-            description: Directory containing generated SBOM files.
-            type: string
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
-            type: string
-          - name: dataDir
             type: string
         volumes:
           - name: workdir
@@ -222,13 +197,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -237,8 +212,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              workdir="$(params.dataDir)/$(params.subdirectory)/workdir"
-              sbomsDir="$(params.dataDir)/$(params.sbomDir)"
+              workdir="$(params.dataDir)/$(context.pipelineRun.uid)/workdir"
+              sbomsDir="$(params.dataDir)/$(context.pipelineRun.uid)/sboms"
               mkdir -p "${workdir}"
               mkdir -p "${sbomsDir}"
 

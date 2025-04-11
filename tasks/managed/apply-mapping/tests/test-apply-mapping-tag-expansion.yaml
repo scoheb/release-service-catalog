@@ -32,18 +32,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         results:
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         workspaces:
           - name: data
@@ -68,8 +62,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-              cat > "$(params.dataDir)/$(params.subdirectory)/test_data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/test_data.json" << EOF
               {
                 "mapping": {
                   "components": [
@@ -119,7 +113,7 @@ spec:
               }
               EOF
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -153,7 +147,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -161,7 +155,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -185,9 +179,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -207,9 +199,7 @@ spec:
           workspace: tests-workspace
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       runAfter:
@@ -219,8 +209,6 @@ spec:
           - name: data
         params:
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
             type: string
           - name: dataDir
             type: string
@@ -246,31 +234,31 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               echo Test that SNAPSHOT contains component comp1
               test "$(
                 jq -r '[ .components[] | select(.name=="comp1") ] | length' \
-                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec.json"
               )" -eq 1
 
               echo Test that comp1 has the proper tags
               test "$(
                 jq -c '.components[] | select(.name=="comp1") | .tags' \
-                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec.json"
               )" == '["defaultTag","foo-123456","tag-labelvalue","tag-labelvalue-with-dash",'\
               '"tag1-2024-07-29","tag2-2024-07-29","tag3-2024-07-29-testrev","v2.0.0-5","123456",'\
               '"testrevision-abc","testrev-bar","testrevision","testrev"]'
@@ -278,23 +266,23 @@ spec:
               echo Test that SNAPSHOT contains component comp2
               test "$(
                 jq -r '[ .components[] | select(.name=="comp2") ] | length' \
-                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec.json"
               )" -eq 1
 
               echo Test that comp2 has the proper tags
               test "$(
                 jq -c '.components[] | select(.name=="comp2") | .tags' \
-                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec.json"
               )" == '["defaultTag","tag1-1980-01","tag2-1980-01","tag4-1980-01","v1-1-release","v1.0.0-1"]'
 
               echo Test that repository of component comp3 was overridden by mapping file
               test "$(
                 jq -r '.components[] | select(.name=="comp3") | .repository' \
-                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec.json"
               )" == repo3a
 
               echo Test that comp3 has the 1 default tag
               test "$(
                 jq -r '.components[] | select(.name=="comp3") | .tags | length' \
-                < "$(params.dataDir)/$(params.subdirectory)/test_snapshot_spec.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec.json"
               )" -eq 1

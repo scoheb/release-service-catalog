@@ -8,7 +8,7 @@ function internal-request() {
   END_TIME=$(date -ud "$TIMEOUT seconds" +%s)
 
   echo Mock internal-request called with: $*
-  echo $* >> $(params.dataDir)/$(params.subdirectory)/mock_internal-request.txt
+  echo $* >> $(params.dataDir)/mock_internal-request.txt
 
   # since we put the IR in the background, we need to be able to locate it so we can
   # get the name to patch it. We do this by tacking on another random label that we can use
@@ -52,7 +52,7 @@ function set_ir_status() {
     DELAY=$3
     echo Setting status of $NAME to reason $REASON in $DELAY seconds... >&2
     sleep $DELAY
-    PATCH_FILE=$(params.dataDir)/$(params.subdirectory)/${NAME}-patch.json
+    PATCH_FILE=$(params.dataDir)/${NAME}-patch.json
     status="Succeeded"
     mockPipelineRunName="$(openssl rand -hex 12)"
     mockTaskRunName="${mockPipelineRunName}-tr"

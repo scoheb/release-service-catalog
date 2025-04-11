@@ -31,13 +31,7 @@ spec:
     - name: tests-workspace
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       taskSpec:
-        params:
-          - name: subdirectory
-            type: string
         results:
           - name: resultArtifact1
             type: string
@@ -66,9 +60,9 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)/1/results/"
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)/2/results/"
-              cat > "$(params.dataDir)/$(params.subdirectory)/1/results/one.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/1/results/"
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/2/results/"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/1/results/one.json" << EOF
               {
                   "one": {
                       "foo": "bar"
@@ -79,7 +73,7 @@ spec:
               }
               EOF
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/2/results/two.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/2/results/two.json" << EOF
               {
                   "one": {
                       "union": "value"
@@ -109,16 +103,16 @@ spec:
 
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(params.dataDir)/$(params.subdirectory)/1/.skip-trusted-artifacts"
-                touch "$(params.dataDir)/$(params.subdirectory)/2/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(context.pipelineRun.uid)/1/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/$(context.pipelineRun.uid)/2/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact-array
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.resultArtifact1.path)=$(params.dataDir)/$(params.subdirectory)/1
-              - $(results.resultArtifact2.path)=$(params.dataDir)/$(params.subdirectory)/2
+              - $(results.resultArtifact1.path)=$(params.dataDir)/$(context.pipelineRun.uid)/1
+              - $(results.resultArtifact2.path)=$(params.dataDir)/$(context.pipelineRun.uid)/2
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
           - name: patch-source-data-artifact-result-array
@@ -158,8 +152,8 @@ spec:
           value: $(params.trustedArtifactsDebug)
         - name: resultArtifacts
           value:
-            - "$(tasks.setup.results.resultArtifact1)=$(params.dataDir)/$(context.pipelineRun.uid)"
-            - "$(tasks.setup.results.resultArtifact2)=$(params.dataDir)/$(context.pipelineRun.uid)"
+            - "$(tasks.setup.results.resultArtifact1)=$(params.dataDir)"
+            - "$(tasks.setup.results.resultArtifact2)=$(params.dataDir)"
         - name: taskGitUrl
           value: "http://localhost"
         - name: taskGitRevision

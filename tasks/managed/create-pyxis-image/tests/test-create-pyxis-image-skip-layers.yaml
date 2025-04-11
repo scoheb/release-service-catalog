@@ -31,18 +31,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         results:
           - name: sourceDataArtifact
-            type: string
-        params:
-          - name: subdirectory
             type: string
         workspaces:
           - name: data
@@ -67,8 +61,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-              cat > "$(params.dataDir)/$(params.subdirectory)"/mapped_snapshot.json << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)"/mapped_snapshot.json << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -84,7 +78,7 @@ spec:
               }
               EOF
 
-              cat > "$(params.dataDir)/$(params.subdirectory)/mydata.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/mydata.json" << EOF
               {
                 "pyxis": {
                   "skipLayers": true
@@ -98,7 +92,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -106,7 +100,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -134,9 +128,7 @@ spec:
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -155,9 +147,7 @@ spec:
         - name: pyxisDataPath
           value: $(tasks.run-task.results.pyxisDataPath)
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       workspaces:
@@ -168,8 +158,6 @@ spec:
           - name: pyxisDataPath
             type: string
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
             type: string
           - name: dataDir
             type: string
@@ -197,13 +185,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -213,24 +201,24 @@ spec:
               set -eux
 
               if [ "$(wc -l < \
-                "$(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt")" != 1 ]; then
+                "$(params.dataDir)/mock_create_container_image.txt")" != 1 ]; then
                 echo Error: create_container_image was expected to be called 1 time. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_create_container_image.txt"
+                cat "$(params.dataDir)/mock_create_container_image.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt")" != 3 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/mock_oras.txt")" != 3 ]; then
                 echo Error: oras was expected to be called 3 times. Actual calls:
-                cat "$(params.dataDir)/$(params.subdirectory)/mock_oras.txt"
+                cat "$(params.dataDir)/mock_oras.txt"
                 exit 1
               fi
 
-              [ "$(head -n 1 < "$(params.dataDir)/$(params.subdirectory)/mock_skopeo.txt")" \
+              [ "$(head -n 1 < "$(params.dataDir)/mock_skopeo.txt")" \
                 = "inspect --raw docker://registry.io/image-with-gzipped-layers@sha256:mydigest" ]
 
               # check that decompressed layers info is not included in the oras manifest fetch
               jq -e '. | has("uncompressed_layers") == false' \
-                "$(params.dataDir)/$(params.subdirectory)/oras-manifest-fetch.json"
+                "$(params.dataDir)/$(context.pipelineRun.uid)/oras-manifest-fetch.json"
 
       runAfter:
         - run-task

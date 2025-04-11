@@ -145,7 +145,7 @@ spec:
           mkdir -p "$(params.dataDir)/$(params.subdirectory)"
           if [ "$(params.ociStorage)" == "empty" ]; then
             echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-            touch "$(params.dataDir)/$(params.subdirectory)/.skip-trusted-artifacts"
+            touch "$(params.dataDir)/.skip-trusted-artifacts"
 
             # this is needed to skip trusted-artifacts tasks
             # when using PVC based workspaces.
@@ -339,7 +339,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: workDir
-          value: $(params.dataDir)/$(params.subdirectory)
+          value: $(params.dataDir)
         - name: sourceDataArtifact
           value: $(results.sourceDataArtifact.path)
     - name: patch-source-data-artifact-result

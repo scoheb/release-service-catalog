@@ -4,8 +4,8 @@ set -x
 # mocks to be injected into task step scripts
 function curl-with-retry() {
   echo Mock curl called with: $* >&2
-  mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-  echo $* >> "$(params.dataDir)/$(params.subdirectory)/mock_curl.txt"
+  mkdir -p "$(params.dataDir)"
+  echo $* >> "$(params.dataDir)/mock_curl.txt"
 
   if [[ "$*" == "--retry 3 https://jira.atlassian.com/rest/api/2/issue/ISSUE-123" ]]
   then

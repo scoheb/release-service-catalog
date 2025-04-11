@@ -31,18 +31,12 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         workspaces:
           - name: data
-        params:
-          - name: subdirectory
-            type: string
         results:
           - name: sourceDataArtifact
             type: string
@@ -67,8 +61,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-              cat > "$(params.dataDir)/$(params.subdirectory)/data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/data.json" << EOF
               {
                 "releaseNotes": {
                   "type": "RHBA",
@@ -83,7 +77,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -91,7 +85,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
           - name: patch-source-data-artifact-result
@@ -110,14 +104,12 @@ spec:
           value: $(context.pipelineRun.uid)/data.json
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
-        - name: subdirectory
-          value: $(context.pipelineRun.uid)
         - name: ociStorage
           value: $(params.ociStorage)
         - name: orasOptions
           value: $(params.orasOptions)
         - name: sourceDataArtifact
-          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -139,9 +131,7 @@ spec:
         - run-task
       params:
         - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: "$(context.pipelineRun.uid)"
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       taskSpec:
@@ -149,10 +139,6 @@ spec:
           - name: data
         params:
           - name: sourceDataArtifact
-            type: string
-          - name: subdirectory
-            type: string
-          - name: dataDir
             type: string
         volumes:
           - name: workdir
@@ -176,13 +162,13 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact
             params:
               - name: workDir
-                value: $(params.dataDir)/$(params.subdirectory)
+                value: $(params.dataDir)
               - name: sourceDataArtifact
                 value: $(params.sourceDataArtifact)
           - name: check-result
@@ -191,5 +177,5 @@ spec:
               #!/usr/bin/env bash
               set -ex
 
-              test "$(jq '.releaseNotes | has("severity")' "$(params.dataDir)/$(params.subdirectory)/data.json")" \
+              test "$(jq '.releaseNotes | has("severity")' "$(params.dataDir)/$(context.pipelineRun.uid)/data.json")" \
                 == "false"

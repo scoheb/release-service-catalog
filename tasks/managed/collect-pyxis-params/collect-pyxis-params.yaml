@@ -36,10 +36,6 @@ spec:
       type: string
       description: Location of trusted artifacts to be used to populate data directory
       default: ""
-    - name: subdirectory
-      description: Subdirectory inside the workspace to be used
-      type: string
-      default: ""
     - name: dataDir
       description: The location where data will be stored
       type: string
@@ -92,7 +88,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: workDir
-          value: $(params.dataDir)/$(params.subdirectory)
+          value: $(params.dataDir)
     - name: use-trusted-artifact
       ref:
         resolver: "git"
@@ -105,7 +101,7 @@ spec:
             value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
       params:
         - name: workDir
-          value: $(params.dataDir)/$(params.subdirectory)
+          value: $(params.dataDir)
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: collect-pyxis-params

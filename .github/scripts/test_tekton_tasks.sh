@@ -150,7 +150,7 @@ do
     dataDir=/workspace/data
   else
     workSpaceParams="emptyDir="
-    dataDir=/var/workdir
+    dataDir=/var/workdir/release
   fi
 
   # while we are converting tasks to use TA, it is possible that a PR will include a Task that does not have the
