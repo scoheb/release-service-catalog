@@ -18,8 +18,6 @@ spec:
           value: "http://localhost"
         - name: taskGitRevision
           value: "main"
-      runAfter:
-        - setup
     - name: check-result
       runAfter:
         - run-task

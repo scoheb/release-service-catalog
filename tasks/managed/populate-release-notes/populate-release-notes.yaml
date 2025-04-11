@@ -230,7 +230,6 @@ spec:
             echo "No data JSON was provided."
             exit 1
         fi
-        cat "$(params.dataDir)/$(params.dataPath)"
 
         NUM_CVES=$(jq '.releaseNotes.cves | length' "${DATA_FILE}")
 
@@ -242,7 +241,6 @@ spec:
         if [ "$(jq -r '.releaseNotes.type' "${DATA_FILE}")" != "RHSA" ] ; then
             echo "Type is not RHSA. Ensuring references key exists, but not adding any"
             jq '.releaseNotes.references += []' "${DATA_FILE}" > /tmp/data.tmp && mv /tmp/data.tmp "${DATA_FILE}"
-            cat "$(params.dataDir)/$(params.dataPath)"
             exit 0
         fi
 
@@ -260,7 +258,6 @@ spec:
 
         # Remove duplicate references
         jq '.releaseNotes.references |= unique' "${DATA_FILE}" > /tmp/data.tmp && mv /tmp/data.tmp "${DATA_FILE}"
-        cat "$(params.dataDir)/$(params.dataPath)"
     - name: create-trusted-artifact
       ref:
         resolver: "git"

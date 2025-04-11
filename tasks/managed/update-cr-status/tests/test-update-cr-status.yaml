@@ -113,8 +113,6 @@ spec:
           value: default/release-cr-status
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/results
-        - name: resultsDirName
-          value: results
         - name: dataDir
           value: $(params.dataDir)
         - name: ociStorage

@@ -282,6 +282,14 @@ Requirements:
 kubectl apply --filename https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
 ```
 
+* Enable StepActions in Tekton
+
+```
+kubectl get cm feature-flags -n tekton-pipelines -o yaml | \
+   sed -e 's|enable-step-actions: "false"|enable-step-actions: "true"|' > /tmp/ff.yaml
+kubectl apply -f /tmp/ff.yaml -n tekton-pipelines
+```
+
 * Local Registry is installed in the Cluster
 
 ```

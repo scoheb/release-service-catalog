@@ -6,8 +6,7 @@ metadata:
 spec:
   description: |
     Run the run-file-updates task for the osd-addons use case with multiple IR requests
-    which has the first one failing. Ensure the result shows the MR from the 1st passing
-    request and that an error is surfaced for the failing one
+    which has the first one failing. Ensure the result that an error is surfaced for the failing one
   workspaces:
     - name: tests-workspace
   params:
@@ -32,7 +31,6 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
       taskSpec:
         results:
           - name: sourceDataArtifact
@@ -186,13 +184,9 @@ spec:
       params:
         - name: result
           value: $(tasks.run-task.results.mergeRequestUrl)
-        - name: sourceDataArtifact
-          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
       taskSpec:
         params:
           - name: result
-            type: string
-          - name: sourceDataArtifact
             type: string
         workspaces:
           - name: data
@@ -203,30 +197,7 @@ spec:
           volumeMounts:
             - mountPath: /var/workdir
               name: workdir
-          env:
-            - name: IMAGE_EXPIRES_AFTER
-              value: $(params.ociArtifactExpiresAfter)
-            - name: "ORAS_OPTIONS"
-              value: "$(params.orasOptions)"
-            - name: "DEBUG"
-              value: "$(params.trustedArtifactsDebug)"
         steps:
-          - name: skip-trusted-artifact-operations
-            ref:
-              name: skip-trusted-artifact-operations
-            params:
-              - name: ociStorage
-                value: $(params.ociStorage)
-              - name: workDir
-                value: $(params.dataDir)
-          - name: use-trusted-artifact
-            ref:
-              name: use-trusted-artifact
-            params:
-              - name: workDir
-                value: $(params.dataDir)
-              - name: sourceDataArtifact
-                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:0f82be4be43294b6a96846d87ef7f7c0b9e34267
             script: |
@@ -250,14 +221,13 @@ spec:
               passedIr=$(echo "$allRequests" | \
                               jq -r '.items[] | select(.spec.params.ref == "main")')
 
-              #request 1 passes
               state=$(echo "$passedIr" | jq '.status.results.buildState')
               echo "Test no requests are successful"
               test "${state}" == ""
               state=$(echo "$failedIr" | jq '.status.results.buildState')
-              echo "Test 2nd request has failed"
+              echo "Test 2nd fileUpdate has failed"
               test "${state}" == "\"Failed\""
-              
+
               echo "Test result should have no MRs in it"
               MR=$(tr '\n' ' ' <<< "$(params.result)" | xargs)
               test "$MR" == ""

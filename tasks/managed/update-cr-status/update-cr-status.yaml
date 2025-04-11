@@ -29,12 +29,6 @@ spec:
         Path to the directory containing the result files in the data workspace which will be added to the
         resource's status
       type: string
-    - name: resultsDirName
-      description: |
-        Name of possible directories in subdirectory containing the result files in the data workspace 
-        which will be added to the resource's status
-      type: string
-      default: "results"
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
       type: string
@@ -100,13 +94,18 @@ spec:
         - name: workDir
           value: $(params.dataDir)
     - name: use-trusted-artifact-array
-      args: ["use", "$(params.resultArtifacts[*])"]
-      env:
-        # Set HOME variable to something else than `/` to avoid 'permission denied' problems when writing files.
-        - name: HOME
-          value: /tekton/home
-      computeResources: {}
-      image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/use-trusted-artifact-array/use-trusted-artifact-array.yaml
+      params:
+        - name: sourceDataArtifacts
+          value: $(params.resultArtifacts)
     - name: update-cr-status
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       script: |
@@ -114,21 +113,15 @@ spec:
         set -ex
 
         RESULTS_JSON="{}"
-        resultPaths=$(find "$(params.dataDir)/$(context.pipelineRun.uid)" \
-          -name "$(params.resultsDirName)" -type d)
-        for resultsPath in ${resultPaths}; do
-          if [ -d "$resultsPath" ]; then
-            resultFiles=$(find "$resultsPath" -type f)
-            for resultsFile in ${resultFiles}; do
-                if ! jq . >/dev/null 2>&1 "${resultsFile}" ; then
-                    echo "Passed results JSON file ${resultsFile} in results directory was not proper JSON."
-                    exit 1
-                fi
-                # If two files have arrays with the same key, it will be overwritten. Otherwise, the jsons
-                # are merged (only arrays are not merged properly with this notation).
-                RESULTS_JSON=$(jq -c "${RESULTS_JSON} * ." "${resultsFile}")
-            done
-          fi
+        RESULTS_DIR="$(params.dataDir)/$(params.resultsDirPath)"
+        for resultsFile in $([ -d "$RESULTS_DIR" ] && find "$RESULTS_DIR" -type f); do
+            if ! jq . >/dev/null 2>&1 "${resultsFile}" ; then
+                echo "Passed results JSON file ${resultsFile} in results directory was not proper JSON."
+                exit 1
+            fi
+            # If two files have arrays with the same key, it will be overwritten. Otherwise, the jsons
+            # are merged (only arrays are not merged properly with this notation).
+            RESULTS_JSON=$(jq -c "${RESULTS_JSON} * ." "${resultsFile}")
         done
 
         IFS='/' read -r namespace name <<< "$(params.resource)"

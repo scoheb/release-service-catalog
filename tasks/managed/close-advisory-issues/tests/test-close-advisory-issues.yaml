@@ -187,7 +187,7 @@ spec:
 
               if [ "$(wc -l < "$(params.dataDir)/mock_curl.txt")" != 3 ]; then
                   echo Error: curl was expected to be called 3 times. Actual calls:
-                  cat "$(params.dataDir)/$(context.pipelineRun.uid)/mock_curl.txt"
+                  cat "$(params.dataDir)/mock_curl.txt"
                   exit 1
               fi
 
