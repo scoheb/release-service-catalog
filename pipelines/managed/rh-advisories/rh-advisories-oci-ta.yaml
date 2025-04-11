@@ -72,10 +72,12 @@ spec:
     - name: trustedArtifactsDebug
       description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
       type: string
-      default: "true"
+      default: ""
     - name: dataDir
       description: The location where data will be stored
       type: string
+      # to avoid tar extraction errors, we need to specify a subdirectory
+      # inside the volume.
       default: "/var/workdir/release"
   workspaces:
     - name: release-workspace
@@ -258,8 +260,7 @@ spec:
             value: tasks/verify-conforma-konflux-ta/0.1/verify-conforma-konflux-ta.yaml
       params:
         - name: SNAPSHOT_FILENAME
-          # hardcoded in collect-data
-          value: "snapshot_spec.json"
+          value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: SSL_CERT_DIR
           value: /var/run/secrets/kubernetes.io/serviceaccount
         - name: POLICY_CONFIGURATION
