@@ -215,6 +215,7 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              test "$(jq -c '.releaseNotes.references' "$(params.dataDir)/$(context.pipelineRun.uid)/data.json")" == "[]"
+              test "$(jq -c '.releaseNotes.references' "$(params.dataDir)/$(context.pipelineRun.uid)/data.json")" \
+                == "[]"
       runAfter:
         - run-task

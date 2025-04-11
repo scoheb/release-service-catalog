@@ -234,7 +234,8 @@ spec:
               set -ex
 
               # Parse the input json file
-              fileUpdates=$(jq -r '.spec.data.fileUpdates | length' "$(params.dataDir)/$(context.pipelineRun.uid)/rpa.json")
+              fileUpdates=$(jq -r '.spec.data.fileUpdates | length' \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/rpa.json")
 
               # Fetch all the InternalRequest resources
               allRequests=$(kubectl get InternalRequest -o json)

@@ -45,7 +45,6 @@ spec:
       default: ""
     - name: dataDir
       description: The location where data will be stored
-      #default: $(workspaces.data.path)
       type: string
     - name: taskGitUrl
       type: string

@@ -287,9 +287,11 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: https://github.com/scoheb/ec-cli # https://github.com/enterprise-contract/ec-cli
+            value: https://github.com/scoheb/ec-cli
+            #  https://github.com/enterprise-contract/ec-cli
           - name: revision
-            value: "RELEASE-1425" # "$(params.verify_ec_task_git_revision)
+            value: "RELEASE-1425"
+            #  "$(params.verify_ec_task_git_revision)
           - name: pathInRepo
             value: tasks/verify-conforma-konflux-ta/0.1/verify-conforma-konflux-ta.yaml
       params:
