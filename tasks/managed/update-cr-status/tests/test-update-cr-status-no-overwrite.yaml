@@ -117,8 +117,6 @@ spec:
           value: default/release-cr-status-overwrite
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/results
-        - name: resultsDirName
-          value: results
         - name: statusKey
           value: attribution
         - name: dataDir

@@ -180,7 +180,7 @@ spec:
               - name: ociStorage
                 value: $(params.ociStorage)
               - name: workDir
-                value: $(params.dataDir)/
+                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact

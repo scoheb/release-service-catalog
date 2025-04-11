@@ -31,7 +31,6 @@ spec:
       type: string
   tasks:
     - name: setup
-      params:
       taskSpec:
         results:
           - name: sourceDataArtifact

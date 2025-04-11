@@ -116,8 +116,6 @@ spec:
           value: default/releaseplan-missing-rbac
         - name: resourceType
           value: releasePlan
-        - name: resultsDirName
-          value: results
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/results
         - name: statusKey

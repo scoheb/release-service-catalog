@@ -60,9 +60,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/1/results/"
-              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/2/results/"
-              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/1/results/one.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/results"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/results/one.json" << EOF
               {
                   "one": {
                       "foo": "bar"
@@ -73,7 +72,7 @@ spec:
               }
               EOF
 
-              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/2/results/two.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/results/two.json" << EOF
               {
                   "one": {
                       "union": "value"
@@ -103,16 +102,15 @@ spec:
 
               if [ "$(params.ociStorage)" == "empty" ]; then
                 echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-                touch "$(params.dataDir)/$(context.pipelineRun.uid)/1/.skip-trusted-artifacts"
-                touch "$(params.dataDir)/$(context.pipelineRun.uid)/2/.skip-trusted-artifacts"
+                touch "$(params.dataDir)/.skip-trusted-artifacts"
               fi
           - name: create-trusted-artifact-array
             args:
               - create
               - --store
               - $(params.ociStorage)
-              - $(results.resultArtifact1.path)=$(params.dataDir)/$(context.pipelineRun.uid)/1
-              - $(results.resultArtifact2.path)=$(params.dataDir)/$(context.pipelineRun.uid)/2
+              - $(results.resultArtifact1.path)=$(params.dataDir)
+              - $(results.resultArtifact2.path)=$(params.dataDir)
             computeResources: { }
             image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
           - name: patch-source-data-artifact-result-array
@@ -136,8 +134,6 @@ spec:
       params:
         - name: resource
           value: default/release-cr-status-multiple
-        - name: resultsDirName
-          value: results
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/results
         - name: subdirectory

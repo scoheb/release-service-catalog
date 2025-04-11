@@ -113,8 +113,6 @@ spec:
           value: default/release-cr-nonexistent-status-field
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/results
-        - name: resultsDirName
-          value: results
         - name: statusKey
           value: devnull
         - name: dataDir

@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: collect-data
   labels:
-    app.kubernetes.io/version: "5.0.0"
+    app.kubernetes.io/version: "6.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -120,6 +120,21 @@ spec:
       - name: "DEBUG"
         value: "$(params.trustedArtifactsDebug)"
   steps:
+    - name: skip-trusted-artifact-operations
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
     - name: collect-data
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       env:
@@ -143,14 +158,6 @@ spec:
         RESULTS_DIR_PATH="results"
         if [ -n "$(params.subdirectory)" ]; then
           mkdir -p "$(params.dataDir)/$(params.subdirectory)"
-          if [ "$(params.ociStorage)" == "empty" ]; then
-            echo "oci storage not detected via params.ociStorage ... skipping trusted artifacts tasks"
-            touch "$(params.dataDir)/.skip-trusted-artifacts"
-
-            # this is needed to skip trusted-artifacts tasks
-            # when using PVC based workspaces.
-            echo -n "$(params.ociStorage)" > "$(results.sourceDataArtifact.path)"
-          fi
           RESULTS_DIR_PATH="$(params.subdirectory)/results"
         fi
 

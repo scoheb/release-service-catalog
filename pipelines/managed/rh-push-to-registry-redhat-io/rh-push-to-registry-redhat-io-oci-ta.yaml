@@ -679,9 +679,9 @@ spec:
           value: $(params.ociStorage)
         - name: resultArtifacts
           value:
-            - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-            - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-            - "$(tasks.run-file-updates.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
+            - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(params.dataDir)"
+            - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(params.dataDir)"
+            - "$(tasks.run-file-updates.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug

@@ -35,7 +35,7 @@ should not be present in the Release data section).
 | taskGitUrl              | The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored                      | Yes       | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision         | The revision in the taskGitUrl repo to be used                                                                             | Yes       | production                                                |
 
-## Changes in 5.0.0
+## Changes in 6.0.0
 * This task now supports Trusted artifacts
 
 ## Changes in 5.0.0

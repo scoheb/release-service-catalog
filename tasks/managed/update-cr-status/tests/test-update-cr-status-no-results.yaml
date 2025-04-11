@@ -106,8 +106,6 @@ spec:
           value: default/release-cr-no-results
         - name: resultsDirPath
           value: $(context.pipelineRun.uid)/nonexistent
-        - name: resultsDirName
-          value: nonexistent
         - name: dataDir
           value: $(params.dataDir)
         - name: ociStorage
