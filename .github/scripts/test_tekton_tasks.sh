@@ -150,6 +150,8 @@ do
     dataDir=/workspace/data
   else
     workSpaceParams="emptyDir="
+    # to avoid tar extraction errors, we need to specify a subdirectory
+    # inside the volume.
     dataDir=/var/workdir/release
   fi
 
