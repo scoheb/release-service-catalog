@@ -76,7 +76,9 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
-      default: "/var/workdir"
+      # to avoid tar extraction errors, we need to specify a subdirectory
+      # inside the volume.
+      default: "/var/workdir/release"
   workspaces:
     - name: release-workspace
   tasks:
@@ -104,7 +106,6 @@ spec:
         - name: requireInternalServices
           value: "true"
     - name: collect-data
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       taskRef:
         resolver: "git"
         params:
@@ -158,8 +159,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -207,8 +206,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -271,8 +268,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.reduce-snapshot.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -292,15 +287,14 @@ spec:
         resolver: "git"
         params:
           - name: url
-            value: https://github.com/enterprise-contract/ec-cli
+            value: https://github.com/scoheb/ec-cli # https://github.com/enterprise-contract/ec-cli
           - name: revision
-            value: $(params.verify_ec_task_git_revision)
+            value: "RELEASE-1425" # "$(params.verify_ec_task_git_revision)
           - name: pathInRepo
             value: tasks/verify-conforma-konflux-ta/0.1/verify-conforma-konflux-ta.yaml
       params:
         - name: SNAPSHOT_FILENAME
-          # hardcoded in collect-data
-          value: "snapshot_spec.json"
+          value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: SSL_CERT_DIR
           value: /var/run/secrets/kubernetes.io/serviceaccount
         - name: POLICY_CONFIGURATION
@@ -339,8 +333,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -380,8 +372,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -422,8 +412,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -454,8 +442,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -496,10 +482,6 @@ spec:
           value: 1800
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
-        - name: taskGitUrl
-          value: $(params.taskGitUrl)
-        - name: taskGitRevision
-          value: $(params.taskGitRevision)
         - name: pyxisServer
           value: $(tasks.collect-pyxis-params.results.server)
         - name: pyxisSecret
@@ -510,8 +492,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -555,8 +535,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.push-snapshot.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -597,8 +575,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -668,8 +644,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.apply-mapping.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -694,7 +668,6 @@ spec:
         - name: data
           workspace: release-workspace
     - name: update-cr-status
-      timeout: "4h"  # temp workaround until github.com/konflux-ci/release-service/issues/603 is fixed
       params:
         - name: resource
           value: $(params.release)
@@ -709,8 +682,6 @@ spec:
             - "$(tasks.push-snapshot.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
             - "$(tasks.publish-pyxis-repository.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
             - "$(tasks.run-file-updates.results.sourceDataArtifact)=$(params.dataDir)/$(context.pipelineRun.uid)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
