@@ -23,6 +23,14 @@ the rh-push-to-registry-redhat-io pipeline.
 | verify_ec_task_git_revision     | The git revision to be used when consuming the verify-conforma task                                                                | No       | -                                                         |
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | -                                                         |
+| ociStorage                      | The OCI repository where the Trusted Artifacts are stored                                                                          | Yes      | quay.io/konflux-ci/release-service-trusted-artifacts      |
+| orasOptions                     | oras options to pass to Trusted Artifacts calls                                                                                    | Yes      | ""                                                        |
+| trustedArtifactsDebug           | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable                                             | Yes      | ""                                                        |
+| dataDir                         | The location where data will be stored                                                                                             | Yes      | /var/workdir                                              | 
+
+## Changes in 1.13.0
+* Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers
+* Align workspace name with changes in the apply-mapping task
 
 ## Changes in 1.12.0
 * Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task

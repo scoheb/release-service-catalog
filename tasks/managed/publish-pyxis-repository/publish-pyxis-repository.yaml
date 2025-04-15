@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: publish-pyxis-repository
   labels:
-    app.kubernetes.io/version: "3.0.1"
+    app.kubernetes.io/version: "4.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -38,6 +38,37 @@ spec:
     - name: resultsDirPath
       description: Path to the results directory in the data workspace
       type: string
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+      default: "empty"
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: sourceDataArtifact
+      type: string
+      description: Location of trusted artifacts to be used to populate data directory
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
+      default: $(workspaces.data.path)
+    - name: taskGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored
+    - name: taskGitRevision
+      type: string
+      description: The revision in the taskGitUrl repo to be used
   workspaces:
     - name: data
       description: The workspace where the snapshot spec json file resides
@@ -48,7 +79,54 @@ spec:
         The relative path in the workspace to a text file that contains a list of repositories
         that needs registry.access.redhat.com image references to be signed (i.e.
         requires_terms=true), one repository string per line, e.g. "rhtas/cosign-rhel9".
+    - description: Produced trusted data artifact
+      name: sourceDataArtifact
+      type: string
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: "DEBUG"
+        value: "$(params.trustedArtifactsDebug)"
   steps:
+    - name: skip-trusted-artifact-operations
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
+    - name: use-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
+      params:
+        - name: workDir
+          value: $(params.dataDir)
+        - name: sourceDataArtifact
+          value: $(params.sourceDataArtifact)
     - name: publish-pyxis-repository
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       env:
@@ -91,22 +169,22 @@ spec:
         echo "${PYXIS_KEY}" > /tmp/key
         set -x
 
-        SNAPSHOT_SPEC_FILE="$(workspaces.data.path)/$(params.snapshotPath)"
+        SNAPSHOT_SPEC_FILE="$(params.dataDir)/$(params.snapshotPath)"
         if [ ! -f "${SNAPSHOT_SPEC_FILE}" ] ; then
             echo "No valid snapshot file was provided."
             exit 1
         fi
 
-        DATA_FILE="$(workspaces.data.path)/$(params.dataPath)"
+        DATA_FILE="$(params.dataDir)/$(params.dataPath)"
         if [ ! -f "${DATA_FILE}" ] ; then
             echo "No data JSON was provided."
             exit 1
         fi
 
-        RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/publish-pyxis-repository-results.json"
+        RESULTS_FILE="$(params.dataDir)/$(params.resultsDirPath)/publish-pyxis-repository-results.json"
         SIGN_REGISTRY_ACCESS_PATH="$(dirname "$(params.dataPath)")/sign-registry-access.txt"
         echo -n "$SIGN_REGISTRY_ACCESS_PATH" > "$(results.signRegistryAccessPath.path)"
-        SIGN_REGISTRY_ACCESS_PATH="$(workspaces.data.path)/${SIGN_REGISTRY_ACCESS_PATH}"
+        SIGN_REGISTRY_ACCESS_PATH="$(params.dataDir)/${SIGN_REGISTRY_ACCESS_PATH}"
         touch "$SIGN_REGISTRY_ACCESS_PATH"
 
         # Use a unique key to avoid conflicts with other tasks
@@ -192,3 +270,35 @@ spec:
         jq <<< "${RESULTS_JSON}" | tee "$RESULTS_FILE"
 
         printf 'Completed "%s" for "%s"\n\n' "$(context.task.name)" "$application"
+    - name: create-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: "$(params.taskGitUrl)"
+          - name: revision
+            value: "$(params.taskGitRevision)"
+          - name: pathInRepo
+            value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)
+    - name: patch-source-data-artifact-result
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)

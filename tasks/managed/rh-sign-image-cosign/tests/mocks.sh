@@ -125,7 +125,7 @@ EOF
 )
 
 function skopeo() {
-  echo "$@" >> $(workspaces.data.path)/mock_skopeo_calls
+  echo "$@" >> $(params.dataDir)/mock_skopeo_calls
   if [ "$1" = "inspect" ]; then
     if [ "$3" = "docker://${_TEST_MANIFEST_LIST_OCI_REFERENCE}" ]; then
       echo "$_DOCKER_MANIFEST_LIST_OCI" | jq -r
@@ -153,24 +153,24 @@ function cosign () {
   # mock_cosign_success_calls file is expected to contain lines with "1" or "0" where
   # "1" means that the call should end successfully and "0" means that the call should end with an error
   # following command pops the first line from the file and stores it in successfull_run variable
-  successfull_run=$(sed -n '1p' $(workspaces.data.path)/mock_cosign_success_calls && \
-    sed -i '1d' $(workspaces.data.path)/mock_cosign_success_calls)
+  successfull_run=$(sed -n '1p' $(params.dataDir)/mock_cosign_success_calls && \
+    sed -i '1d' $(params.dataDir)/mock_cosign_success_calls)
 
   if [ "$1" = "verify" ]; then
     mock_existing_sig_file=$(echo "${*: -1}" | tr "/" "-")
-    echo "$@" >> $(workspaces.data.path)/mock_cosign_verify_calls
+    echo "$@" >> $(params.dataDir)/mock_cosign_verify_calls
     # if the call shouldn't end successfully, exit with error
     if [ "$successfull_run" != "1" ]; then
       return 1
     fi
-    cat "$(workspaces.data.path)/$mock_existing_sig_file"
+    cat "$(params.dataDir)/$mock_existing_sig_file"
   else
     echo "running cosign: $@"
-    echo "$@" >> "$(workspaces.data.path)/mock_cosign_sign_calls"
+    echo "$@" >> "$(params.dataDir)/mock_cosign_sign_calls"
     # if the call shouldn't end successfully, exit with error
     if [ "$successfull_run" != "1" ]; then
       >&2 echo "- SIMULATED ERROR -"
-      echo "- SIMULATED ERROR -" >> "$(workspaces.data.path)/mock_cosign_sign_calls"
+      echo "- SIMULATED ERROR -" >> "$(params.dataDir)/mock_cosign_sign_calls"
       return 1
     fi
   fi

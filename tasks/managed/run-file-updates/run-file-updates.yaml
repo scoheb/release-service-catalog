@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: run-file-updates
   labels:
-    app.kubernetes.io/version: "3.0.1"
+    app.kubernetes.io/version: "4.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -40,19 +40,90 @@ spec:
     - name: resultsDirPath
       description: Path to the results directory in the data workspace
       type: string
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+      default: "empty"
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: sourceDataArtifact
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
+      default: $(workspaces.data.path)
     - name: taskGitUrl
       type: string
-      description: The url to the git repo where the release-service-catalog tasks to be used are stored
+      description: The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored
     - name: taskGitRevision
       type: string
       description: The revision in the taskGitUrl repo to be used
   results:
     - name: mergeRequestUrl
       description: URL of MR that was created
+    - description: Produced trusted data artifact
+      name: sourceDataArtifact
+      type: string
   workspaces:
     - name: data
       description: Workspace where the file updates to apply are defined
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: "DEBUG"
+        value: "$(params.trustedArtifactsDebug)"
   steps:
+    - name: skip-trusted-artifact-operations
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
+    - name: use-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
+      params:
+        - name: workDir
+          value: $(params.dataDir)
+        - name: sourceDataArtifact
+          value: $(params.sourceDataArtifact)
     - name: run-script
       image: quay.io/konflux-ci/release-service-utils:0f82be4be43294b6a96846d87ef7f7c0b9e34267
       script: |
@@ -62,17 +133,17 @@ spec:
         set -ex
 
         # Obtain application from snapshot
-        application=$(jq -rc .application "$(workspaces.data.path)/$(params.snapshotPath)")
+        application=$(jq -rc .application "$(params.dataDir)/$(params.snapshotPath)")
 
         # Extract the key from the JSON file
-        fileUpdates=$(jq -rc "$(params.jsonKey)" "$(workspaces.data.path)/$(params.fileUpdatesPath)")
+        fileUpdates=$(jq -rc "$(params.jsonKey)" "$(params.dataDir)/$(params.fileUpdatesPath)")
 
         TASK_LABEL="internal-services.appstudio.openshift.io/group-id"
         REQUEST_LABEL="internal-services.appstudio.openshift.io/request-id"
         TASK_ID=$(context.taskRun.uid)
         PIPELINERUN_LABEL="internal-services.appstudio.openshift.io/pipelinerun-uid"
 
-        RESULTS_FILE="$(workspaces.data.path)/$(params.resultsDirPath)/file-updates-results.json"
+        RESULTS_FILE="$(params.dataDir)/$(params.resultsDirPath)/file-updates-results.json"
         RESULTS_JSON='{"merge_requests":[]}'
 
         # empty result to start so result is available
@@ -92,7 +163,7 @@ spec:
           echo "=== Updates for repo: ${repo} ==="
 
           echo -en "  Evaluating '{{ }}' expressions..."
-          updatedPaths=$(update-paths -p "${paths}" -f "$(workspaces.data.path)/$(params.snapshotPath)")
+          updatedPaths=$(update-paths -p "${paths}" -f "$(params.dataDir)/$(params.snapshotPath)")
           echo "done"
 
           echo -en "  Creating InternalRequest to produce file-updates..."
@@ -140,3 +211,35 @@ spec:
           fi
           echo -e "=== Finished ===\n"
         done
+    - name: create-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: "$(params.taskGitUrl)"
+          - name: revision
+            value: "$(params.taskGitRevision)"
+          - name: pathInRepo
+            value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)
+    - name: patch-source-data-artifact-result
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)

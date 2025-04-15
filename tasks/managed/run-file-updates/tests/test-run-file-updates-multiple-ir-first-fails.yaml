@@ -6,21 +6,58 @@ metadata:
 spec:
   description: |
     Run the run-file-updates task for the osd-addons use case with multiple IR requests
-    which has the first one failing. Ensure the result shows the MR from the 1st passing
-    request and that an error is surfaced for the failing one
+    which has the first one failing. Ensure the result that an error is surfaced for the failing one
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
           - name: create-crs
             image: quay.io/konflux-ci/release-service-utils:0f82be4be43294b6a96846d87ef7f7c0b9e34267
             script: |
               #!/usr/bin/env sh
               set -eux
-              
-              yq -o json > "$(workspaces.data.path)/rpa.json" << EOF
+
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              yq -o json > "$(params.dataDir)/$(context.pipelineRun.uid)/rpa.json" << EOF
               apiVersion: appstudio.redhat.com/v1alpha1
               kind: ReleasePlanAdmission
               metadata:
@@ -52,8 +89,8 @@ spec:
                               replacement: "|name:.*|name: myName|"
               EOF
 
-              mkdir "$(workspaces.data.path)/results"
-              yq -o json > "$(workspaces.data.path)/snapshot_spec.json" << EOF
+              mkdir "$(params.dataDir)/$(context.pipelineRun.uid)/results"
+              yq -o json > "$(params.dataDir)/$(context.pipelineRun.uid)/snapshot_spec.json" << EOF
               {
                   "application": "foo-app",
                   "artifacts": {},
@@ -73,6 +110,32 @@ spec:
                       }]
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -82,17 +145,27 @@ spec:
       onError: continue
       params:
         - name: fileUpdatesPath
-          value: "rpa.json"
+          value: "$(context.pipelineRun.uid)/rpa.json"
         - name: synchronously
           value: "false"
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
         - name: snapshotPath
-          value: snapshot_spec.json
+          value: $(context.pipelineRun.uid)/snapshot_spec.json
         - name: dataPath
           value: ""
         - name: resultsDirPath
-          value: results
+          value: $(context.pipelineRun.uid)/results
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
         - name: taskGitUrl
           value: "http://localhost"
         - name: taskGitRevision
@@ -117,6 +190,13 @@ spec:
             type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
         steps:
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:0f82be4be43294b6a96846d87ef7f7c0b9e34267
@@ -141,14 +221,13 @@ spec:
               passedIr=$(echo "$allRequests" | \
                               jq -r '.items[] | select(.spec.params.ref == "main")')
 
-              #request 1 passes
               state=$(echo "$passedIr" | jq '.status.results.buildState')
               echo "Test no requests are successful"
               test "${state}" == ""
               state=$(echo "$failedIr" | jq '.status.results.buildState')
-              echo "Test 2nd request has failed"
+              echo "Test 2nd fileUpdate has failed"
               test "${state}" == "\"Failed\""
-              
+
               echo "Test result should have no MRs in it"
               MR=$(tr '\n' ' ' <<< "$(params.result)" | xargs)
               test "$MR" == ""

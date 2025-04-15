@@ -9,22 +9,62 @@ spec:
     handled by the task. Verify that the resulting json remains unchanged in the repository field.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
-    - name: setup-other-formats
+    - name: setup
       workspaces:
-        - name: config
+        - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: snapshot
+            type: string
+          - name: sourceDataArtifact
+            type: string
         workspaces:
-          - name: config
+          - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
-          - name: setup-other-formats-values
+          - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
             script: |
               #!/usr/bin/env sh
               set -eux
 
-              cat > "$(workspaces.config.path)/test_data_other_formats.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/test_data_other_formats.json" << EOF
               {
                 "mapping": {
                   "components": [
@@ -37,7 +77,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.config.path)/test_snapshot_spec_other_formats.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -48,55 +88,135 @@ spec:
                 ]
               }
               EOF
-    - name: run-task-other-formats
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+    - name: run-task
       taskRef:
         name: apply-mapping
       params:
         - name: snapshotPath
-          value: test_snapshot_spec_other_formats.json
+          value: $(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json
         - name: dataPath
-          value: test_data_other_formats.json
+          value: $(context.pipelineRun.uid)/test_data_other_formats.json
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       runAfter:
-        - setup-other-formats
+        - setup
       workspaces:
-        - name: config
+        - name: data
           workspace: tests-workspace
-    - name: check-result-other-formats
+    - name: check-result
       workspaces:
-        - name: config
+        - name: data
           workspace: tests-workspace
+      params:
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
+      runAfter:
+        - run-task
       taskSpec:
         workspaces:
-          - name: config
+          - name: data
+        params:
+          - name: sourceDataArtifact
+            type: string
+          - name: dataDir
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
-          - name: check-result-other-formats
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
+          - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               echo Test that SNAPSHOT contains component comp1
               test "$(
                 jq -r '[ .components[] | select(.name=="comp1") ] | length' \
-                < "$(workspaces.config.path)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )" -eq 1
 
               echo Test that repository of component comp1 stayed intact
               test "$(
                 jq -r '.components[] | select(.name=="comp1") | .repository' \
-                < "$(workspaces.config.path)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )" == quay.io/my-sample/my-image
 
               echo Test that rh-registry-repo for comp1 is not set because it was not in a known format
               test -z "$(
                 jq -r '.components[] | select(.name=="comp1") | ."rh-registry-repo" // empty' \
-                < "$(workspaces.config.path)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )"
 
               echo Test that registry-access-repo for comp1 is not set because it was not in a known format
               test -z "$(
                 jq -r '.components[] | select(.name=="comp1") | ."registry-access-repo" // empty' \
-                < "$(workspaces.config.path)/test_snapshot_spec_other_formats.json"
+                < "$(params.dataDir)/$(context.pipelineRun.uid)/test_snapshot_spec_other_formats.json"
               )"
-      runAfter:
-        - run-task-other-formats

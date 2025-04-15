@@ -14,6 +14,10 @@ spec:
       params:
         - name: cves
           value: "CVE-123 CVE-456"
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
     - name: check-result
       runAfter:
         - run-task

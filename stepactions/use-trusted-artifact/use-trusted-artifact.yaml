@@ -1,0 +1,22 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: StepAction
+metadata:
+  name: use-trusted-artifact
+spec:
+  description: >-
+    This stepaction extracts a Trusted Artifact into a folder.
+  image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+  env:
+    # Set HOME variable to something else than `/` to avoid 'permission denied' problems when writing files.
+    - name: HOME
+      value: /tekton/home
+  params:
+    - name: workDir
+      type: string
+    - name: sourceDataArtifact
+      type: string
+      default: ""
+  args:
+    - use
+    - $(params.sourceDataArtifact)=$(params.workDir)

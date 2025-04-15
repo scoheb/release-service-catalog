@@ -22,6 +22,27 @@ shopt -s nullglob
 
 WORKSPACE_TEMPLATE=${BASH_SOURCE%/*/*}/resources/workspace-template.yaml
 
+if [ -z "${USE_TRUSTED_ARTIFACTS}" ]
+then
+  echo "Defaulting to PVC based workspaces..."
+  # empty is needed since trusted-artifacts needs a non-empty storage
+  # parameter in order to reach the skipping logic
+  export TRUSTED_ARTIFACT_OCI_STORAGE="empty"
+else
+
+  echo "Using Trusted Artifacts for workspaces..."
+  export TRUSTED_ARTIFACT_OCI_STORAGE=registry-service.kind-registry/trusted-artifacts
+  export TRUSTED_ARTIFACT_OCI_DOCKER_CONFIG_JSON_PATH=${DOCKER_CONFIG_JSON}
+
+  echo "Using docker config stored in ${DOCKER_CONFIG_JSON}"
+  kubectl create secret generic docker-config \
+    --from-file=.dockerconfigjson="${TRUSTED_ARTIFACT_OCI_DOCKER_CONFIG_JSON_PATH}" \
+    --type=kubernetes.io/dockerconfigjson --dry-run=client -o yaml | kubectl apply -f -
+  kubectl patch serviceaccount default -p \
+    '{"imagePullSecrets": [{"name": "docker-config"}], "secrets": [{"name": "docker-config"}]}'
+
+fi
+
 if [ $# -gt 0 ]
 then
   TEST_ITEMS=$@
@@ -54,6 +75,19 @@ do
     echo "Error: Invalid file or directory: $ITEM"
     exit 1
   fi
+done
+
+# install step actions
+echo "Installing StepActions"
+SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
+STEPACTION_ROOT=${SCRIPT_DIR}/../../stepactions
+stepActionFiles=$(find $STEPACTION_ROOT -maxdepth 2 -name "*.yaml")
+
+for stepAction in ${stepActionFiles};
+do
+  name=$(yq ".metadata.name" "${stepAction}")
+  echo "  Installing StepAction $name"
+  kubectl apply -f $stepAction
 done
 
 for ITEM in $TEST_ITEMS
@@ -98,8 +132,42 @@ do
     ${TESTS_DIR}/pre-apply-task-hook.sh "$TASK_COPY"
   fi
 
+  # Update stepaction resolvers
+  # - we want to remove the git resolver params so we can use the StepAction on cluster
+  echo "Updating StepAction resolvers"
+  for stepAction in ${stepActionFiles};
+  do
+    name=$(yq ".metadata.name" "${stepAction}")
+    echo "  Update resolver for $name"
+    yq -i "(.spec.steps[] | select(.name == \"$name\") | .ref) = {\"name\": \"$name\"}" $TASK_COPY
+  done
+
   echo "  Installing task"
   kubectl apply -f "$TASK_COPY"
+
+  if [ -z "${USE_TRUSTED_ARTIFACTS}" ]; then
+    workSpaceParams="volumeClaimTemplateFile=$WORKSPACE_TEMPLATE"
+    dataDir=/workspace/data
+  else
+    workSpaceParams="emptyDir="
+    # to avoid tar extraction errors, we need to specify a subdirectory
+    # inside the volume.
+    dataDir=/var/workdir/release
+  fi
+
+  # while we are converting tasks to use TA, it is possible that a PR will include a Task that does not have the
+  # ociStorage or dataDir params. Therefore we cannot pass them when we start the test pipelinerun. Otherwise, you will
+  # see the error: "Error: param 'ociStorage' not present in spec"
+  ociStorageParamCheck=$(yq '(.spec.params[] | select(.name == "ociStorage"))' "$TASK_COPY")
+  ociStorageParam=""
+  if [ ! -z "${ociStorageParamCheck}" ]; then
+    ociStorageParam="-p ociStorage=${TRUSTED_ARTIFACT_OCI_STORAGE}"
+  fi
+  dataDirParamCheck=$(yq '(.spec.params[] | select(.name == "dataDir"))' "$TASK_COPY")
+  dataDirParam=""
+  if [ ! -z "${dataDirParamCheck}" ]; then
+    dataDirParam="-p dataDir=${dataDir}"
+  fi
 
   rm -f "$TASK_COPY"
 
@@ -116,7 +184,9 @@ do
       sleep 5
     done
 
-    PIPELINERUN=$(tkn p start $TEST_NAME -w name=tests-workspace,volumeClaimTemplateFile=$WORKSPACE_TEMPLATE -o json | jq -r '.metadata.name')
+    PIPELINERUNJSON=$(tkn p start --use-param-defaults $TEST_NAME ${ociStorageParam} ${dataDirParam} -w "name=tests-workspace,${workSpaceParams}" -o json)
+    PIPELINERUN=$(jq -r '.metadata.name' <<< "${PIPELINERUNJSON}")
+
     echo "  Started pipelinerun $PIPELINERUN"
     sleep 1  # allow a second for the pr object to appear (including a status condition)
     while [ "$(kubectl get pr $PIPELINERUN -o=jsonpath='{.status.conditions[0].status}')" == "Unknown" ]
@@ -143,6 +213,7 @@ do
         if [ -z "$TASKRUN" ]
         then
           echo "    Unable to find task $ASSERT_TASK_FAILURE in childReferences of pipelinerun $PIPELINERUN. Pipelinerun failed earlier?"
+          kubectl get pr $PIPELINERUN -o json
           exit 1
         else
           echo "    Found taskrun $TASKRUN"
@@ -150,6 +221,7 @@ do
         if [ $(kubectl get tr $TASKRUN -o=jsonpath='{.status.conditions[0].status}') != "False" ]
         then
           echo "    Taskrun did not fail - pipelinerun failed later on?"
+          kubectl get tr $TASKRUN -o json
           exit 1
         else
           echo "    Taskrun failed as expected"

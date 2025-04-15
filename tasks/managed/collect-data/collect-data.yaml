@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: collect-data
   labels:
-    app.kubernetes.io/version: "5.0.0"
+    app.kubernetes.io/version: "6.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -32,6 +32,33 @@ spec:
       description: Subdirectory inside the workspace to be used
       type: string
       default: ""
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+      default: "empty"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire
+      type: string
+      default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
+      default: $(workspaces.data.path)
+    - name: taskGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored
+    - name: taskGitRevision
+      type: string
+      description: The revision in the taskGitUrl repo to be used
   workspaces:
     - name: data
       description: Workspace to save the CR jsons to
@@ -72,7 +99,42 @@ spec:
     - name: releasePipelineMetadata
       type: string
       description: json object containing git resolver metadata about the running release pipeline
+    - name: sourceDataArtifact
+      type: string
+      description: Produced trusted data artifact
+    - name: subdirectory
+      type: string
+      description: Subdirectory inside the workspace to be used
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: "ORAS_OPTIONS"
+        value: "$(params.orasOptions)"
+      - name: "DEBUG"
+        value: "$(params.trustedArtifactsDebug)"
   steps:
+    - name: skip-trusted-artifact-operations
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
     - name: collect-data
       image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
       env:
@@ -90,40 +152,43 @@ spec:
         #!/usr/bin/env bash
         set -eo pipefail
 
+        set -x
+        echo -n "$(params.subdirectory)" > "$(results.subdirectory.path)"
+
         RESULTS_DIR_PATH="results"
         if [ -n "$(params.subdirectory)" ]; then
-          mkdir -p "$(workspaces.data.path)/$(params.subdirectory)"
+          mkdir -p "$(params.dataDir)/$(params.subdirectory)"
           RESULTS_DIR_PATH="$(params.subdirectory)/results"
         fi
 
-        mkdir "$(workspaces.data.path)/$RESULTS_DIR_PATH"
+        mkdir -p "$(params.dataDir)/$RESULTS_DIR_PATH"
         echo -n "$RESULTS_DIR_PATH" > "$(results.resultsDir.path)"
 
         RELEASE_PATH="$(params.subdirectory)/release.json"
         echo -n "$RELEASE_PATH" > "$(results.release.path)"
-        get-resource "release" "${RELEASE}" | tee "$(workspaces.data.path)/$RELEASE_PATH"
+        get-resource "release" "${RELEASE}" | tee "$(params.dataDir)/$RELEASE_PATH"
 
         RELEASEPLAN_PATH="$(params.subdirectory)/release_plan.json"
         echo -n "$RELEASEPLAN_PATH" > "$(results.releasePlan.path)"
-        get-resource "releaseplan" "${RELEASE_PLAN}" | tee "$(workspaces.data.path)/$RELEASEPLAN_PATH"
+        get-resource "releaseplan" "${RELEASE_PLAN}" | tee "$(params.dataDir)/$RELEASEPLAN_PATH"
 
         RELEASEPLANADMISSION_PATH="$(params.subdirectory)/release_plan_admission.json"
         echo -n "$RELEASEPLANADMISSION_PATH" > "$(results.releasePlanAdmission.path)"
         get-resource "releaseplanadmission" "${RELEASE_PLAN_ADMISSION}" \
-          | tee "$(workspaces.data.path)/$RELEASEPLANADMISSION_PATH"
+          | tee "$(params.dataDir)/$RELEASEPLANADMISSION_PATH"
 
         RELEASESERVICECONFIG_PATH="$(params.subdirectory)/release_service_config.json"
         echo -n "$RELEASESERVICECONFIG_PATH" > "$(results.releaseServiceConfig.path)"
         get-resource "releaseserviceconfig" "${RELEASE_SERVICE_CONFIG}" \
-          | tee "$(workspaces.data.path)/$RELEASESERVICECONFIG_PATH"
+          | tee "$(params.dataDir)/$RELEASESERVICECONFIG_PATH"
 
         echo -e "\nFetching Snapshot Spec"
         SNAPSHOTSPEC_PATH="$(params.subdirectory)/snapshot_spec.json"
         echo -n "$SNAPSHOTSPEC_PATH" > "$(results.snapshotSpec.path)"
-        get-resource "snapshot" "${SNAPSHOT}" "{.spec}" | tee "$(workspaces.data.path)/$SNAPSHOTSPEC_PATH"
+        get-resource "snapshot" "${SNAPSHOT}" "{.spec}" | tee "$(params.dataDir)/$SNAPSHOTSPEC_PATH"
 
         echo -e "\nFetching fbcFragment"
-        jq -cr '.components[0].containerImage' < "$(workspaces.data.path)/$SNAPSHOTSPEC_PATH" | tr -d "\n" \
+        jq -cr '.components[0].containerImage' < "$(params.dataDir)/$SNAPSHOTSPEC_PATH" | tr -d "\n" \
           | tee "$(results.fbcFragment.path)"
   
         echo -e "\nGenerating collectors data"
@@ -177,19 +242,47 @@ spec:
 
         DATA_PATH="$(params.subdirectory)/data.json"
         echo -n "$DATA_PATH" > "$(results.data.path)"
-        echo "$merged_output" | tee "$(workspaces.data.path)/$DATA_PATH"
-    - name: collect-single-component-mode-data
-      image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
-      env:
-        - name: "SNAPSHOT"
-          value: '$(params.snapshot)'
-      script: |
-        #!/usr/bin/env bash
-        set -ex
+        echo "$merged_output" | tee "$(params.dataDir)/$DATA_PATH"
 
-        # check if RP/RPA has a single-component mode
-        DATA_PATH="$(params.subdirectory)/data.json"
-        SINGLE_COMPONENT_MODE=$(jq -r '.singleComponentMode // "false"' "$(workspaces.data.path)/$DATA_PATH")
+        # get pipeline ref info
+        pipelineref=$(jq -c '.spec.pipeline.pipelineRef' \
+          "$(params.dataDir)/$(params.subdirectory)/release_plan_admission.json")
+        resolver=$(jq -r '.resolver // ""' <<< "${pipelineref}")
+        if [ "${resolver}" == "git" ] ; then
+          url=$(jq -r '.params[] | select(.name=="url") | .value' <<< "${pipelineref}")
+          revision=$(jq -r '.params[] | select(.name=="revision") | .value' <<< "${pipelineref}")
+          pathinrepo=$(jq -r '.params[] | select(.name=="pathInRepo") | .value' <<< "${pipelineref}")
+          orgrepo="${url#*/*/*/}"
+          org=$(echo "${orgrepo}" | cut -f1 -d/)
+          repo=$(echo "${orgrepo}" | cut -f2 -d/ | cut -d. -f1)
+
+          sha=$(curl -s "https://api.github.com/repos/${org}/${repo}/commits/${revision}" | jq -r '.sha // ""')
+
+        fi
+
+        org="${org:-unknown}"
+        repo="${repo:-unknown}"
+        revision="${revision:-unknown}"
+        pathinrepo="${pathinrepo:-unknown}"
+        sha="${sha:-unknown}"
+
+        echo ""
+        echo "Release Pipeline Ref Info:"
+        echo "--------------------------"
+
+        json=$(jq -n -c \
+          --arg org "${org}" \
+          --arg repo "${repo}" \
+          --arg revision "${revision}" \
+          --arg pathinrepo "${pathinrepo}" \
+          --arg sha "${sha}" \
+          '$ARGS.named')
+
+        echo "${json}" > "$(results.releasePipelineMetadata.path)"
+        # pretty print for log message
+        jq . <<< "$json"
+
+        SINGLE_COMPONENT_MODE=$(jq -r '.singleComponentMode // "false"' "$(params.dataDir)/$DATA_PATH")
         SNAPSHOT_NAME=$(echo "${SNAPSHOT}" | cut -f2 -d/)
         SNAPSHOT_NAMESPACE=$(echo "${SNAPSHOT}" | cut -f1 -d/)
 
@@ -233,51 +326,41 @@ spec:
             done
         }
 
-        check_source "Release" "$(workspaces.data.path)/$(params.subdirectory)/release.json"
-        check_source "ReleasePlan" "$(workspaces.data.path)/$(params.subdirectory)/release_plan.json"
+        check_source "Release" "$(params.dataDir)/$(params.subdirectory)/release.json"
+        check_source "ReleasePlan" "$(params.dataDir)/$(params.subdirectory)/release_plan.json"
         check_source "ReleasePlanAdmission" \
-            "$(workspaces.data.path)/$(params.subdirectory)/release_plan_admission.json"
+            "$(params.dataDir)/$(params.subdirectory)/release_plan_admission.json"
 
         exit $RC
-    - name: print-pipeline-ref-info
-      image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
-      script: |
-        #!/usr/bin/env bash
-        set -eu
-
-        pipelineref=$(jq -c '.spec.pipeline.pipelineRef' \
-          "$(workspaces.data.path)/$(params.subdirectory)/release_plan_admission.json")
-        resolver=$(jq -r '.resolver // ""' <<< "${pipelineref}")
-        if [ "${resolver}" == "git" ] ; then
-          url=$(jq -r '.params[] | select(.name=="url") | .value' <<< "${pipelineref}")
-          revision=$(jq -r '.params[] | select(.name=="revision") | .value' <<< "${pipelineref}")
-          pathinrepo=$(jq -r '.params[] | select(.name=="pathInRepo") | .value' <<< "${pipelineref}")
-          orgrepo="${url#*/*/*/}"
-          org=$(echo "${orgrepo}" | cut -f1 -d/)
-          repo=$(echo "${orgrepo}" | cut -f2 -d/ | cut -d. -f1)
-
-          sha=$(curl -s "https://api.github.com/repos/${org}/${repo}/commits/${revision}" | jq -r '.sha // ""')
-
-        fi
-
-        org="${org:-unknown}"
-        repo="${repo:-unknown}"
-        revision="${revision:-unknown}"
-        pathinrepo="${pathinrepo:-unknown}"
-        sha="${sha:-unknown}"
-
-        echo ""
-        echo "Release Pipeline Ref Info:"
-        echo "--------------------------"
-
-        json=$(jq -n -c \
-          --arg org "${org}" \
-          --arg repo "${repo}" \
-          --arg revision "${revision}" \
-          --arg pathinrepo "${pathinrepo}" \
-          --arg sha "${sha}" \
-          '$ARGS.named')
-
-        echo "${json}" > "$(results.releasePipelineMetadata.path)"
-        # pretty print for log message
-        jq . <<< "$json"
+    - name: create-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: "$(params.taskGitUrl)"
+          - name: revision
+            value: "$(params.taskGitRevision)"
+          - name: pathInRepo
+            value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)
+    - name: patch-source-data-artifact-result
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)

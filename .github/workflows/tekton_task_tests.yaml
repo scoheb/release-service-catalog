@@ -22,10 +22,31 @@ jobs:
           dir_names: "true"
           dir_names_max_depth: "3"
       - name: Show changed dirs
+        id: show-changed-dirs
+        shell: bash
         run: |
           echo ${{ steps.changed-dirs.outputs.all_changed_files }}
+          trustedArtifactsBasedTasks=()
+          for dir in ${{ steps.changed-dirs.outputs.all_changed_files }}
+          do
+            echo "$dir"
+            taskName=$(basename "${dir}")
+            taskFile="${dir}/${taskName}.yaml"
+            if [ -f "${taskFile}" ] \
+              && [[ $(yq '[.spec.params[] | select(.name == "ociStorage")] | length' \
+              "${taskFile}") -gt 0 ]]
+            then
+              ociStageParam=$(yq '.spec.params[] | select(.name == "ociStorage") | .name' "${taskFile}")
+              if [ -n "${ociStageParam}" ]; then
+                echo "Found a trusted artifacts compatible task: ${taskFile}"
+                trustedArtifactsBasedTasks+=($dir)
+              fi
+            fi
+          done
+          echo "trustedArtifactsBasedTasks: ${trustedArtifactsBasedTasks[@]}"
+          echo "trustedArtifactsBasedTasks=${trustedArtifactsBasedTasks[@]}" >> $GITHUB_OUTPUT
       - name: Create k8s Kind Cluster
-        uses: helm/kind-action@v1.10.0
+        uses: helm/kind-action@v1.12.0
         if: |
           steps.changed-dirs.outputs.any_changed == 'true'
       - name: Check cluster info
@@ -33,6 +54,14 @@ jobs:
           steps.changed-dirs.outputs.any_changed == 'true'
         run: |
           kubectl cluster-info
+      - name: Deploy Local Kind Registry
+        id: deploy-local-kind-registry
+        timeout-minutes: 10
+        if: |
+          steps.changed-dirs.outputs.any_changed == 'true'
+        run: |
+          . .github/scripts/deploy_registry.sh
+          echo "DOCKER_CONFIG_JSON=${DOCKER_CONFIG_JSON}" >> "$GITHUB_OUTPUT"
       - name: Install Tekton
         timeout-minutes: 10
         if: |
@@ -55,11 +84,30 @@ jobs:
           done
 
           kubectl get pods --namespace tekton-pipelines
+
+          # let tekton controllers startup...
+          sleep 10
+
+          # enable stepActions
+          echo "Updating feature-flags"
+          kubectl get cm feature-flags -n tekton-pipelines -o yaml | \
+            sed -e 's|enable-step-actions: "false"|enable-step-actions: "true"|' > /tmp/ff.yaml
+          kubectl apply -f /tmp/ff.yaml -n tekton-pipelines
+
       - name: Install tkn
         if: |
           steps.changed-dirs.outputs.any_changed == 'true'
         uses: ./.github/actions/install-tkn
-      - name: Test Tekton tasks
+      - name: Test Tekton tasks with Trusted Artifacts
+        if: |
+          steps.show-changed-dirs.outputs.trustedArtifactsBasedTasks != ''
+        run: .github/scripts/test_tekton_tasks.sh
+        env:
+          DOCKER_CONFIG_JSON: ${{ steps.deploy-local-kind-registry.outputs.DOCKER_CONFIG_JSON }}
+          USE_TRUSTED_ARTIFACTS: true
+          TEST_ITEMS: >-
+            ${{ steps.show-changed-dirs.outputs.trustedArtifactsBasedTasks }}
+      - name: Test Tekton tasks using PVC-based workspace
         if: |
           steps.changed-dirs.outputs.any_changed == 'true'
         run: .github/scripts/test_tekton_tasks.sh

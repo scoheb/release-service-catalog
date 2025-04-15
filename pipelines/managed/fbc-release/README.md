@@ -20,6 +20,9 @@ Tekton release pipeline to interact with FBC Pipeline
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                                      | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                             | No       | -                                                         |
 
+## Changes in 4.4.0
+* Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers
+
 ## Changes in 4.3.0
 * Add new parameter `verify_ec_task_git_revision` needed for consuming the verify-conforma task
   via git resolver

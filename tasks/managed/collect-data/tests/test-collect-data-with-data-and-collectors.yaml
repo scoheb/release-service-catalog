@@ -8,14 +8,48 @@ spec:
     Run the collect-data task with collectors and verify that data task result is accurate.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       taskSpec:
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
           - name: create-crs
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
-              #!/usr/bin/env sh
+              #!/usr/bin/env bash
               set -eux
 
               cat > release << EOF
@@ -123,6 +157,18 @@ spec:
           value: default/snapshot-with-data-sample
         - name: subdirectory
           value: $(context.pipelineRun.uid)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       runAfter:
         - setup
       workspaces:
@@ -134,6 +180,12 @@ spec:
           value: $(tasks.run-task.results.data)
         - name: singleComponentMode
           value: $(tasks.run-task.results.singleComponentMode)
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: subdirectory
+          value: $(tasks.run-task.results.subdirectory)
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -145,7 +197,45 @@ spec:
             type: string
           - name: singleComponentMode
             type: string
+          - name: sourceDataArtifact
+            type: string
+          - name: subdirectory
+            type: string
+          - name: dataDir
+            type: string
+        workspaces:
+          - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
             script: |
@@ -153,7 +243,7 @@ spec:
               set -eux
 
               echo Test that data result was set properly
-              test "$(jq -cr --sort-keys . "$(workspaces.data.path)/$(params.data)")" \
+              test "$(jq -cr --sort-keys . "$(params.dataDir)/$(params.data)")" \
                == "$(jq -cr --sort-keys <<< '{"releaseNotes":{"cves":[{"component":"my-component","key":"FOO-3444"}],
                   "foobar":[{"component":"my-component",
                   "key":"FOO-4333"}],"issues":{"fixed":[{"id":"FOO-1234",

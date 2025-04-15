@@ -9,14 +9,51 @@ spec:
     the data JSON has the proper content
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
           - name: setup
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
@@ -24,7 +61,8 @@ spec:
               #!/usr/bin/env sh
               set -eux
 
-              cat > "$(workspaces.data.path)/data.json" << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/data.json" << EOF
               {
                 "releaseNotes": {
                   "product_id": [
@@ -57,7 +95,7 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/snapshot.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/snapshot.json" << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -86,14 +124,54 @@ spec:
                 ]
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
     - name: run-task
       taskRef:
         name: populate-release-notes
       params:
         - name: dataPath
-          value: "data.json"
+          value: "$(context.pipelineRun.uid)/data.json"
         - name: snapshotPath
-          value: "snapshot.json"
+          value: "$(context.pipelineRun.uid)/snapshot.json"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -103,15 +181,53 @@ spec:
       params:
         - name: sbomDataPath
           value: $(tasks.run-task.results.sbomDataPath)
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
         params:
           - name: sbomDataPath
+          - name: sourceDataArtifact
+            type: string
+          - name: dataDir
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
             script: |
@@ -119,7 +235,8 @@ spec:
               set -eux
 
               echo Checking image1arch1...
-              image1arch1=$(jq '.releaseNotes.content.images[0]' "$(workspaces.data.path)/data.json")
+              image1arch1=$(jq '.releaseNotes.content.images[0]' \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/data.json")
               test "$(jq -r '.architecture' <<< "$image1arch1")" == "amd64"
               test "$(jq -r '.containerImage' <<< "$image1arch1")" == "registry.redhat.io/product/repo@sha256:abcdefg"
               test "$(jq -r '.purl' <<< "$image1arch1")" == \
@@ -128,28 +245,30 @@ spec:
               test "$(jq -rc '.tags' <<< "$image1arch1")" == '["9.4-1723436855","9.4.0-1723436855","foo","bar"]'
 
               test "$(jq -r '.images[0].multiarch' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "true"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "true"
 
               test "$(jq -r '.images[0].imageSha' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "123456"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "123456"
 
               echo Checking image1arch2...
-              image1arch2=$(jq '.releaseNotes.content.images[1]' "$(workspaces.data.path)/data.json")
+              image1arch2=$(jq '.releaseNotes.content.images[1]' \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/data.json")
               test "$(jq -r '.architecture' <<< "$image1arch2")" == "s390x"
               test "$(jq -r '.containerImage' <<< "$image1arch2")" == "registry.redhat.io/product/repo@sha256:deadbeef"
               test "$(jq -r '.purl' <<< "$image1arch2")" == \
-                "pkg:oci/repo@sha256%3Adeadbeef?arch=s390x&repository_url=registry.redhat.io/product&tag=9.4.0-1723436855"
+               "pkg:oci/repo@sha256%3Adeadbeef?arch=s390x&repository_url=registry.redhat.io/product&tag=9.4.0-1723436855"
               test "$(jq -r '.repository' <<< "$image1arch2")" == "registry.redhat.io/product/repo"
               test "$(jq -rc '.tags' <<< "$image1arch2")" == '["9.4-1723436855","9.4.0-1723436855","foo","bar"]'
 
               test "$(jq -r '.images[1].multiarch' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "false"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "false"
 
               test "$(jq -r '.images[1].imageSha' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "123456"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "123456"
 
               echo Checking image2arch1...
-              image2arch1=$(jq '.releaseNotes.content.images[2]' "$(workspaces.data.path)/data.json")
+              image2arch1=$(jq '.releaseNotes.content.images[2]' \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/data.json")
               test "$(jq -r '.architecture' <<< "$image2arch1")" == "amd64"
               test "$(jq -r '.containerImage' <<< "$image2arch1")" == \
                 "registry.stage.redhat.io/product2/repo2@sha256:abcdefg"
@@ -159,13 +278,14 @@ spec:
               test "$(jq -rc '.tags' <<< "$image2arch1")" == '["foo","bar"]'
 
               test "$(jq -r '.images[2].multiarch' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "true"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "true"
 
               test "$(jq -r '.images[2].imageSha' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "abcde"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "abcde"
 
               echo Checking image2arch2...
-              image2arch2=$(jq '.releaseNotes.content.images[3]' "$(workspaces.data.path)/data.json")
+              image2arch2=$(jq '.releaseNotes.content.images[3]' \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/data.json")
               test "$(jq -r '.architecture' <<< "$image2arch2")" == "s390x"
               test "$(jq -r '.containerImage' <<< "$image2arch2")" == \
                 "registry.stage.redhat.io/product2/repo2@sha256:deadbeef"
@@ -175,9 +295,9 @@ spec:
               test "$(jq -rc '.tags' <<< "$image2arch2")" == '["foo","bar"]'
 
               test "$(jq -r '.images[3].multiarch' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "false"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "false"
 
               test "$(jq -r '.images[3].imageSha' \
-                "$(workspaces.data.path)/$(params.sbomDataPath)")" == "abcde"
+                "$(params.dataDir)/$(params.sbomDataPath)")" == "abcde"
       runAfter:
         - run-task

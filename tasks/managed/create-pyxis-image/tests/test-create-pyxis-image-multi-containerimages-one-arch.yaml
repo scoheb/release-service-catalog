@@ -9,14 +9,51 @@ spec:
     and a single arch.
   workspaces:
     - name: tests-workspace
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
   tasks:
     - name: setup
       workspaces:
         - name: data
           workspace: tests-workspace
       taskSpec:
+        results:
+          - name: sourceDataArtifact
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
           - name: setup-values
             image: quay.io/konflux-ci/release-service-utils:6f53e325678d7a8aac51d80fd1ab62927cf44e73
@@ -24,7 +61,8 @@ spec:
               #!/usr/bin/env bash
               set -eux
 
-              cat > "$(workspaces.data.path)"/mapped_snapshot.json << EOF
+              mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)"/mapped_snapshot.json << EOF
               {
                 "application": "myapp",
                 "components": [
@@ -56,10 +94,36 @@ spec:
               }
               EOF
 
-              cat > "$(workspaces.data.path)/mydata.json" << EOF
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/mydata.json" << EOF
               {
               }
               EOF
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: create-trusted-artifact
+            ref:
+              name: create-trusted-artifact
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
+          - name: patch-source-data-artifact-result
+            ref:
+              name: patch-source-data-artifact-result
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: sourceDataArtifact
+                value: $(results.sourceDataArtifact.path)
     - name: run-task
       taskRef:
         name: create-pyxis-image
@@ -69,9 +133,23 @@ spec:
         - name: server
           value: stage
         - name: snapshotPath
-          value: mapped_snapshot.json
+          value: $(context.pipelineRun.uid)/mapped_snapshot.json
         - name: dataPath
-          value: mydata.json
+          value: $(context.pipelineRun.uid)/mydata.json
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: sourceDataArtifact
+          value: "$(tasks.setup.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -81,6 +159,10 @@ spec:
       params:
         - name: pyxisDataPath
           value: $(tasks.run-task.results.pyxisDataPath)
+        - name: sourceDataArtifact
+          value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
       workspaces:
         - name: data
           workspace: tests-workspace
@@ -88,60 +170,95 @@ spec:
         params:
           - name: pyxisDataPath
             type: string
+          - name: sourceDataArtifact
+            type: string
+          - name: dataDir
+            type: string
         workspaces:
           - name: data
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: IMAGE_EXPIRES_AFTER
+              value: $(params.ociArtifactExpiresAfter)
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: $(params.dataDir)
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: workDir
+                value: $(params.dataDir)
+              - name: sourceDataArtifact
+                value: $(params.sourceDataArtifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:6f53e325678d7a8aac51d80fd1ab62927cf44e73
             script: |
               #!/usr/bin/env bash
               set -eux
 
-              if [ "$(wc -l < "$(workspaces.data.path)"/mock_create_container_image.txt)" != 3 ]; then
+              if [ "$(wc -l < \
+                "$(params.dataDir)/mock_create_container_image.txt")" != 3 ]; then
                 echo Error: create_container_image was expected to be called 3 times. Actual calls:
-                cat "$(workspaces.data.path)/mock_create_container_image.txt"
+                cat "$(params.dataDir)/mock_create_container_image.txt"
                 exit 1
               fi
 
-              if [ -f "$(workspaces.data.path)"/mock_cleanup_tags.txt ]; then
+              if [ -f "$(params.dataDir)/mock_cleanup_tags.txt" ]; then
                 echo Error: cleanup_tags was not expected to be called. Actual calls:
-                cat "$(workspaces.data.path)/mock_cleanup_tags.txt"
+                cat "$(params.dataDir)/mock_cleanup_tags.txt"
                 exit 1
               fi
 
-              cat > "$(workspaces.data.path)"/skopeo_expected_calls.txt << EOF
+              cat > "$(params.dataDir)/skopeo_expected_calls.txt" << EOF
               inspect --raw docker://registry.io/image1@sha256:mydigest1
               inspect --raw docker://registry.io/image2@sha256:mydigest2
               inspect --raw docker://registry.io/image3@sha256:mydigest3
               EOF
 
               # check that the actual calls match the expected calls
-              if [ "$(md5sum < "$(workspaces.data.path)/skopeo_expected_calls.txt")" \
-                != "$(md5sum < "$(workspaces.data.path)/mock_skopeo.txt")" ]
+              if [ "$(md5sum < "$(params.dataDir)/skopeo_expected_calls.txt")" \
+                != "$(md5sum < "$(params.dataDir)/mock_skopeo.txt")" ]
               then
                 echo "Error: Actual skopeo calls do not match expected calls."
                 echo Expected calls:
-                cat "$(workspaces.data.path)/skopeo_expected_calls.txt"
+                cat "$(params.dataDir)/skopeo_expected_calls.txt"
                 echo Actual calls:
-                cat "$(workspaces.data.path)/mock_skopeo.txt"
+                cat "$(params.dataDir)/mock_skopeo.txt"
                 exit 1
               fi
 
-              if [ "$(wc -l < "$(workspaces.data.path)"/mock_oras.txt)" != 9 ]; then
+              if [ "$(wc -l < "$(params.dataDir)/mock_oras.txt")" != 9 ]; then
                 echo Error: oras was expected to be called 9 times. Actual calls:
-                cat "$(workspaces.data.path)/mock_oras.txt"
+                cat "$(params.dataDir)/mock_oras.txt"
                 exit 1
               fi
 
               # check if the correct arch and image id are set in the json file
               jq -e '.components[0].pyxisImages[0] | ( .arch == "amd64" ) and ( .imageId == "0001" )
-                and ( .os == "linux" )' "$(workspaces.data.path)/$(params.pyxisDataPath)"
+                and ( .os == "linux" )' "$(params.dataDir)/$(params.pyxisDataPath)"
 
               jq -e '.components[1].pyxisImages[0] | ( .arch == "amd64" ) and ( .imageId == "0002" )
-                and ( .os == "linux" )' "$(workspaces.data.path)/$(params.pyxisDataPath)"
+                and ( .os == "linux" )' "$(params.dataDir)/$(params.pyxisDataPath)"
 
               jq -e '.components[2].pyxisImages[0] | ( .arch == "amd64" ) and ( .imageId == "0003" )
-                and ( .os == "linux" )' "$(workspaces.data.path)/$(params.pyxisDataPath)"
+                and ( .os == "linux" )' "$(params.dataDir)/$(params.pyxisDataPath)"
 
       runAfter:
         - run-task
