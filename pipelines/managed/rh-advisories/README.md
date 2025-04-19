@@ -26,7 +26,11 @@ the rh-push-to-registry-redhat-io pipeline.
 | ociStorage                      | The OCI repository where the Trusted Artifacts are stored                                                                          | Yes      | quay.io/konflux-ci/release-service-trusted-artifacts      |
 | orasOptions                     | oras options to pass to Trusted Artifacts calls                                                                                    | Yes      | ""                                                        |
 | trustedArtifactsDebug           | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable                                             | Yes      | ""                                                        |
-| dataDir                         | The location where data will be stored                                                                                             | Yes      | /var/workdir                                              | 
+| dataDir                         | The location where data will be stored                                                                                             | Yes      | /var/workdir/release                                      | 
+
+## Changes in 2.0.0
+* Activate the use of trusted artifacts
+* Use the verify-conforma task to verify the enterprise contract policy
 
 ## Changes in 1.13.0
 * Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers
