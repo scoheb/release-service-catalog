@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: create-advisory-task
   labels:
-    app.kubernetes.io/version: "1.1.1"
+    app.kubernetes.io/version: "1.1.2"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -152,12 +152,16 @@ spec:
           echo "Checking advisories in directory: ${ADVISORY_BASE_DIR}"
 
           # Check existing advisories across ALL years
-          EXISTING_ADVISORIES=$(
-            find "${ADVISORY_BASE_DIR}" -mindepth 2 -type d -printf "%T@ %p\n" |  # year/advisory dir with modified time
-            sort -nr |                                                            # sort by latest modified first
-            cut -d' ' -f2- |                                                      # remove the timestamp, keep only path
-            sed "s|^${ADVISORY_BASE_DIR}/||"                                      # keeping year/advisory format
-          )
+          EXISTING_ADVISORIES=""
+          if [ -d "${ADVISORY_BASE_DIR}" ]; then
+            EXISTING_ADVISORIES=$(
+              # year/advisory dir with modified time
+              find "${ADVISORY_BASE_DIR}" -mindepth 2 -type d -printf "%T@ %p\n" |
+              sort -nr |                       # sort by latest modified first
+              cut -d' ' -f2- |                 # remove the timestamp, keep only path
+              sed "s|^${ADVISORY_BASE_DIR}/||" # keeping year/advisory format
+            )
+          fi
 
           if [[ -z "$EXISTING_ADVISORIES" ]]; then
               echo "No existing advisories found."

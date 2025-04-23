@@ -9,6 +9,7 @@ function git() {
     gitRepo=$(echo "$*" | cut -f5 -d/ | cut -f1 -d.)
     mkdir -p "$gitRepo"/schema
     echo '{"$schema": "http://json-schema.org/draft-07/schema#","type": "object", "properties":{}}' > "$gitRepo"/schema/advisory.json
+    mkdir -p "$gitRepo"/data/advisories/dev-tenant
   elif [[ "$*" == *"failing-tenant"* ]]; then
     echo "Mocking failing git command" && false
   else
@@ -19,6 +20,11 @@ function git() {
 
 function find() {
   echo "Mock find called with: $*" >&2
+
+  if echo "$*" | grep -q "not-existing-origin"; then
+    echo "Error: Unexpected call for not existing origin"
+    exit 1
+  fi
 
   if echo "$*" | grep -q "${ADVISORY_BASE_DIR}"; then
     # Simulate directories with timestamps

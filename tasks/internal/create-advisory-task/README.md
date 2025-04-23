@@ -16,6 +16,9 @@ internal request. The success/failure is handled in the task creating the intern
 | errata_secret_name             | The name of the secret that contains the errata service account metadata                               | No       | -             |
 | internalRequestPipelineRunName | Name of the PipelineRun that called this task                                                          | No       | -             |
 
+## Changes in 1.1.2
+* Fixes an error introduced in 1.0.0 which affected new advisories.
+
 ## Changes in 1.1.1
 * Optimized advisory matching with early exit when all images are already released.
 

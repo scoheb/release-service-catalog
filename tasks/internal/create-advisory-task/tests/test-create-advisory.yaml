@@ -23,7 +23,7 @@ spec:
         - name: application
           value: "test-app"
         - name: origin
-          value: "dev-tenant"
+          value: "not-existing-origin"
         - name: config_map_name
           value: "create-advisory-test-cm"
         - name: advisory_secret_name
@@ -58,4 +58,4 @@ spec:
 
               echo Test that advisory_url was properly set
               test "$(params.advisory_url)" == \
-                https://gitlab.com/org/repo/-/blob/main/data/advisories/dev-tenant/2024/1234/advisory.yaml
+                https://gitlab.com/org/repo/-/blob/main/data/advisories/not-existing-origin/2024/1234/advisory.yaml
