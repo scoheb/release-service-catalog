@@ -108,12 +108,12 @@ spec:
               set +x
               echo "${KUBECONFIG:?}" > "${KUBECONFIG_FILE}"
               set -x
-              export KUBECONFIG="${KUBECONFIG}"
+              export KUBECONFIG="${KUBECONFIG_FILE}"
 
               export RELEASE_CATALOG_GIT_URL="$(params.PR_GIT_URL)"
               export RELEASE_CATALOG_GIT_REVISION="$(params.PR_GIT_REVISION)"
 
-              $HOME/tests/collectors/run-test.sh
+              /home/e2e/tests/collectors/run-test.sh
 
               # Output the standardized TEST_OUTPUT result in JSON form
               TEST_OUTPUT=$(jq -rc --arg date $(date -u --iso-8601=seconds) --arg RESULT "${RESULT}" --null-input \

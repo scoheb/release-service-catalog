@@ -47,13 +47,16 @@ export release_plan_admission_name=collector-rpa-${uuid}
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-if [ ! -f tenant/secrets/tenant-secrets.yaml ]; then
+mkdir -p "${SCRIPT_DIR}/tenant/secrets"
+mkdir -p "${SCRIPT_DIR}/managed/secrets"
+
+if [ ! -f "${SCRIPT_DIR}/tenant/secrets/tenant-secrets.yaml" ]; then
   echo "Secrets missing...decrypting"
-  ansible-vault decrypt collector-tenant-secrets.yaml --output tenant/secrets/tenant-secrets.yaml --vault-password-file $VAULT_PASSWORD_FILE
+  ansible-vault decrypt "${SCRIPT_DIR}/collector-tenant-secrets.yaml" --output "${SCRIPT_DIR}/tenant/secrets/tenant-secrets.yaml" --vault-password-file $VAULT_PASSWORD_FILE
 fi
-if [ ! -f managed/secrets/managed-secrets.yaml ]; then
+if [ ! -f "${SCRIPT_DIR}/managed/secrets/managed-secrets.yaml" ]; then
   echo "Secrets missing...decrypting"
-  ansible-vault decrypt collector-managed-secrets.yaml --output managed/secrets/managed-secrets.yaml --vault-password-file $VAULT_PASSWORD_FILE
+  ansible-vault decrypt "${SCRIPT_DIR}/collector-managed-secrets.yaml" --output "${SCRIPT_DIR}/managed/secrets/managed-secrets.yaml" --vault-password-file $VAULT_PASSWORD_FILE
 fi
 
 # create GH branch
@@ -63,7 +66,7 @@ echo ""
 echo "Setup namespaces..."
 set +eo pipefail
 #oc project ${managed_namespace} 2> /dev/null
-kubectl get ns ${managed_namespace} 2> /dev/null
+kubectl get ns ${managed_namespace}
 if [ $? -eq 1 ]; then
   kubectl create namespace ${managed_namespace}
 fi
@@ -71,7 +74,7 @@ kubectl config set-context --current --namespace=$managed_namespace 2> /dev/null
 $SCRIPT_DIR/../scripts/setup-namespace.sh
 
 #oc project ${tenant_namespace} 2> /dev/null
-kubectl get ns ${tenant_namespace} 2> /dev/null
+kubectl get ns ${tenant_namespace}
 if [ $? -eq 1 ]; then
   kubectl create namespace ${tenant_namespace}
   #oc project ${tenant_namespace} 2> /dev/null
@@ -83,8 +86,8 @@ set -eo pipefail
 echo ""
 echo "Creating resources on cluster..."
 tmpDir=$(mktemp -d)
-kustomize build tenant | envsubst  > $tmpDir/tenant-resources.yaml
-kustomize build managed | envsubst > $tmpDir/managed-resources.yaml
+kustomize build "$SCRIPT_DIR/tenant" | envsubst  > $tmpDir/tenant-resources.yaml
+kustomize build "$SCRIPT_DIR/managed" | envsubst > $tmpDir/managed-resources.yaml
 
 echo ""
 echo "Cleanup resources can be done with:"
