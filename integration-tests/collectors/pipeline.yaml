@@ -13,6 +13,9 @@ spec:
     - name: GITHUB_TOKEN_SECRET_NAME
       default: 'github-token-secret'
       type: string
+    - name: KUBECONFIG_SECRET_NAME
+      default: 'kubeconfig-secret'
+      type: string
   tasks:
     - name: get-snapshot-data
       params:
@@ -53,6 +56,8 @@ spec:
           value: $(params.VAULT_PASSWORD_SECRET_NAME)
         - name: GITHUB_TOKEN_SECRET_NAME
           value: $(params.GITHUB_TOKEN_SECRET_NAME)
+        - name: KUBECONFIG_SECRET_NAME
+          value: $(params.KUBECONFIG_SECRET_NAME)
 
       taskSpec:
         params:
@@ -80,6 +85,11 @@ spec:
                   secretKeyRef:
                     name: $(params.GITHUB_TOKEN_SECRET_NAME)
                     key: token
+              - name: KUBECONFIG
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.KUBECONFIG_SECRET_NAME)
+                    key: kubeconfig
             script: |
               dnf -y install jq
               echo -e "Example test task for the Snapshot:\n ${SNAPSHOT}"
@@ -94,6 +104,11 @@ spec:
               set +x
               echo "${VAULT_PASSWORD:?}" > "${VAULT_PASSWORD_FILE}"
               set -x
+              export KUBECONFIG_FILE=$(mktemp)
+              set +x
+              echo "${KUBECONFIG:?}" > "${KUBECONFIG_FILE}"
+              set -x
+              export KUBECONFIG="${KUBECONFIG}"
 
               export RELEASE_CATALOG_GIT_URL="$(params.PR_GIT_URL)"
               export RELEASE_CATALOG_GIT_REVISION="$(params.PR_GIT_REVISION)"

@@ -22,6 +22,9 @@ if [ -z "$RELEASE_CATALOG_GIT_REVISION" ] ; then
   echo "error: missing env var RELEASE_CATALOG_GIT_REVISION"
   exit 1
 fi
+if [ -n "$KUBECONFIG" ] ; then
+  echo "Using provided KUBECONFIG"
+fi
 
 uuid=$(openssl rand -hex 4)
 
