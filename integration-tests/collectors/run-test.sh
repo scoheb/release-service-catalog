@@ -14,52 +14,69 @@ if [ ! -f "$VAULT_PASSWORD_FILE" ] ; then
   echo "error: env var VAULT_PASSWORD_FILE points to a non-existent file"
   exit 1
 fi
-if [ -z "$RELEASE_CATALOG_GIT_URL" ] ; then
-  echo "error: missing env var RELEASE_CATALOG_GIT_URL"
-  exit 1
+if [ -n "$RELEASE_CATALOG_GIT_URL" ] ; then
+  echo "Using provided RELEASE_CATALOG_GIT_URL: ${RELEASE_CATALOG_GIT_URL}"
+else
+  RELEASE_CATALOG_GIT_URL=https://github.com/konflux-ci/release-service-catalog.git
+  export RELEASE_CATALOG_GIT_URL
+  echo "Defaulting to RELEASE_CATALOG_GIT_URL: ${RELEASE_CATALOG_GIT_URL}"
 fi
-if [ -z "$RELEASE_CATALOG_GIT_REVISION" ] ; then
-  echo "error: missing env var RELEASE_CATALOG_GIT_REVISION"
-  exit 1
+if [ -n "$RELEASE_CATALOG_GIT_REVISION" ] ; then
+  echo "Using provided RELEASE_CATALOG_GIT_REVISION: ${RELEASE_CATALOG_GIT_REVISION}"
+else
+  RELEASE_CATALOG_GIT_REVISION=development
+  export RELEASE_CATALOG_GIT_REVISION
+  echo "Defaulting to RELEASE_CATALOG_GIT_REVISION: ${RELEASE_CATALOG_GIT_REVISION}"
 fi
 if [ -n "$KUBECONFIG" ] ; then
   echo "Using provided KUBECONFIG"
 fi
 
-uuid=$(openssl rand -hex 4)
+cleanup() {
+  local err=$1
+  local line=$2
+  local command="$3"
 
-export tenant_namespace=shebert-tenant #release-catalog-tenant-e2e-tenant
-export managed_namespace=managed-release-team-tenant #release-catalog-managed-e2e-tenant
+  if [ "$err" -ne 0 ] ; then
+    echo -n \
+    "$0: ERROR $command failed at line $line - exited with status $err"
+  fi
 
-export application_name=e2eapp-${uuid}
-export component_name=collector-${uuid}
-export component_branch=${component_name}
+  # cleanup...so we can ignore errors
+  set +eo pipefail
 
-export component_base_branch=collector-base
-export component_repo_name=scoheb/e2e-base
-export component_git_url=https://github.com/$component_repo_name
+  echo ""
+  echo "Delete Github branch..."
+  ${SCRIPT_DIR}/../scripts/delete-single-branch.sh "${component_repo_name}" "${component_branch}" 2> /dev/null
 
-export tenant_sa_name=collector-sa-${uuid}
-export release_plan_name=collector-rp-${uuid}
+  echo ""
+  echo "Delete test resources..."
+  kubectl delete -f "$tmpDir/tenant-resources.yaml" 2> /dev/null
+  kubectl delete -f "$tmpDir/managed-resources.yaml" 2> /dev/null
 
-export managed_sa_name=collector-sa-${uuid}
-export release_plan_admission_name=collector-rpa-${uuid}
+  exit $err
+}
+trap 'cleanup $? $LINENO "$BASH_COMMAND"' EXIT
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-mkdir -p "${SCRIPT_DIR}/tenant/secrets"
-mkdir -p "${SCRIPT_DIR}/managed/secrets"
+. "${SCRIPT_DIR}/test.env"
 
-if [ ! -f "${SCRIPT_DIR}/tenant/secrets/tenant-secrets.yaml" ]; then
+mkdir -p "${SCRIPT_DIR}/resources/tenant/secrets"
+mkdir -p "${SCRIPT_DIR}/resources/managed/secrets"
+
+if [ ! -f "${SCRIPT_DIR}/resources/tenant/secrets/tenant-secrets.yaml" ]; then
   echo "Secrets missing...decrypting"
-  ansible-vault decrypt "${SCRIPT_DIR}/collector-tenant-secrets.yaml" --output "${SCRIPT_DIR}/tenant/secrets/tenant-secrets.yaml" --vault-password-file $VAULT_PASSWORD_FILE
+  ansible-vault decrypt "${SCRIPT_DIR}/vault/collector-tenant-secrets.yaml" --output "${SCRIPT_DIR}/resources/tenant/secrets/tenant-secrets.yaml" --vault-password-file $VAULT_PASSWORD_FILE
 fi
-if [ ! -f "${SCRIPT_DIR}/managed/secrets/managed-secrets.yaml" ]; then
+if [ ! -f "${SCRIPT_DIR}/resources/managed/secrets/managed-secrets.yaml" ]; then
   echo "Secrets missing...decrypting"
-  ansible-vault decrypt "${SCRIPT_DIR}/collector-managed-secrets.yaml" --output "${SCRIPT_DIR}/managed/secrets/managed-secrets.yaml" --vault-password-file $VAULT_PASSWORD_FILE
+  ansible-vault decrypt "${SCRIPT_DIR}/vault/collector-managed-secrets.yaml" --output "${SCRIPT_DIR}/resources/managed/secrets/managed-secrets.yaml" --vault-password-file $VAULT_PASSWORD_FILE
 fi
 
 # create GH branch
+echo ""
+echo "Create component branch..."
 $SCRIPT_DIR/../scripts/create-branch-from-base.sh "${component_repo_name}" "${component_base_branch}" "${component_branch}"
 
 echo ""
@@ -81,13 +98,13 @@ set -eo pipefail
 echo ""
 echo "Creating resources on cluster..."
 tmpDir=$(mktemp -d)
-kustomize build "$SCRIPT_DIR/tenant" | envsubst  > $tmpDir/tenant-resources.yaml
-kustomize build "$SCRIPT_DIR/managed" | envsubst > $tmpDir/managed-resources.yaml
+kustomize build "$SCRIPT_DIR/resources/tenant" | envsubst  > $tmpDir/tenant-resources.yaml
+kustomize build "$SCRIPT_DIR/resources/managed" | envsubst > $tmpDir/managed-resources.yaml
 
 echo ""
 echo "Cleanup resources can be done with:"
-echo "kubectl delete -f $tmpDir/tenant-resources.yaml"
-echo "kubectl delete -f $tmpDir/managed-resources.yaml"
+echo "% kubectl delete -f $tmpDir/tenant-resources.yaml"
+echo "% kubectl delete -f $tmpDir/managed-resources.yaml"
 echo ""
 
 kubectl apply -f "$tmpDir/tenant-resources.yaml"
@@ -99,7 +116,8 @@ component_annotations=
 while [ -z "${component_annotations}" ]; do
   sleep 1
   echo -n "."
-  component_annotations=$(kubectl get component/${component_name} -n ${tenant_namespace} -ojson | jq -r --arg k "build.appstudio.openshift.io/status" '.metadata.annotations[$k] // ""')
+  component_annotations=$(kubectl get component/${component_name} -n ${tenant_namespace} -ojson | \
+    jq -r --arg k "build.appstudio.openshift.io/status" '.metadata.annotations[$k] // ""')
 done
 
 component_pr=$(jq -r '.pac."merge-url" // ""' <<< $component_annotations)
@@ -115,13 +133,14 @@ echo "found PR: $pr_number"
 # merge PR
 echo ""
 echo "Merging PR"
+# Merge PR using CVE info in commit message.
 merge_result=$(curl -L \
   -X PUT \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer $GITHUB_TOKEN" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   https://api.github.com/repos/${component_repo_name}/pulls/${pr_number}/merge \
-  -d '{"commit_title":"e2e test","commit_message":"merging for e2e testing"}' 2> /dev/null)
+  -d '{"commit_title":"e2e test","commit_message":"This fixes CVE-2024-8260"}' 2> /dev/null)
 
 # wait for push PR
 SHA=$(jq -r '.sha' <<< $merge_result)
@@ -192,22 +211,17 @@ echo $release_json
 num_issues=$(jq -r '.status.collectors.tenant."jira-collector".releaseNotes.issues.fixed | length // 0' <<< "${release_json}")
 advisory_url=$(jq -r '.status.artifacts.advisory.url // ""' <<< "${release_json}")
 catalog_url=$(jq -r '.status.artifacts.catalog_urls[].url // ""' <<< "${release_json}")
+topic=$(jq -r '.status.collectors.tenant.convertyaml.releaseNotes.topic // ""' <<< "${release_json}")
+description=$(jq -r '.status.collectors.tenant.convertyaml.releaseNotes.description // ""' <<< "${release_json}")
+cve=$(jq -r '.status.collectors.tenant.cve.releaseNotes.cves[] | select(.key == "CVE-2024-8260") | .key' <<< "${release_json}")
 
 echo "checking that number of issues found is > 0"
 test "${num_issues}" -gt 0
 echo "checking advisory url is not empty"
 test -n "${advisory_url}"
-echo "checking catalog url  is not empty"
-test -n "${catalog_url}"
-
-# cleanup...so we can ignore errors
-set +eo pipefail
-
-echo ""
-echo "Delete Github branch..."
-${SCRIPT_DIR}/../scripts/delete-single-branch.sh ${component_repo_name} ${component_branch}
-
-echo ""
-echo "Delete test resources..."
-kubectl delete -f "$tmpDir/tenant-resources.yaml"
-kubectl delete -f "$tmpDir/managed-resources.yaml"
+echo "checking topic is 'from yaml topic'"
+test "${topic}" == "from yaml topic"
+echo "checking description is 'from yaml description'"
+test "${description}" == "from yaml description"
+echo "checking that CVE 'CVE-2024-8260' was found"
+test "${cve}" == "CVE-2024-8260"

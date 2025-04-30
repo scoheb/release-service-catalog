@@ -104,17 +104,23 @@ spec:
                 local err=$1
                 local line=$2
                 local command="$3"
+
+                successcount=0
+                failurecount=0
                 if [ "$err" -eq 0 ] ; then   
                   # After the tests finish, record the overall result in the RESULT variable
                   RESULT="SUCCESS"
+                  successcount=1
                 else
                   echo -n \
                   "$0: ERROR $command failed at line $line - exited with status $err"
-                  RESULT="FAILED"
+                  RESULT="FAILURE"
+                  failurecount=1
                 fi
                 # Output the standardized TEST_OUTPUT result in JSON form
-                TEST_OUTPUT=$(jq -rc --arg date "$(date -u --iso-8601=seconds)" --arg RESULT "${RESULT}" --null-input \
-                  '{result: $RESULT, timestamp: $date, failures: 0, successes: 1, warnings: 0}')
+                TEST_OUTPUT=$(jq -rc --arg date "$(date -u --iso-8601=seconds)" --arg RESULT "${RESULT}" \
+                  --argjson successcount ${successcount} --argjson failurecount ${failurecount} --null-input \
+                  '{result: $RESULT, timestamp: $date, failures: $failurecount, successes: $successcount, warnings: 0}')
                 echo -n "${TEST_OUTPUT}" | tee "$(results.TEST_OUTPUT.path)"
                 exit 0 # exit the script cleanly as there is no point in proceeding past an error or exit call
               }

@@ -15,5 +15,5 @@ rules:
 
 ignore:
   - .tekton/
-  - integration-tests/collectors/collector-managed-secrets.yaml
-  - integration-tests/collectors/collector-tenant-secrets.yaml
+  - integration-tests/collectors/vault/collector-managed-secrets.yaml
+  - integration-tests/collectors/vault/collector-tenant-secrets.yaml
