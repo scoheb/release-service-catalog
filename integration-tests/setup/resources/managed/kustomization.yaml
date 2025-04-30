@@ -1,5 +1,6 @@
+---
 resources:
-- service_account_rolebinding.yaml
+  - service_account_rolebinding.yaml
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

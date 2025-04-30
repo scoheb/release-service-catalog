@@ -65,22 +65,17 @@ $SCRIPT_DIR/../scripts/create-branch-from-base.sh "${component_repo_name}" "${co
 echo ""
 echo "Setup namespaces..."
 set +eo pipefail
-#oc project ${managed_namespace} 2> /dev/null
 kubectl get ns ${managed_namespace}
 if [ $? -eq 1 ]; then
-  kubectl create namespace ${managed_namespace}
+  echo "Error: managed namespace ${managed_namespace} does not exist"
+  exit 2
 fi
-kubectl config set-context --current --namespace=$managed_namespace 2> /dev/null
-$SCRIPT_DIR/../scripts/setup-namespace.sh
 
-#oc project ${tenant_namespace} 2> /dev/null
 kubectl get ns ${tenant_namespace}
 if [ $? -eq 1 ]; then
-  kubectl create namespace ${tenant_namespace}
-  #oc project ${tenant_namespace} 2> /dev/null
+  echo "Error: tenant namespace ${tenant_namespace} does not exist"
+  exit 2
 fi
-kubectl config set-context --current --namespace=$tenant_namespace 2> /dev/null
-$SCRIPT_DIR/../scripts/setup-namespace.sh
 set -eo pipefail
 
 echo ""
@@ -204,6 +199,9 @@ echo "checking advisory url is not empty"
 test -n "${advisory_url}"
 echo "checking catalog url  is not empty"
 test -n "${catalog_url}"
+
+# cleanup...so we can ignore errors
+set +eo pipefail
 
 echo ""
 echo "Delete Github branch..."

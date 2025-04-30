@@ -1,11 +1,14 @@
+---
 kind: Pipeline
 apiVersion: tekton.dev/v1beta1
 metadata:
-  name: run-collector-test
+  name: e2e-tests-staging-pipeline
 spec:
   params:
     - name: SNAPSHOT
       default: '{"application":"e2eapp-2eb54d79","artifacts":{},"components":[{"containerImage":"registry.redhat.io/openshift4/ose-cli:latest","name":"collector-2eb54d79","source":{"git":{"revision":"4b7d4677ca75a0db09a414df6e4a1fd9cb64208c","url":"https://github.com/scoheb/e2e-base"}}}]}'
+      type: string
+    - name: PIPELINE_TEST_SUITE
       type: string
     - name: VAULT_PASSWORD_SECRET_NAME
       default: 'vault-password-secret'
@@ -30,22 +33,25 @@ spec:
           - name: PR_GIT_REVISION
         steps:
           - name: get-container-image
-            image: registry.redhat.io/openshift4/ose-cli:latest
+            image: quay.io/konflux-ci/release-service-utils@sha256:bd541d08823b7b77a5637af44cb5042bb31d765a18c8739643c8e176f55c83cf
             env:
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
             script: |
-              dnf -y install jq
+              #!/usr/bin/env bash
+
               containerImage=$(jq -r '.components[0].containerImage // ""' <<< "${SNAPSHOT}")
               gitUrl=$(jq -r '.components[0].source.git.url // ""' <<< "${SNAPSHOT}")
               gitRevision=$(jq -r '.components[0].source.git.revision // ""' <<< "${SNAPSHOT}")
               echo "${SNAPSHOT}"
-              echo -n "${containerImage}" | tee $(results.CONTAINER_IMAGE.path)
-              echo -n "${gitUrl}" | tee $(results.PR_GIT_URL.path)
-              echo -n "${gitRevision}" | tee $(results.PR_GIT_REVISION.path)
+              echo -n "${containerImage}" | tee "$(results.CONTAINER_IMAGE.path)"
+              echo -n "${gitUrl}" | tee "$(results.PR_GIT_URL.path)"
+              echo -n "${gitRevision}" | tee "$(results.PR_GIT_REVISION.path)"
 
     - name: run-test
       params:
+        - name: PIPELINE_TEST_SUITE
+          value: $(params.PIPELINE_TEST_SUITE)
         - name: STEP_IMAGE
           value: $(tasks.get-snapshot-data.results.CONTAINER_IMAGE)
         - name: PR_GIT_URL
@@ -61,6 +67,7 @@ spec:
 
       taskSpec:
         params:
+          - name: PIPELINE_TEST_SUITE
           - name: STEP_IMAGE
           - name: PR_GIT_URL
           - name: PR_GIT_REVISION
@@ -91,33 +98,50 @@ spec:
                     name: $(params.KUBECONFIG_SECRET_NAME)
                     key: kubeconfig
             script: |
-              dnf -y install jq
-              echo -e "Example test task for the Snapshot:\n ${SNAPSHOT}"
-              # Run custom tests for the given Snapshot here
-              # After the tests finish, record the overall result in the RESULT variable
-              RESULT="SUCCESS"
-              
+              #!/usr/bin/env bash
+
+              exitfunc() {
+                local err=$1
+                local line=$2
+                local command="$3"
+                if [ "$err" -eq 0 ] ; then   
+                  # After the tests finish, record the overall result in the RESULT variable
+                  RESULT="SUCCESS"
+                else
+                  echo -n \
+                  "$0: ERROR $command failed at line $line - exited with status $err"
+                  RESULT="FAILED"
+                fi
+                # Output the standardized TEST_OUTPUT result in JSON form
+                TEST_OUTPUT=$(jq -rc --arg date "$(date -u --iso-8601=seconds)" --arg RESULT "${RESULT}" --null-input \
+                  '{result: $RESULT, timestamp: $date, failures: 0, successes: 1, warnings: 0}')
+                echo -n "${TEST_OUTPUT}" | tee "$(results.TEST_OUTPUT.path)"
+                exit 0 # exit the script cleanly as there is no point in proceeding past an error or exit call
+              }
+              # due to set -e, this catches all EXIT and ERR calls and the task should never fail with nonzero exit code
+              trap 'exitfunc $? $LINENO "$BASH_COMMAND"' EXIT
+
               echo "PR_GIT_URL: $(params.PR_GIT_URL)"
               echo "PR_GIT_REVISION: $(params.PR_GIT_REVISION)"
 
-              export VAULT_PASSWORD_FILE=$(mktemp)
+              VAULT_PASSWORD_FILE=$(mktemp)
+              export VAULT_PASSWORD_FILE
               set +x
               echo "${VAULT_PASSWORD:?}" > "${VAULT_PASSWORD_FILE}"
               set -x
-              export KUBECONFIG_FILE=$(mktemp)
+              KUBECONFIG_FILE=$(mktemp)
               set +x
               echo "${KUBECONFIG:?}" > "${KUBECONFIG_FILE}"
               set -x
-              export KUBECONFIG="${KUBECONFIG_FILE}"
+              KUBECONFIG="${KUBECONFIG_FILE}"
+              export KUBECONFIG
 
-              export RELEASE_CATALOG_GIT_URL="$(params.PR_GIT_URL)"
-              export RELEASE_CATALOG_GIT_REVISION="$(params.PR_GIT_REVISION)"
+              RELEASE_CATALOG_GIT_URL="$(params.PR_GIT_URL)"
+              RELEASE_CATALOG_GIT_REVISION="$(params.PR_GIT_REVISION)"
+              export RELEASE_CATALOG_GIT_URL
+              export RELEASE_CATALOG_GIT_REVISION
 
-              /home/e2e/tests/collectors/run-test.sh
+              "/home/e2e/tests/$(params.PIPELINE_TEST_SUITE)/run-test.sh"
 
-              # Output the standardized TEST_OUTPUT result in JSON form
-              TEST_OUTPUT=$(jq -rc --arg date $(date -u --iso-8601=seconds) --arg RESULT "${RESULT}" --null-input \
-                '{result: $RESULT, timestamp: $date, failures: 0, successes: 1, warnings: 0}')
-              echo -n "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
       runAfter:
         - get-snapshot-data
