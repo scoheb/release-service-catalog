@@ -1,0 +1,108 @@
+kind: Pipeline
+apiVersion: tekton.dev/v1beta1
+metadata:
+  name: run-collector-test
+spec:
+  params:
+    - name: SNAPSHOT
+      default: '{"application":"e2eapp-2eb54d79","artifacts":{},"components":[{"containerImage":"registry.redhat.io/openshift4/ose-cli:latest","name":"collector-2eb54d79","source":{"git":{"revision":"4b7d4677ca75a0db09a414df6e4a1fd9cb64208c","url":"https://github.com/scoheb/e2e-base"}}}]}'
+      type: string
+    - name: VAULT_PASSWORD_SECRET_NAME
+      default: 'vault-password-secret'
+      type: string
+    - name: GITHUB_TOKEN_SECRET_NAME
+      default: 'github-token-secret'
+      type: string
+  tasks:
+    - name: get-snapshot-data
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+        results:
+          - name: CONTAINER_IMAGE
+          - name: PR_GIT_URL
+          - name: PR_GIT_REVISION
+        steps:
+          - name: get-container-image
+            image: registry.redhat.io/openshift4/ose-cli:latest
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              dnf -y install jq
+              containerImage=$(jq -r '.components[0].containerImage // ""' <<< "${SNAPSHOT}")
+              gitUrl=$(jq -r '.components[0].source.git.url // ""' <<< "${SNAPSHOT}")
+              gitRevision=$(jq -r '.components[0].source.git.revision // ""' <<< "${SNAPSHOT}")
+              echo "${SNAPSHOT}"
+              echo -n "${containerImage}" | tee $(results.CONTAINER_IMAGE.path)
+              echo -n "${gitUrl}" | tee $(results.PR_GIT_URL.path)
+              echo -n "${gitRevision}" | tee $(results.PR_GIT_REVISION.path)
+
+    - name: run-test
+      params:
+        - name: STEP_IMAGE
+          value: $(tasks.get-snapshot-data.results.CONTAINER_IMAGE)
+        - name: PR_GIT_URL
+          value: $(tasks.get-snapshot-data.results.PR_GIT_URL)
+        - name: PR_GIT_REVISION
+          value: $(tasks.get-snapshot-data.results.PR_GIT_REVISION)
+        - name: VAULT_PASSWORD_SECRET_NAME
+          value: $(params.VAULT_PASSWORD_SECRET_NAME)
+        - name: GITHUB_TOKEN_SECRET_NAME
+          value: $(params.GITHUB_TOKEN_SECRET_NAME)
+
+      taskSpec:
+        params:
+          - name: STEP_IMAGE
+          - name: PR_GIT_URL
+          - name: PR_GIT_REVISION
+          - name: VAULT_PASSWORD_SECRET_NAME
+          - name: GITHUB_TOKEN_SECRET_NAME
+        results:
+          - name: TEST_OUTPUT
+            description: Test output
+        steps:
+          - name: run-test
+            image: $(params.STEP_IMAGE)
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+              - name: VAULT_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.VAULT_PASSWORD_SECRET_NAME)
+                    key: password
+              - name: GITHUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.GITHUB_TOKEN_SECRET_NAME)
+                    key: token
+            script: |
+              dnf -y install jq
+              echo -e "Example test task for the Snapshot:\n ${SNAPSHOT}"
+              # Run custom tests for the given Snapshot here
+              # After the tests finish, record the overall result in the RESULT variable
+              RESULT="SUCCESS"
+              
+              echo "PR_GIT_URL: $(params.PR_GIT_URL)"
+              echo "PR_GIT_REVISION: $(params.PR_GIT_REVISION)"
+
+              export VAULT_PASSWORD_FILE=$(mktemp)
+              set +x
+              echo "${VAULT_PASSWORD:?}" > "${VAULT_PASSWORD_FILE}"
+              set -x
+
+              export RELEASE_CATALOG_GIT_URL="$(params.PR_GIT_URL)"
+              export RELEASE_CATALOG_GIT_REVISION="$(params.PR_GIT_REVISION)"
+
+              $HOME/tests/collectors/run-test.sh
+
+              # Output the standardized TEST_OUTPUT result in JSON form
+              TEST_OUTPUT=$(jq -rc --arg date $(date -u --iso-8601=seconds) --arg RESULT "${RESULT}" --null-input \
+                '{result: $RESULT, timestamp: $date, failures: 0, successes: 1, warnings: 0}')
+              echo -n "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
+      runAfter:
+        - get-snapshot-data
