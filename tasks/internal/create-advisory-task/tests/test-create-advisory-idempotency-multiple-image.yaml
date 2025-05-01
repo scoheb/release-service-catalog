@@ -11,6 +11,10 @@ spec:
     The task is expected to recognize these and only create a new advisory for the remaining image (gamma123).
     The test passes if only the unmatched image is included in the resulting advisory and the advisory URL matches the
     expected value.
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
     - name: run-task
       taskRef:
@@ -43,6 +47,10 @@ spec:
           value: "create-advisory-errata-secret"
         - name: internalRequestPipelineRunName
           value: $(context.pipelineRun.name)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
     - name: check-result
       params:
         - name: advisory-url

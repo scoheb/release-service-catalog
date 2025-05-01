@@ -11,6 +11,10 @@ spec:
     unit test.
 
     The failure here is due to the `origin` param being `failing-tenant`, which is accounted for in mocks.sh
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
   tasks:
     - name: run-task
       taskRef:
@@ -37,6 +41,10 @@ spec:
           value: "create-advisory-errata-secret"
         - name: internalRequestPipelineRunName
           value: $(context.pipelineRun.name)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
     - name: check-result
       runAfter:
         - run-task

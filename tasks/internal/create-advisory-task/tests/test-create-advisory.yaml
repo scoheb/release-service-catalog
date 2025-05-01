@@ -6,6 +6,23 @@ metadata:
 spec:
   description: |
     Run the create-advisory task and check that an advisory url is emitted as a task result
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: "true"
   tasks:
     - name: run-task
       taskRef:
@@ -32,6 +49,16 @@ spec:
           value: "create-advisory-errata-secret"
         - name: internalRequestPipelineRunName
           value: $(context.pipelineRun.name)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
     - name: check-result
       runAfter:
         - run-task
@@ -40,13 +67,49 @@ spec:
           value: $(tasks.run-task.results.result)
         - name: advisory_url
           value: $(tasks.run-task.results.advisory_url)
+        - name: advisory_oci_artifact
+          value: $(tasks.run-task.results.advisory_oci_artifact)
+        - name: ociStorage
+          value: $(params.ociStorage)
       taskSpec:
         params:
           - name: result
             type: string
           - name: advisory_url
             type: string
+          - name: advisory_oci_artifact
+            type: string
+          - name: ociStorage
+            type: string
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        stepTemplate:
+          volumeMounts:
+            - mountPath: /var/workdir
+              name: workdir
+          env:
+            - name: "ORAS_OPTIONS"
+              value: "$(params.orasOptions)"
+            - name: "DEBUG"
+              value: "$(params.trustedArtifactsDebug)"
         steps:
+          - name: skip-trusted-artifact-operations
+            ref:
+              name: skip-trusted-artifact-operations
+            params:
+              - name: ociStorage
+                value: $(params.ociStorage)
+              - name: workDir
+                value: /var/workdir
+          - name: use-trusted-artifact
+            ref:
+              name: use-trusted-artifact
+            params:
+              - name: workDir
+                value: /var/workdir
+              - name: sourceDataArtifact
+                value: $(params.advisory_oci_artifact)
           - name: check-result
             image: quay.io/konflux-ci/release-service-utils:26e22ecf2c23e7ec8134fede3b40a6e6aef8ac20
             script: |
@@ -59,3 +122,13 @@ spec:
               echo Test that advisory_url was properly set
               test "$(params.advisory_url)" == \
                 https://access.redhat.com/errata/RHSA-2024:1234
+
+              if [ "$(params.ociStorage)" != "empty" ]; then
+                echo Test that advisory.yaml was saved as an oci artifact
+                test -f "/var/workdir/advisory.yaml"
+                product_id=$(yq .spec.product_id "/var/workdir/advisory.yaml")
+                echo Test that product_id is correct in advisory.yaml
+                test "${product_id}" == "123"
+              else
+                echo "skipping advisory.yaml check since params.ociStorage == $(params.ociStorage)"
+              fi

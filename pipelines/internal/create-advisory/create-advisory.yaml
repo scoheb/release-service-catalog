@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: create-advisory
   labels:
-    app.kubernetes.io/version: "1.1.0"
+    app.kubernetes.io/version: "2.0.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: advisory
@@ -40,6 +40,17 @@ spec:
     - name: taskGitRevision
       type: string
       description: The revision in the taskGitUrl repo to be used
+    - name: ociStorage
+      type: string
+      default: "quay.io/konflux-ci/release-service-trusted-artifacts"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
   tasks:
     - name: create-advisory-task
       taskRef:
@@ -66,11 +77,21 @@ spec:
           value: $(params.errata_secret_name)
         - name: internalRequestPipelineRunName
           value: $(context.pipelineRun.name)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
   results:
     - name: result
       value: $(tasks.create-advisory-task.results.result)
     - name: advisory_url
       value: $(tasks.create-advisory-task.results.advisory_url)
+    - name: advisory_oci_artifact
+      value: $(tasks.create-advisory-task.results.advisory_oci_artifact)
     - name: internalRequestPipelineRunName
       value: $(tasks.create-advisory-task.results.internalRequestPipelineRunName)
     - name: internalRequestTaskRunName

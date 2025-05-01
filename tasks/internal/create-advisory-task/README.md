@@ -6,15 +6,24 @@ internal request. The success/failure is handled in the task creating the intern
 
 ## Parameters
 
-| Name                           | Description                                                                                            | Optional | Default value |
-|--------------------------------|--------------------------------------------------------------------------------------------------------|----------|---------------|
-| advisory_json                  | String containing a JSON representation of the advisory data (e.g. '{"product_id":123,"type":"RHSA"}') | No       | -             |
-| application                    | Application being released                                                                             | No       | -             |
-| origin                         | The origin workspace where the release CR comes from. This is used to determine the advisory path      | No       | -             |
-| config_map_name                | The name of the configMap that contains the signing key                                                | No       | -             |
-| advisory_secret_name           | The name of the secret that contains the advisory creation metadata                                    | No       | -             |
-| errata_secret_name             | The name of the secret that contains the errata service account metadata                               | No       | -             |
-| internalRequestPipelineRunName | Name of the PipelineRun that called this task                                                          | No       | -             |
+| Name                           | Description                                                                                                                | Optional | Default value |
+|--------------------------------|----------------------------------------------------------------------------------------------------------------------------|----------|---------------|
+| advisory_json                  | String containing a JSON representation of the advisory data (e.g. '{"product_id":123,"type":"RHSA"}')                     | No       | -             |
+| application                    | Application being released                                                                                                 | No       | -             |
+| origin                         | The origin workspace where the release CR comes from. This is used to determine the advisory path                          | No       | -             |
+| config_map_name                | The name of the configMap that contains the signing key                                                                    | No       | -             |
+| advisory_secret_name           | The name of the secret that contains the advisory creation metadata                                                        | No       | -             |
+| errata_secret_name             | The name of the secret that contains the errata service account metadata                                                   | No       | -             |
+| internalRequestPipelineRunName | Name of the PipelineRun that called this task                                                                              | No       | -             |
+| ociStorage                     | The OCI repository where the Trusted Artifacts are stored                                                                  | Yes      | empty         |
+| ociArtifactExpiresAfter        | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire | Yes      | 1d            |
+| trustedArtifactsDebug          | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable                                     | Yes      | ""            |
+| orasOptions                    | oras options to pass to Trusted Artifacts calls                                                                            | Yes      | ""            |
+| taskGitUrl                     | The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored                      | No       | ""            |
+| taskGitRevision                | The revision in the taskGitUrl repo to be used                                                                             | No       | ""            |
+
+## Changes in 1.2.0
+* Create an OCI artifact that contains the advisory yaml file and store as result.
 
 ## Changes in 1.2.0
 * Allow setting of custom advisory live id

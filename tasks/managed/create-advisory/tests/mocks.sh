@@ -7,7 +7,7 @@ function kubectl() {
   # The IR won't actually be acted upon, so mock it to return Success as the task wants
   if [[ "$*" == "get internalrequest "*"-o=jsonpath={.status.results}" ]]
   then
-    echo '{"result":"Success","advisory_url":"https://access.redhat.com/errata/RHBA-2025:1111"}'
+    echo '{"result":"Success","advisory_url":"https://access.redhat.com/errata/RHBA-2025:1111","advisory_oci_artifact":"quay.io/scoheb/trusted-artifacts@sha256:mydigest"}'
   else
     /usr/bin/kubectl $*
   fi

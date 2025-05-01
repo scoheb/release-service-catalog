@@ -7,6 +7,23 @@ spec:
   description: |
     Run the create-advisory task and check that an advisory url is emitted as a task result.
     This test uses a custom advisory live id.
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire.
+      type: string
+      default: "1d"
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: "true"
   tasks:
     - name: run-task
       taskRef:
@@ -34,6 +51,16 @@ spec:
           value: "create-advisory-errata-secret"
         - name: internalRequestPipelineRunName
           value: $(context.pipelineRun.name)
+        - name: orasOptions
+          value: $(params.orasOptions)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: trustedArtifactsDebug
+          value: $(params.trustedArtifactsDebug)
+        - name: taskGitUrl
+          value: "http://localhost"
+        - name: taskGitRevision
+          value: "main"
     - name: check-result
       runAfter:
         - run-task

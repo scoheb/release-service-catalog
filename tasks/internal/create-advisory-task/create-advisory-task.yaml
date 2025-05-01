@@ -40,15 +40,59 @@ spec:
     - name: internalRequestPipelineRunName
       type: string
       description: Name of the PipelineRun that called this task
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+      default: "empty"
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire
+      type: string
+      default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      type: string
+      default: ""
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: taskGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog tasks to be used are stored
+      default: https://github.com/konflux-ci/release-service-catalog.git
+    - name: taskGitRevision
+      type: string
+      description: The revision in the taskGitUrl repo to be used
+    - name: trusted_artifacts_dockerconfig_json_secret_name
+      type: string
+      description: The name of the secret that contains to dockerconfig json to use for trusted artifact operations
+      default: quay-token-konflux-release-trusted-artifacts-secret
   results:
     - name: result
       description: Success if the task succeeds, the error otherwise
     - name: advisory_url
       description: The advisory url if the task succeeds, empty string otherwise
+    - name: advisory_oci_artifact
+      description: The oci artifact pullspec that contains the advisory yaml file
     - name: internalRequestPipelineRunName
       description: Name of the PipelineRun that called this task
     - name: internalRequestTaskRunName
       description: Name of this Task Run to be made available to caller
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: ORAS_OPTIONS
+        value: $(params.orasOptions)
+      - name: DEBUG
+        value: $(params.trustedArtifactsDebug)
   steps:
     - name: create-advisory
       image: quay.io/konflux-ci/release-service-utils:26e22ecf2c23e7ec8134fede3b40a6e6aef8ac20
@@ -98,9 +142,24 @@ spec:
               key: base64_keytab
         - name: "ADVISORY_JSON"
           value: "$(params.advisory_json)"
+        - name: TRUSTED_ARTIFACTS_DOCKERCONFIG_JSON
+          valueFrom:
+            secretKeyRef:
+              name: $(params.trusted_artifacts_dockerconfig_json_secret_name)
+              key: .dockerconfigjson
+              optional: true
       script: |
           #!/usr/bin/env bash
           set -eo pipefail
+
+          ## AppSRE clusters do not enable credentials-init in Tekton
+          ## therefore, we need to do it ourselves.
+          ## This will be used later in create-trusted-artifact
+          if [ -n "${TRUSTED_ARTIFACTS_DOCKERCONFIG_JSON}" ]; then
+            mkdir -p ~/.docker/
+            echo -n "${TRUSTED_ARTIFACTS_DOCKERCONFIG_JSON}" > ~/.docker/config.json
+          fi
+          ##
 
           STDERR_FILE=/tmp/stderr.txt
           echo -n "$(params.internalRequestPipelineRunName)" > "$(results.internalRequestPipelineRunName.path)"
@@ -191,7 +250,6 @@ spec:
               # If after filtering, no images are left, then we can exit early
               if jq -e 'length == 0' <<< "$CONTENT_IMAGES" >/dev/null; then
                   echo "Matching advisory exists: ${ADVISORY_FILE}. Skipping creation."
-                  ADVISORY_URL="${GIT_REPO//\.git/}/-/blob/main/${ADVISORY_FILE}"
                   ADVISORY_TYPE=$(yq -r '.spec.type' "${ADVISORY_FILE}")
                   ADVISORY_NAME=$(yq -r '.metadata.name' "${ADVISORY_FILE}")
                   ADVISORY_URL="${ADVISORY_URL_PREFIX}/${ADVISORY_TYPE}-${ADVISORY_NAME}"
@@ -251,3 +309,53 @@ spec:
           # Construct the advisory url on customer portal to report back to the user as a result
           ADVISORY_TYPE=$(jq -r '.type' <<< "$ADVISORY_JSON" )
           ADVISORY_URL="${ADVISORY_URL_PREFIX}/${ADVISORY_TYPE}-${ADVISORY_NAME}"
+
+          # copy new advisory yaml so it can be saved as OCI artifact
+          cp -v "$ADVISORY_FILEPATH" /var/workdir
+    - name: skip-trusted-artifact-operations
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: /var/workdir
+    - name: create-trusted-artifact
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: /var/workdir
+        - name: sourceDataArtifact
+          value: $(results.advisory_oci_artifact.path)
+    - name: patch-source-data-artifact-result
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: $(results.advisory_oci_artifact.path)

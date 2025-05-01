@@ -194,6 +194,8 @@ spec:
       params:
         - name: advisory_url
           value: $(tasks.run-task.results.advisory_url)
+        - name: advisory_oci_artifact
+          value: $(tasks.run-task.results.advisory_oci_artifact)
         - name: sourceDataArtifact
           value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
@@ -205,6 +207,8 @@ spec:
           - name: data
         params:
           - name: advisory_url
+            type: string
+          - name: advisory_oci_artifact
             type: string
           - name: sourceDataArtifact
             type: string
@@ -304,11 +308,17 @@ spec:
 
               echo Test that the advisory_url result was properly set
               test "$(params.advisory_url)" == "https://access.redhat.com/errata/RHBA-2025:1111"
+              echo Test that the advisory_oci_artifact result was properly set
+              test "$(params.advisory_oci_artifact)" == "quay.io/scoheb/trusted-artifacts@sha256:mydigest"
 
               echo Test that the advisory_url was properly added to the results file
               test "$(jq -r '.advisory.url' \
                 "$(params.dataDir)/$(context.pipelineRun.uid)/results/create-advisory-results.json")" == \
                 "https://access.redhat.com/errata/RHBA-2025:1111"
+              echo Test that the advisory_oci_artifact was properly added to the results file
+              test "$(jq -r '.advisory.oci_artifact' \
+                "$(params.dataDir)/$(context.pipelineRun.uid)/results/create-advisory-results.json")" == \
+                "quay.io/scoheb/trusted-artifacts@sha256:mydigest"
 
               # Check the advisory_secret_name parameter
               if [ "$(echo "$internalRequest" | jq -r '.spec.params.advisory_secret_name' )" != \
