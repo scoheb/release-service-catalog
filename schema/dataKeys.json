@@ -196,7 +196,7 @@
         },
         "issues": {
           "type": "object",
-          "additionalProperties": false,
+          "additionalProperties": true,
           "properties": {
             "fixed": {
               "type": "array",
