@@ -331,6 +331,14 @@
             "stage",
             "production"
           ]
+        },
+        "atlas-sso-secret-name": {
+          "type": "string",
+          "description": "The secret used to authenticate to Atlas via SSO"
+        },
+        "atlas-retry-aws-secret-name": {
+          "type": "string",
+          "description": "The secret used to authenticate to the Atlas retry AWS S3 bucket"
         }
       }
     },
