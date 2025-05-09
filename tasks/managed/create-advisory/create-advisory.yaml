@@ -4,7 +4,7 @@ kind: Task
 metadata:
   name: create-advisory
   labels:
-    app.kubernetes.io/version: "6.1.0"
+    app.kubernetes.io/version: "6.1.1"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -76,6 +76,8 @@ spec:
   results:
     - name: advisory_url
       description: The advisory url if one was created
+    - name: advisory_internal_url
+      description: The advisory internal url if one was created
     - description: Produced trusted data artifact
       name: sourceDataArtifact
       type: string
@@ -278,7 +280,10 @@ spec:
 
         URL=$(echo "${results}" | jq -r '.advisory_url // ""')
         echo -n "$URL" | tee "$(results.advisory_url.path)"
-        jq -n --arg url "$URL" '{"advisory": {"url": $url}}' | tee "$RESULTS_FILE"
+        INTERNAL_URL=$(echo "${results}" | jq -r '.advisory_internal_url // ""')
+        echo -n "$INTERNAL_URL" | tee "$(results.advisory_internal_url.path)"
+        jq -n --arg url "$URL" --arg internal_url "$INTERNAL_URL" \
+          '{"advisory": {"url": $url, "internal_url": $internal_url}}' | tee "$RESULTS_FILE"
     - name: create-trusted-artifact
       ref:
         resolver: "git"
