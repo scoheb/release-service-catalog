@@ -993,7 +993,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+          value: "$(tasks.set-advisory-severity.results.sourceDataArtifact)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug

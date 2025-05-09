@@ -28,6 +28,9 @@ the rh-push-to-registry-redhat-io pipeline.
 | trustedArtifactsDebug           | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable                                             | Yes      | ""                                                        |
 | dataDir                         | The location where data will be stored                                                                                             | Yes      | /var/workdir/release                                      |
 
+## Changes in 2.0.3
+* Correct missing severity in advisory due to incorrect sourceDataArtifact
+
 ## Changes in 2.0.2
 * Temporarily allow the `close-advisory-issues` task to fail
   * Until https://issues.redhat.com/browse/KONFLUX-7489 is fixed
