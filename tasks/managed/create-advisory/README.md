@@ -26,6 +26,9 @@ Only all `redhat-pending` or all `redhat-prod` repositories may be specified in 
 | taskGitUrl               | The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored                      | No        | ""                      |
 | taskGitRevision          | The revision in the taskGitUrl repo to be used                                                                             | No        | ""                      |
 
+## Changes in 6.1.1
+* Add gitlab advisory internal url to results
+
 ## Changes in 6.1.0
 * Add check for custom advisory id
   * If `.releaseNotes.allow_custom_live_id` is set to `true` in the RPA, then a custom advisory live

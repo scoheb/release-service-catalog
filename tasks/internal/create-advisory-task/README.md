@@ -16,6 +16,9 @@ internal request. The success/failure is handled in the task creating the intern
 | errata_secret_name             | The name of the secret that contains the errata service account metadata                               | No       | -             |
 | internalRequestPipelineRunName | Name of the PipelineRun that called this task                                                          | No       | -             |
 
+## Changes in 1.3.1
+* Add new result for the gitlab advisory url
+
 ## Changes in 1.3.0
 * Add check for advisory id before creating the advisory
   * This will make sure there isn't an existing advisory with the same year and live id in the repo
