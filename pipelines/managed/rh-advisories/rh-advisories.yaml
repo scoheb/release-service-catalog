@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: rh-advisories
   labels:
-    app.kubernetes.io/version: "2.0.5"
+    app.kubernetes.io/version: "2.0.6"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -356,7 +356,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
+          value: "$(tasks.embargo-check.results.sourceDataArtifact)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -379,6 +379,7 @@ spec:
           workspace: release-workspace
       runAfter:
         - populate-release-notes
+        - embargo-check
     - name: collect-cosign-params
       taskRef:
         resolver: "git"

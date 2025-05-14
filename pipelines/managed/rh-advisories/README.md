@@ -28,6 +28,9 @@ the rh-push-to-registry-redhat-io pipeline.
 | trustedArtifactsDebug           | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable                                             | Yes      | ""                                                        |
 | dataDir                         | The location where data will be stored                                                                                             | Yes      | /var/workdir/release                                      |
 
+## Changes in 2.0.6
+* set-advisory-severity should use the artifacts from embargo-check
+
 ## Changes in 2.0.5
 * This pipeline is now using trusted artifacts. Therefore, we can remove the comments and timeouts
   added to workaround PVC contention issues.
