@@ -46,10 +46,16 @@ spec:
 
               cat > "$(workspaces.data.path)"/data.json << EOF
               {
-                "contentGateway": {
+                "mapping": {
                   "components": [
-                    {"name": "comp2"},
-                    {"name": "comp3"}
+                    {
+                      "contentGateway": {
+                        "components": [
+                          { "name": "comp2" },
+                          { "name": "comp3" }
+                        ]
+                      }
+                    }
                   ]
                 }
               }
