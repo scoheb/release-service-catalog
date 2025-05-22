@@ -76,7 +76,8 @@ spec:
         fi
 
         REQUESTTYPE=$(jq -r '.requestType // "internal-request"' "${DATA_FILE}")
-        service_account_name=$(jq -r '.spec.pipeline.serviceAccountName // "release-service-account"' "${RPA_FILE}")
+        #  service_account_name=$(jq -r '.spec.pipeline.serviceAccountName // "release-service-account"' "${RPA_FILE}")
+        service_account_name="release-service-account"
         if [ "${REQUESTTYPE}" == "internal-pipelinerun" ] ; then
           requestType=internal-pipelinerun
           requestK8sType=pipelinerun
