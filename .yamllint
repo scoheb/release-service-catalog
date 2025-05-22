@@ -17,3 +17,5 @@ ignore:
   - .tekton/
   - integration-tests/collectors/vault/collector-managed-secrets.yaml
   - integration-tests/collectors/vault/collector-tenant-secrets.yaml
+  - integration-tests/push-artifacts-to-cdn/vault/managed-secrets.yaml
+  - integration-tests/push-artifacts-to-cdn/vault/tenant-secrets.yaml
