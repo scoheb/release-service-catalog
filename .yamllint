@@ -19,3 +19,5 @@ ignore:
   - integration-tests/collectors/vault/tenant-secrets.yaml
   - integration-tests/fbc-release/vault/managed-secrets.yaml
   - integration-tests/fbc-release/vault/tenant-secrets.yaml
+  - integration-tests/push-artifacts-to-cdn/vault/managed-secrets.yaml
+  - integration-tests/push-artifacts-to-cdn/vault/tenant-secrets.yaml
