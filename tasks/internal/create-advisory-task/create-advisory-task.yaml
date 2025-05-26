@@ -257,7 +257,9 @@ spec:
 
           # Create advisory file
           /home/utils/apply_template.py -o "$ADVISORY_FILEPATH" --data "$DATA" \
-            --template /home/templates/advisory.yaml.jinja
+            --verbose --template /home/templates/advisory.yaml.jinja
+
+          cat "$ADVISORY_FILEPATH"
 
           # Ensure the created advisory file passes the advisory schema
           check-jsonschema --schemafile schema/advisory.json "$ADVISORY_FILEPATH" 2> "$STDERR_FILE"

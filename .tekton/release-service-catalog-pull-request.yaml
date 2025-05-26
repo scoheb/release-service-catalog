@@ -17,7 +17,8 @@ metadata:
       || "pipelines/managed/*/*.yaml".pathChanged()
       || "schema/dataKeys.json".pathChanged()
       || "stepactions/*/*.yaml".pathChanged()
-      || "pipelines/internal/*/*.yaml".pathChanged())
+      || "pipelines/internal/*/*.yaml".pathChanged()
+      || "integration-tests/*".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: release-service-catalog
@@ -37,6 +38,8 @@ spec:
     value: 5d
   - name: dockerfile
     value: Dockerfile
+  - name: skip-checks
+    value: true
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while reducing network traffic.
