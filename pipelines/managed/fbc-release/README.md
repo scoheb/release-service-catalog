@@ -20,6 +20,9 @@ Tekton release pipeline to interact with FBC Pipeline
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                                      | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                             | No       | -                                                         |
 
+## Changes in 4.7.0
+* use snapshotPath as input parameter to `get-ocp-version` now
+
 ## Changes in 4.6.0
 * Add new `fbcResultsPath` parameter for `sign-index-image`. This is to support multicomponent releases
 

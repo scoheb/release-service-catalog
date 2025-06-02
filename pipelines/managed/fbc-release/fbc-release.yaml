@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: fbc-release
   labels:
-    app.kubernetes.io/version: "4.6.0"
+    app.kubernetes.io/version: "4.7.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -220,8 +220,11 @@ spec:
           - name: pathInRepo
             value: tasks/managed/get-ocp-version/get-ocp-version.yaml
       params:
-        - name: fbcFragment
-          value: "$(tasks.collect-data.results.fbcFragment)"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+      workspaces:
+        - name: data
+          workspace: release-workspace
       runAfter:
         - verify-enterprise-contract
     - name: update-ocp-tag
