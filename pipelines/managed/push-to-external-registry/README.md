@@ -21,6 +21,10 @@ Tekton pipeline to release Snapshots to an external registry.
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | -                                                         |
 
+## Changes in 5.8.0
+* add new required parameters to `collect-registry-token-secret` and
+  `make-repo-public` tasks
+
 ## Changes in 5.7.0
 * Set timeout for verify-enterprise-contract task to be 4 hours.
 * Increase enterpriseContractTimeout to a large value, 8 hours.
