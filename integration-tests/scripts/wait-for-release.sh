@@ -43,13 +43,11 @@ function describeFailedPipelineRun() {
   ## check if this is a collector pipeline
   ## if so, the status is nested.
   if [[ "${failedPipelineProcessing}" == *"ollector"* ]]; then
-    tempJson=$(jq '.status.collectorsProcessing' <<< "${json}")
-    failedPipelineRun=$(jq -r --arg processing "${failedPipelineProcessing}" '.[$processing].pipelineRun' \
-      <<< "${tempJson}")
+    filter=".status.collectorsProcessing.${failedPipelineProcessing}.pipelineRun"
   else
-    failedPipelineRun=$(jq -r --arg processing "${failedPipelineProcessing}" '.status.[$processing].pipelineRun' \
-      <<< "${json}")
+    filter=".status.${failedPipelineProcessing}.pipelineRun"
   fi
+  failedPipelineRun=$(jq -r "${filter}" <<< "${json}")
 
   PLR_NAME=$(cut -f2 -d/ <<< "${failedPipelineRun}")
   PLR_NS=$(cut -f1 -d/ <<< "${failedPipelineRun}")
@@ -94,6 +92,9 @@ function diagnoseFailedPLR() {
             if [ -n "${taskrun_name}" ]; then
                 echo "📜 Last 50 lines of logs for taskrun ${taskrun_name}:"
                 tkn taskrun logs "${taskrun_name}" -n "${namespace}" 2>/dev/null | tail -n 50 | sed 's/^/  /'
+
+                echo -e "\n💡 Describe output:"
+                tkn tr desc "${taskrun_name}" -n "${namespace}"
 
                 echo -e "\n💡 Error message:"
                 kubectl get taskrun "${taskrun_name}" -n "${namespace}" -o jsonpath='{.status.conditions[0].message}' | sed 's/^/  /'
