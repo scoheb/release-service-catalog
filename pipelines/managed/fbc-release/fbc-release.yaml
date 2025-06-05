@@ -249,6 +249,10 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: ocpVersion
           value: "$(tasks.get-ocp-version.results.stored-version)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
       runAfter:
         - collect-data
         - get-ocp-version
