@@ -26,6 +26,7 @@ Tekton release pipeline to interact with FBC Pipeline
 ## Changes in 4.7.0
 * use snapshotPath as input parameter to `get-ocp-version` now
 * update to specify new required params for task update-ocp-tag
+* update to specify new required params for task prepare-fbc-release
 
 ## Changes in 4.6.0
 * Add new `fbcResultsPath` parameter for `sign-index-image`. This is to support multicomponent releases
