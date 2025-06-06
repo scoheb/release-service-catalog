@@ -3,7 +3,7 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlan
 metadata:
   labels:
-    release.appstudio.openshift.io/auto-release: ${release_plan_happy_auto_release}
+    release.appstudio.openshift.io/auto-release: "${release_plan_happy_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_happy_name}"
   name: ${release_plan_happy_name}
@@ -15,7 +15,7 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlan
 metadata:
   labels:
-    release.appstudio.openshift.io/auto-release: ${release_plan_hotfix_auto_release}
+    release.appstudio.openshift.io/auto-release: "${release_plan_hotfix_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_hotfix_name}"
   name: ${release_plan_hotfix_name}
@@ -27,7 +27,7 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlan
 metadata:
   labels:
-    release.appstudio.openshift.io/auto-release: ${release_plan_prega_auto_release}
+    release.appstudio.openshift.io/auto-release: "${release_plan_prega_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_prega_name}"
   name: ${release_plan_prega_name}
@@ -39,7 +39,7 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlan
 metadata:
   labels:
-    release.appstudio.openshift.io/auto-release: ${release_plan_staged_auto_release}
+    release.appstudio.openshift.io/auto-release: "${release_plan_staged_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_staged_name}"
   name: ${release_plan_staged_name}
