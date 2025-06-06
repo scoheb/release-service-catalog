@@ -147,6 +147,9 @@ cleanup_resources() {
     echo "Skipping cleanup as per --skip-cleanup flag."
   fi
 
+  echo "Killing any child processes..." >> "${cleanup_log_file}"
+  pkill -e  -P $$
+
   if [ "$err" -ne 0 ]; then
     exit "$err"
   fi
@@ -360,21 +363,35 @@ wait_for_plr_to_complete() {
     echo "PipelineRun URL: $(get_build_pipeline_run_url "${tenant_namespace}" "${application_name}" "${component_push_plr_name}")"
 }
 
-# Function to wait for Release to appear
-# Modifies global variables: RELEASE_NAME, RELEASE_NAMESPACE (by exporting)
+# Function to wait for Releases to appear
+# Modifies global variables: RELEASE_NAMES, RELEASE_NAMESPACE (by exporting)
 # Relies on global variables: component_push_plr_name, tenant_namespace, SCRIPT_DIR
-wait_for_release() {
+wait_for_releases() {
     echo -n "Waiting for Release associated with PLR ${component_push_plr_name} in namespace ${tenant_namespace}: "
     # release_name is made global by not declaring it local
-    release_name=""
-    while [ -z "${release_name}" ]; do
+    release_names=""
+    while [ -z "${release_names}" ]; do
       sleep 5
       echo -n "."
-      release_name=$(kubectl get release -l "appstudio.openshift.io/build-pipelinerun=${component_push_plr_name}"  -n "${tenant_namespace}" -ojson 2>/dev/null | jq -r '.items[0].metadata.name // ""')
+      #release_name=$(kubectl get release -l "appstudio.openshift.io/build-pipelinerun=${component_push_plr_name}"  -n "${tenant_namespace}" -ojson 2>/dev/null | jq -r '.items[0].metadata.name // ""')
+      release_names=$(kubectl get release -l "appstudio.openshift.io/build-pipelinerun=${component_push_plr_name}"  \
+        -n "${tenant_namespace}" -ojson 2>/dev/null | jq -r '.items[].metadata.name // ""' | xargs)
     done
-    echo " Found: $release_name"
+    echo " Found: $release_names"
 
-    export RELEASE_NAME=${release_name}
+    RUNNING_JOBS="\j" # Bash parameter for number of jobs currently running
+
     export RELEASE_NAMESPACE=${tenant_namespace}
-    "${SCRIPT_DIR}/../scripts/wait-for-release.sh"
+    for release in ${release_names};
+    do
+      export RELEASE_NAME=${release}
+      "${SCRIPT_DIR}/../scripts/wait-for-release.sh" &
+    done
+
+    # Wait for remaining processes to finish
+    while (( ${RUNNING_JOBS@P} > 0 )); do
+        wait -n
+    done
+
+    export RELEASE_NAMES="$release_names"
 }
