@@ -3,6 +3,8 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
 metadata:
   name: ${release_plan_admission_name}
+  labels:
+    originating-tool: "collectors-e2e-test"
 spec:
   applications:
     - ${application_name}

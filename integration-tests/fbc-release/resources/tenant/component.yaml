@@ -8,6 +8,8 @@ metadata:
     image.redhat.com/generate: '{"visibility": "public"}'
     build.appstudio.openshift.io/pipeline: '{"name": "fbc-builder", "bundle": "latest"}'
   name: ${component_name}
+  labels:
+    originating-tool: "fbc-release-e2e-test"
 spec:
   application: ${application_name}
   componentName: ${component_name}

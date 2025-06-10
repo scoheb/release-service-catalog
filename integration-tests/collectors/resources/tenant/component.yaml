@@ -7,6 +7,8 @@ metadata:
     build.appstudio.openshift.io/request: configure-pac
     image.redhat.com/generate: '{"visibility": "public"}'
   name: ${component_name}
+  labels:
+    originating-tool: "collectors-e2e-test"
 spec:
   application: ${application_name}
   componentName: ${component_name}

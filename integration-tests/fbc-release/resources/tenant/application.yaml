@@ -3,5 +3,7 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: Application
 metadata:
   name: ${application_name}
+  labels:
+    originating-tool: "fbc-release-e2e-test"
 spec:
   displayName: ${application_name}

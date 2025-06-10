@@ -413,7 +413,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.update-ocp-tag.results.sourceDataArtifact)"
+          value: "$(tasks.prepare-fbc-release.results.sourceDataArtifact)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -588,7 +588,7 @@ spec:
           value:
             - "$(tasks.add-fbc-contribution-to-index-image.results.sourceDataArtifact)=$(params.dataDir)"
             - "$(tasks.extract-index-image.results.sourceDataArtifact)=$(params.dataDir)"
-            - "$(tasks.sign-index-image.results.sourceDataArtifact)=$(params.dataDir)"
+            #- "$(tasks.sign-index-image.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -610,7 +610,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - publish-index-image
+        - extract-index-image
   finally:
     - name: cleanup-internal-requests
       taskRef:

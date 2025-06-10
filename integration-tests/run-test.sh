@@ -59,15 +59,23 @@
 
 set -eo pipefail
 
+suite=$1
+if [ -z "$suite" ] ; then
+  echo "🔴 error: missing parameter suite"
+  exit 1
+fi
+
 # --- Configuration & Global Variables ---
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-LIB_DIR="${SCRIPT_DIR}/../lib"
+LIB_DIR="${SCRIPT_DIR}/lib"
+
+SUITE_DIR="${SCRIPT_DIR}/${suite}" # e.g. "${SCRIPT_DIR}/fbc-release"
 
 # Source environment variables (ensure this file exists and is correctly populated)
-if [ -f "${SCRIPT_DIR}/test.env" ]; then
-    . "${SCRIPT_DIR}/test.env"
+if [ -f "${SUITE_DIR}/test.env" ]; then
+    . "${SUITE_DIR}/test.env"
 else
-    echo "error: test.env not found in ${SCRIPT_DIR}"
+    echo "error: test.env not found in ${SUITE_DIR}"
     exit 1
 fi
 
@@ -79,100 +87,13 @@ else
     exit 1
 fi
 
-# --- Global Script Variables (Defaults) ---
-CLEANUP="true"
-NO_CVE="true" # Default to true
-
-# Variables that will be set by functions and used globally:
-# component_branch, component_base_branch, component_repo_name (from test.env or similar)
-# managed_namespace, tenant_namespace, application_name, component_name (from test.env or similar)
-# managed_sa_name (from test.env or similar)
-# GITHUB_TOKEN, VAULT_PASSWORD_FILE (from test.env)
-# SCRIPT_DIR (defined above)
-# LIB_DIR (defined above)
-# tmpDir (set by create_kubernetes_resources)
-# component_pr, pr_number (set by wait_for_component_initialization)
-# SHA (set by merge_github_pr)
-# component_push_plr_name (set by wait_for_plr_to_appear)
-# RELEASE_NAME, RELEASE_NAMESPACE (set and exported by wait_for_release)
-# advisory_yaml_dir (set by verify_release_contents)
-
-# Function to verify Release contents
-# Modifies global variable: advisory_yaml_dir
-# Relies on global variables: RELEASE_NAMES, RELEASE_NAMESPACE, SCRIPT_DIR, managed_namespace, managed_sa_name, NO_CVE
-verify_release_contents() {
-
-    local failed_releases
-    for RELEASE_NAME in ${RELEASE_NAMES};
-    do
-      echo "Verifying Release contents for ${RELEASE_NAME} in namespace ${RELEASE_NAMESPACE}..."
-      local release_json
-      release_json=$(kubectl get release/"${RELEASE_NAME}" -n "${RELEASE_NAMESPACE}" -ojson)
-      if [ -z "$release_json" ]; then
-          log_error "Could not retrieve Release JSON for ${RELEASE_NAME}"
-      fi
-
-      local failures=0
-      local fbc_fragment ocp_version iib_log index_image index_image_resolved
-
-      fbc_fragment=$(jq -r '.status.artifacts.components[0].fbc_fragment // ""' <<< "${release_json}")
-      ocp_version=$(jq -r '.status.artifacts.components[0].ocp_version // ""' <<< "${release_json}")
-      iib_log=$(jq -r '.status.artifacts.components[0].iibLog // ""' <<< "${release_json}")
-
-      index_image=$(jq -r '.status.artifacts.index_image.index_image // ""' <<< "${release_json}")
-      index_image_resolved=$(jq -r '.status.artifacts.index_image.index_image_resolved // ""' <<< "${release_json}")
-
-      echo "Checking fbc_fragment..."
-      if [ -n "${fbc_fragment}" ]; then
-        echo "✅️ fbc_fragment: ${fbc_fragment}"
-      else
-        echo "🔴 fbc_fragment was empty!"
-        failures=$((failures+1))
-      fi
-      echo "Checking ocp_version..."
-      if [ -n "${ocp_version}" ]; then
-        echo "✅️ ocp_version: ${ocp_version}"
-      else
-        echo "🔴 ocp_version was empty!"
-        failures=$((failures+1))
-      fi
-      echo "Checking iib_log..."
-      if [ -n "${iib_log}" ]; then
-        echo "✅️ iib_log: ${iib_log}"
-      else
-        echo "🔴 iib_log was empty!"
-        failures=$((failures+1))
-      fi
-      echo "Checking index_image..."
-      if [ -n "${index_image}" ]; then
-        echo "✅️ index_image: ${index_image}"
-      else
-        echo "🔴 index_image was empty!"
-        failures=$((failures+1))
-      fi
-      echo "Checking index_image_resolved..."
-      if [ -n "${index_image_resolved}" ]; then
-        echo "✅️ index_image_resolved: ${index_image_resolved}"
-      else
-        echo "🔴 index_image_resolved was empty!"
-        failures=$((failures+1))
-      fi
-
-      if [ "${failures}" -gt 0 ]; then
-        echo "🔴 Test has FAILED with ${failures} failure(s)!"
-        failed_releases="${RELEASE_NAME} ${failed_releases}"
-      else
-        echo "✅️ All release checks passed. Success!"
-      fi
-    done
-
-    if [ -n "${failed_releases}" ]; then
-      echo "🔴 Releases FAILED: ${failed_releases}"
-      exit 1
-    else
-      echo "✅️ Success!"
-    fi
-}
+# Source test script (ensure this file exists and is correctly populated)
+if [ -f "${SUITE_DIR}/test.sh" ]; then
+    . "${SUITE_DIR}/test.sh"
+else
+    echo "error: test.sh not found in ${SUITE_DIR}"
+    exit 1
+fi
 
 # --- Main Script Execution ---
 
@@ -184,8 +105,10 @@ check_env_vars "$@" # Pass all args for consistency, though check_env_vars doesn
 parse_options "$@" # Parses options and sets CLEANUP, NO_CVE
 
 decrypt_secrets
+delete_old_branches "${component_repo_name}" 2
 create_github_branch
 setup_namespaces # Ensures correct context before resource creation
+cleanup_old_resources "${originating_tool}"
 create_kubernetes_resources # tmpDir is set here
 
 wait_for_component_initialization # component_pr and pr_number are set here

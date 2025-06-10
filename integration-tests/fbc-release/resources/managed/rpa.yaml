@@ -3,6 +3,8 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
 metadata:
   name: ${release_plan_admission_happy_name}
+  labels:
+    originating-tool: "fbc-release-e2e-test"
 spec:
   applications:
     - ${application_name}
@@ -44,6 +46,8 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
 metadata:
   name: ${release_plan_admission_hotfix_name}
+  labels:
+    originating-tool: "fbc-release-e2e-test"
 spec:
   applications:
     - ${application_name}
@@ -85,6 +89,8 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
 metadata:
   name: ${release_plan_admission_prega_name}
+  labels:
+    originating-tool: "fbc-release-e2e-test"
 spec:
   applications:
     - ${application_name}
@@ -126,6 +132,8 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
 metadata:
   name: ${release_plan_admission_staged_name}
+  labels:
+    originating-tool: "fbc-release-e2e-test"
 spec:
   applications:
     - ${application_name}
