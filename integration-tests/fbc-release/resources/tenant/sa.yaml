@@ -4,4 +4,4 @@ kind: ServiceAccount
 metadata:
   name: ${tenant_sa_name}
   labels:
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"

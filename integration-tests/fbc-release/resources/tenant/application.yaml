@@ -4,6 +4,6 @@ kind: Application
 metadata:
   name: ${application_name}
   labels:
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"
 spec:
   displayName: ${application_name}

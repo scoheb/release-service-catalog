@@ -4,6 +4,6 @@ kind: ServiceAccount
 metadata:
   name: ${tenant_sa_name}
   labels:
-    originating-tool: "collectors-e2e-test"
+    originating-tool: "${originating_tool}"
 secrets:
   - name: jira-collectors-secret-${component_name}

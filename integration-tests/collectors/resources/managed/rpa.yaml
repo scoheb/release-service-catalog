@@ -4,7 +4,7 @@ kind: ReleasePlanAdmission
 metadata:
   name: ${release_plan_admission_name}
   labels:
-    originating-tool: "collectors-e2e-test"
+    originating-tool: "${originating_tool}"
 spec:
   applications:
     - ${application_name}

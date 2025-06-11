@@ -8,7 +8,7 @@ metadata:
     image.redhat.com/generate: '{"visibility": "public"}'
   name: ${component_name}
   labels:
-    originating-tool: "collectors-e2e-test"
+    originating-tool: "${originating_tool}"
 spec:
   application: ${application_name}
   componentName: ${component_name}

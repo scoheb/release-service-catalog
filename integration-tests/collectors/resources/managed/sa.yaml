@@ -4,7 +4,7 @@ kind: ServiceAccount
 metadata:
   name: ${managed_sa_name}
   labels:
-    originating-tool: "collectors-e2e-test"
+    originating-tool: "${originating_tool}"
 secrets:
   - name: konflux-ci-konflux-release-trusted-artifacts-pull-secret-${component_name}
   - name: push-${component_name}

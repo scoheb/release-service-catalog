@@ -6,7 +6,7 @@ metadata:
     release.appstudio.openshift.io/auto-release: "${release_plan_happy_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_happy_name}"
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"
   name: ${release_plan_happy_name}
 spec:
   application: ${application_name}
@@ -19,7 +19,7 @@ metadata:
     release.appstudio.openshift.io/auto-release: "${release_plan_hotfix_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_hotfix_name}"
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"
   name: ${release_plan_hotfix_name}
 spec:
   application: ${application_name}
@@ -32,7 +32,7 @@ metadata:
     release.appstudio.openshift.io/auto-release: "${release_plan_prega_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_prega_name}"
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"
   name: ${release_plan_prega_name}
 spec:
   application: ${application_name}
@@ -45,7 +45,7 @@ metadata:
     release.appstudio.openshift.io/auto-release: "${release_plan_staged_auto_release}"
     release.appstudio.openshift.io/standing-attribution: 'true'
     release.appstudio.openshift.io/releasePlanAdmission: "${release_plan_admission_staged_name}"
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"
   name: ${release_plan_staged_name}
 spec:
   application: ${application_name}

@@ -4,7 +4,7 @@ kind: RoleBinding
 metadata:
   name: managed-release-pipeline-resource-role-binding-for-${managed_sa_name}
   labels:
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

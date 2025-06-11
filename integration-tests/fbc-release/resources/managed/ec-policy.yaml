@@ -4,7 +4,7 @@ kind: EnterpriseContractPolicy
 metadata:
   name: standard-${component_name}
   labels:
-    originating-tool: "fbc-release-e2e-test"
+    originating-tool: "${originating_tool}"
 spec:
   description: >-
     Includes rules for levels 1, 2 & 3 of SLSA v0.1.
