@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: push-to-external-registry
   labels:
-    app.kubernetes.io/version: "5.7.0"
+    app.kubernetes.io/version: "5.8.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -280,6 +280,10 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -308,6 +312,10 @@ spec:
           value: "$(tasks.collect-data.results.data)"
         - name: registrySecret
           value: $(tasks.collect-registry-token-secret.results.registrySecret)
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
       runAfter:
         - collect-registry-token-secret
         - push-snapshot
