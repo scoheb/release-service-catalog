@@ -147,7 +147,14 @@ spec:
               export RELEASE_CATALOG_GIT_URL
               export RELEASE_CATALOG_GIT_REVISION
 
-              "/home/e2e/tests/$(params.PIPELINE_TEST_SUITE)/run-test.sh"
+              # initially, there was a run-test.sh in every test suite directory.
+              # then we moved to have a generic run-test.sh in the root.
+              # support both cases.
+              if [ -f "/home/e2e/tests/$(params.PIPELINE_TEST_SUITE)/run-test.sh" ]; then
+                "/home/e2e/tests/$(params.PIPELINE_TEST_SUITE)/run-test.sh"
+              else
+                "/home/e2e/tests/run-test.sh" "$(params.PIPELINE_TEST_SUITE)"
+              fi
 
       runAfter:
         - get-snapshot-data
