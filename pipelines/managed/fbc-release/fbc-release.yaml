@@ -588,7 +588,6 @@ spec:
           value:
             - "$(tasks.add-fbc-contribution-to-index-image.results.sourceDataArtifact)=$(params.dataDir)"
             - "$(tasks.extract-index-image.results.sourceDataArtifact)=$(params.dataDir)"
-            #- "$(tasks.sign-index-image.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
