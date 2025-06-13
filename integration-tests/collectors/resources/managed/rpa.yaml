@@ -7,6 +7,7 @@ spec:
   applications:
     - ${application_name}
   data:
+    singleComponentMode: true
     atlas:
       server: stage
       atlas-sso-secret-name: atlas-staging-sso-secret-${component_name}
@@ -42,7 +43,8 @@ spec:
         - name: revision
           value: "${RELEASE_CATALOG_GIT_REVISION}"
         - name: pathInRepo
-          value: pipelines/managed/rh-advisories/rh-advisories.yaml
+          #value: pipelines/managed/rh-advisories/rh-advisories.yaml
+          value: pipelines/managed/calunga/calunga.yaml
       resolver: git
     serviceAccountName: ${managed_sa_name}
     timeouts:
