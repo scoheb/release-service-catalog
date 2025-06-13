@@ -123,7 +123,7 @@ spec:
           value: $(params.SINGLE_COMPONENT_CUSTOM_RESOURCE_NS)
         - name: SNAPSHOT_PATH
           value: $(params.SNAPSHOT_PATH)
-      image: quay.io/enterprise-contract/ec-cli@sha256:913c7dac3d41877b01835d2e55bcd970c6cdbf4944f8176e9e3de9548642a2b4
+      image: quay.io/enterprise-contract/ec-cli@sha256:f6faddea11326a4fd65d82ac840bf55f61a5e51fb9907e7de7e67028dbb24ef7
       command: [reduce-snapshot.sh]
       onError: continue  # progress even if the step fails
     - name: create-trusted-artifact
