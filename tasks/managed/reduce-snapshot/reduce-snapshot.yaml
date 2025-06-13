@@ -126,10 +126,10 @@ spec:
       image: quay.io/enterprise-contract/ec-cli@sha256:913c7dac3d41877b01835d2e55bcd970c6cdbf4944f8176e9e3de9548642a2b4
       computeResources:
         limits:
-          memory: 32Mi
+          memory: 128Mi
         requests:
-          memory: 32Mi
-          cpu: 10m
+          memory: 128Mi
+          cpu: 100m
       command: [reduce-snapshot.sh]
       onError: continue  # progress even if the step fails
     - name: create-trusted-artifact
