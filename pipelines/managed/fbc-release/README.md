@@ -21,6 +21,7 @@ Tekton release pipeline to interact with FBC Pipeline
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                             | No       | -                                                         |
 
 ## Changes in 4.8.0
+* Pass taskGitUrl and taskGitRevision to extract-index-image task
 * Pass taskGitUrl and taskGitRevision to get-ocp-version task
 
 ## Changes in 4.7.0

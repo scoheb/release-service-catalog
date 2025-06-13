@@ -416,6 +416,10 @@ spec:
           value: $(tasks.add-fbc-contribution-to-index-image.results.requestResultsFile)
         - name: resultsDirPath
           value: "$(tasks.collect-data.results.resultsDir)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
     - name: publish-index-image
       workspaces:
         - name: data
