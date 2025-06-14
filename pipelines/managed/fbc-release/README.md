@@ -23,6 +23,7 @@ Tekton release pipeline to interact with FBC Pipeline
 ## Changes in 4.8.0
 * Pass taskGitUrl and taskGitRevision to extract-index-image task
 * Pass taskGitUrl and taskGitRevision to get-ocp-version task
+* update to specify new required params for task prepare-fbc-release
 * update to specify new required params for task update-ocp-tag
 
 ## Changes in 4.7.0
