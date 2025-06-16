@@ -318,6 +318,10 @@ spec:
           value: $(tasks.collect-data.results.snapshotSpec)
         - name: binariesPath
           value: $(tasks.extract-binaries-from-image.results.binaries_path)
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
       runAfter:
         - extract-binaries-from-image
     - name: create-github-release
