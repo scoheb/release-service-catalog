@@ -344,6 +344,10 @@ spec:
           value: $(tasks.extract-binaries-from-image.results.binaries_path)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
       runAfter:
         - collect-gh-params
         - sign-base64-blob

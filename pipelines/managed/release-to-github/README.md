@@ -24,6 +24,7 @@ Tekton release pipeline to release binaries extracted from the image built with 
 ## Changes in 4.6.0
 * Pass taskGitUrl and taskGitRevision to extract-binaries-from-image task
 * Pass taskGitUrl and taskGitRevision to base64-encode-checksum task
+* Pass taskGitUrl and taskGitRevision to create-github-release task
 
 ## Changes in 4.5.0
 * The `sign-base64-blob` task is now passed the `taskGitUrl` and `taskGitRevision` parameters
