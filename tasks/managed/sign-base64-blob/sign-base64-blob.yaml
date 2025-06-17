@@ -23,7 +23,7 @@ spec:
       description: Name of the user that requested the signing, for auditing purposes
     - name: requestTimeout
       type: string
-      default: "180"
+      default: "1800"
       description: InternalRequest timeout
     - name: binariesPath
       type: string
@@ -117,12 +117,12 @@ spec:
           value: $(params.sourceDataArtifact)
     - name: sign-base64-blob
       image:
-        quay.io/konflux-ci/release-service-utils:3729a54989514da6a777579feabbd9b346c73551
+        quay.io/konflux-ci/release-service-utils:0f82be4be43294b6a96846d87ef7f7c0b9e34267
       computeResources:
         limits:
-          memory: 256Mi
+          memory: 512Mi
         requests:
-          memory: 256Mi
+          memory: 512Mi
           cpu: 100m
       script: |
         #!/usr/bin/env bash
@@ -153,12 +153,11 @@ spec:
             -p config_map_name="${config_map_name}" \
             -p taskGitUrl="$(params.taskGitUrl)" \
             -p taskGitRevision="$(params.taskGitRevision)" \
-            -t "$(params.requestTimeout)" \
             -l ${pipelinerun_label}="$(params.pipelineRunUid)" \
-            | tee "$IR_RESULT_FILE" || \
-            (grep "^\[" "$IR_RESULT_FILE" | jq . && exit 1)
+            -t "$(params.requestTimeout)" --pipeline-timeout "0h30m0s" --task-timeout "0h25m0s" | tee "$IR_RESULT_FILE"
 
-        internalRequest=$(awk 'NR==1{ print $2 }' "$IR_RESULT_FILE" | xargs)
+        internalRequest=$(awk -F"'" '/created/ { print $2 }' \
+          "$IR_RESULT_FILE")
         echo "done (${internalRequest})"
 
         payload=$(kubectl get internalrequest "$internalRequest" -o=jsonpath='{.status.results.signed_payload}')

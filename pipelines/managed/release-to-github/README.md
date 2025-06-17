@@ -20,6 +20,8 @@ Tekton release pipeline to release binaries extracted from the image built with 
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | -                                                         |
 
+## Changes in 4.7.0
+* Pass taskGitUrl and taskGitRevision to validate-single-component task
 
 ## Changes in 4.6.0
 * Pass taskGitUrl and taskGitRevision to extract-binaries-from-image task
