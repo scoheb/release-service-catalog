@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: release-to-github
   labels:
-    app.kubernetes.io/version: "4.6.0"
+    app.kubernetes.io/version: "4.7.0"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -158,6 +158,10 @@ spec:
       params:
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
       workspaces:
         - name: data
           workspace: release-workspace

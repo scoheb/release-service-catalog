@@ -15,7 +15,7 @@ function internal-request() {
 }
 
 function kubectl() {
-  if [ $* != "get internalrequest internal-request -o=jsonpath='{.status.results.signed_payload}'" ]
+  if [[ $* != *"get internalrequest"* ]]
   then
     echo "Unexpected call to kubectl"
     exit 1
@@ -25,5 +25,5 @@ function kubectl() {
 }
 
 function gpg() {
-  echo -n "dummy-payload" 	
+  echo -n "dummy-payload"
 }
