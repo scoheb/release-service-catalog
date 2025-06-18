@@ -4,24 +4,28 @@ set -eo pipefail
 find_release_pipelines_from_pr() {
   local REPO=$1
   local PR_NUM=$2
- 
+
   if [ -z "$REPO" ] || [ -z "$PR_NUM" ]; then
-    echo "please provide repo and PR number, for example: find_release_pipelines_from_pr konflux-ci/release-service-catalog 949" 
+    echo "please provide repo and PR number, for example: find_release_pipelines_from_pr konflux-ci/release-service-catalog 949"
     return 1
   fi
 
   setup_workspace
   clone_and_checkout_pr "$REPO" "$PR_NUM" || return 1
-  
+
   # Declare global variables
   declare -a FOUND_PIPELINENAMES
   declare -a FOUND_INTERNAL_PIPELINENAMES
+  declare -a FOUND_COLLECTOR_PIPELINENAMES
   declare -a TEKTON_INTERNAL_TASKS
+  declare -a TEKTON_COLLECTOR_TASKS
   declare -a TEKTON_MANAGED_TASKS
   declare -a TEKTON_MANAGED_PIPELINES
   declare -a TEKTON_INTERNAL_PIPELINES
+  declare -a TEKTON_COLLECTOR_PIPELINES
+  declare -a INTEGRATION_SUITES
   declare SELECT_ALL_TESTCASES=false
-  
+
   # Find all tasks and pipelines and save them to arrays
   find_changed_tekton_tasks_pipelines
 
@@ -30,27 +34,33 @@ find_release_pipelines_from_pr() {
     cleanup_workspace
     return 0
   fi
-  
-  # Find managed pipelines for managed tasks and save them to $FOUND_PIPELINENAMES 
+
+  # Find managed pipelines for managed tasks and save them to $FOUND_PIPELINENAMES
   if [ ${#TEKTON_MANAGED_TASKS[@]} -gt 0 ]; then
     for task in "${TEKTON_MANAGED_TASKS[@]}"; do
       find_pipelines_using_task "$task" "managed"
     done
   fi
-  
+
   if [ ${#TEKTON_INTERNAL_TASKS[@]} -gt 0 ]; then
     for task in "${TEKTON_INTERNAL_TASKS[@]}"; do
       find_pipelines_using_task "$task" "internal"
     done
   fi
-  
+
+  if [ ${#TEKTON_COLLECTOR_TASKS[@]} -gt 0 ]; then
+    for task in "${TEKTON_COLLECTOR_TASKS[@]}"; do
+      find_pipelines_using_task "$task" "run-collectors"
+    done
+  fi
+
   # Deal with internal pipelines directly searched
   # FOUND_INTERNAL_PIPELINENAMES has values gotten by internal tasks
   if [ ${#TEKTON_INTERNAL_PIPELINES[@]} -gt 0 ]; then
     while IFS= read -r file; do
       local pipeline_name
       pipeline_name=$(yq e '.metadata.name' "$file")
-    
+
       found=false
       for f in "${FOUND_INTERNAL_PIPELINENAMES[@]}"; do
         if [[ "$f" == "$pipeline_name" ]]; then
@@ -64,11 +74,34 @@ find_release_pipelines_from_pr() {
       fi
     done <<< $TEKTON_INTERNAL_PIPELINES
   fi
-  
+
+  # Deal with collector pipelines directly searched
+  # FOUND_COLLECTOR_PIPELINENAMES has values gotten by collector tasks
+  if [ ${#TEKTON_COLLECTOR_PIPELINES[@]} -gt 0 ]; then
+    while IFS= read -r file; do
+      local pipeline_name
+      pipeline_name=$(yq e '.metadata.name' "$file")
+
+      found=false
+      for f in "${FOUND_COLLECTOR_PIPELINENAMES[@]}"; do
+        if [[ "$f" == "$pipeline_name" ]]; then
+          found=true
+          break
+        fi
+      done
+
+      if [[ "$found" == false ]]; then
+        FOUND_COLLECTOR_PIPELINENAMES+=("$pipeline_name")
+      fi
+    done <<< $TEKTON_COLLECTOR_PIPELINES
+  fi
+
   declare -a TEMP_MANAGED_PIPELINENAMES
 
-  # Map internal pipelines to managed pipelines
-  for pipeline_name in "${FOUND_INTERNAL_PIPELINENAMES[@]}"; do
+  # Map internal and collector pipelines to managed pipelines
+  for pipeline_name in "${FOUND_INTERNAL_PIPELINENAMES[@]} ${FOUND_COLLECTOR_PIPELINENAMES[@]}"; do
+    # remove leading spaces
+    pipeline_name="${pipeline_name//[[:space:]]/}"
     case "$pipeline_name" in
       "create-advisory"|"check-embargoed-cves"|"get-advisory-severity")
         TEMP_MANAGED_PIPELINENAMES+=("rh-advisories")
@@ -91,6 +124,9 @@ find_release_pipelines_from_pr() {
       "push-disk-images")
         TEMP_MANAGED_PIPELINENAMES+=("push-disk-images-to-cdn" "push-disk-images-to-marketplaces")
         ;;
+      "run-collectors")
+        TEMP_MANAGED_PIPELINENAMES+=("rh-advisories")
+        ;;
       *)
         continue
         ;;
@@ -103,7 +139,7 @@ find_release_pipelines_from_pr() {
     while IFS= read -r file; do
       local pipeline_name
       pipeline_name=$(yq e '.metadata.name' "$file")
-      
+
       # Add pipeline if not already present
       if [[ ! " ${FOUND_PIPELINENAMES[*]} " =~ " ${pipeline_name} " ]]; then
         FOUND_PIPELINENAMES+=("$pipeline_name")
@@ -120,10 +156,23 @@ find_release_pipelines_from_pr() {
     done < <(printf '%s\n' "${TEMP_MANAGED_PIPELINENAMES[@]}")
   fi
 
+  if [ ${#INTEGRATION_SUITES[@]} -gt 0 ]; then
+    while IFS= read -r suite_name; do
+      # Add suite_name if not already present
+      # special care is needed for collectors
+      if [ "$suite_name" == "collectors" ]; then
+        suite_name="rh-advisories"
+      fi
+      if [[ ! " ${FOUND_PIPELINENAMES[*]} " =~ " ${suite_name} " ]]; then
+        FOUND_PIPELINENAMES+=("$suite_name")
+      fi
+    done < <(printf '%s\n' "${INTEGRATION_SUITES[@]}")
+  fi
+
   if [ ${#FOUND_PIPELINENAMES[@]} -gt 0 ]; then
     export FOUND_PIPELINES="${FOUND_PIPELINENAMES[*]}"
   fi
-  
+
   ALL_TESTCASES=("rh-advisories" "fbc-release" "release-to-github" "push-to-external-registry" "rhtap-service-push" "rh-push-to-registry-redhat-io" "rh-push-to-external-registry")
   SELECTED_TESTCASES=()
 
@@ -139,7 +188,7 @@ find_release_pipelines_from_pr() {
   else
     echo -n "no-test-case"
   fi
-   
+
   cleanup_workspace
 }
 
@@ -179,7 +228,7 @@ find_changed_tekton_tasks_pipelines() {
     rm -rf ".tmp_pr_check"
     return 0
   fi
-      
+
   while IFS= read -r file; do
     # match the files under stepactions
     if echo "$file" | grep -q "^stepactions/"; then
@@ -188,9 +237,16 @@ find_changed_tekton_tasks_pipelines() {
     elif [[ "$file" =~ ^schema/dataKeys.json$ ]] && [ -f "$file" ]; then
       SELECT_ALL_TESTCASES=true
       break
+    elif echo "$file" | grep -q "^integration-tests/"; then
+      IFS='/' read -ra parts <<< "$file"
+      INTEGRATION_SUITES+=("${parts[1]}")
     elif [[ "$file" =~ ^tasks/internal/[^/]+/[^/]+\.ya?ml$ ]] && [ -f "$file" ]; then
       if grep -q -E 'kind: *Task' "$file"; then
         TEKTON_INTERNAL_TASKS+=("$file")
+      fi
+    elif [[ "$file" =~ ^tasks/collectors/[^/]+/[^/]+\.ya?ml$ ]] && [ -f "$file" ]; then
+      if grep -q -E 'kind: *Task' "$file"; then
+        TEKTON_COLLECTOR_TASKS+=("$file")
       fi
     elif [[ "$file" =~ ^tasks/managed/[^/]+/[^/]+\.ya?ml$ ]] && [ -f "$file" ]; then
       if grep -q -E 'kind: *Task' "$file"; then
@@ -203,6 +259,10 @@ find_changed_tekton_tasks_pipelines() {
     elif [[ "$file" =~ ^pipelines/internal/[^/]+/[^/]+\.ya?ml$ ]] && [ -f "$file" ]; then
       if grep -q -E 'kind: *Pipeline' "$file"; then
         TEKTON_INTERNAL_PIPELINES+=("$file")
+      fi
+    elif [[ "$file" =~ ^pipelines/run-collectors/run-collectors.yaml$ ]] && [ -f "$file" ]; then
+      if grep -q -E 'kind: *Pipeline' "$file"; then
+        TEKTON_COLLECTOR_PIPELINES+=("$file")
       fi
     fi
   done <<< "$FILES"
@@ -254,9 +314,11 @@ find_pipelines_using_task() {
             fi
           fi
         fi
-      done < <(grep -rl "taskRef:" "$dir"/*/*.yaml 2>/dev/null)
+        # we include two search paths since run-collectors does not
+        # have nested folders.
+      done < <(grep -rl "taskRef:" "$dir"/*/*.yaml "$dir"/*.yaml 2>/dev/null)
     fi
-  done   
+  done
 }
 
 cleanup_workspace() {
