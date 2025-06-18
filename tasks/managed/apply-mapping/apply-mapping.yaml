@@ -112,13 +112,16 @@ spec:
       image: quay.io/konflux-ci/release-service-utils:e85ceb962ee6f4d0672b4aa4e9946621ab302f20
       computeResources:
         limits:
-          memory: 64Mi
+          memory: 128Mi
         requests:
-          memory: 64Mi
+          memory: 128Mi
           cpu: '1'
       script: |
         #!/usr/bin/env bash
         set -eux
+
+        # Start timing
+        START_TIME=$(date +%s)
 
         SNAPSHOT_SPEC_FILE="$(params.dataDir)/$(params.snapshotPath)"
         DATA_FILE="$(params.dataDir)/$(params.dataPath)"
@@ -337,7 +340,15 @@ spec:
         defaultTimestampFormat=$(jq -r '.defaults.timestampFormat // "%s"' <<< "$MAPPING")
         currentTimestamp="$(date "+%Y%m%d %T")"
         defaultCGWSettings=$(jq -c '.defaults.contentGateway // {}' <<< "$MAPPING")
+
+        # Create a temporary file to store image metadata to avoid repeated skopeo calls
+        declare -A image_metadata_cache
+        declare -A arch_json_cache
+
+        # Process all components in a single jq operation to reduce file I/O
         NUM_MAPPED_COMPONENTS=$(jq '.components | length' "${SNAPSHOT_SPEC_FILE}")
+
+        # Process components one by one, applying optimizations to reduce external calls
         for ((i = 0; i < NUM_MAPPED_COMPONENTS; i++)) ; do
             component=$(jq -c --argjson i "$i" '.components[$i]' "${SNAPSHOT_SPEC_FILE}")
 
@@ -349,19 +360,32 @@ spec:
               exit 1
             fi
 
+            # Check if we've already processed this image
+            if [[ -z "${arch_json_cache[$IMAGE_REF]:-}" ]]; then
+                arch_json_cache[$IMAGE_REF]=$(get-image-architectures "${IMAGE_REF}")
+            fi
+            arch_json="${arch_json_cache[$IMAGE_REF]}"
+
+            # The build-date label and Created values are not the same per architecture, but we don't support separate
+            # tags per arch. So, we just use the first digest listed.
+            arch="$(jq -rs 'map(.platform.architecture) | .[0]' <<< "$arch_json")"
+            os="$(jq -rs 'map(.platform.os) | .[0]' <<< "$arch_json")"
+
+            # Check if we've already fetched metadata for this image
+            if [[ -z "${image_metadata_cache[$IMAGE_REF]:-}" ]]; then
+                image_metadata_cache[$IMAGE_REF]=$(skopeo inspect --no-tags --override-os "${os}" --override-arch "${arch}" \
+                  docker://"${IMAGE_REF}" | jq -c)
+            fi
+            image_metadata="${image_metadata_cache[$IMAGE_REF]}"
+
+            # Process tags and other component properties
             imageTags=$(jq '.tags // []' <<< "$component")
             git_sha=$(jq -r '.source.git.revision' <<< "$component") # this sets the value to "null" if it doesn't exist
             build_sha=$(echo "$IMAGE_REF" | cut -d ':' -f 2)
             passedTimestampFormat=$(jq -r --arg default "$defaultTimestampFormat" \
               '.timestampFormat // $default' <<< "$component")
             release_timestamp="$(date -d "$currentTimestamp" "+$passedTimestampFormat")"
-            arch_json="$(get-image-architectures "${IMAGE_REF}")"
-            # The build-date label and Created values are not the same per architecture, but we don't support separate
-            # tags per arch. So, we just use the first digest listed.
-            arch="$(jq -rs 'map(.platform.architecture) | .[0]' <<< "$arch_json")"
-            os="$(jq -rs 'map(.platform.os) | .[0]' <<< "$arch_json")"
-            image_metadata="$(skopeo inspect --no-tags --override-os "${os}" --override-arch "${arch}" \
-              docker://"${IMAGE_REF}" | jq -c)"
+
             # For timestamp, use Labels.build-date and fallback to Created
             build_date="$(jq -r '.Labels."build-date" // .Created // ""' <<< "$image_metadata")"
             if [ "${build_date}" = "" ] ; then
@@ -382,24 +406,27 @@ spec:
             labels="$(jq -c '.Labels' <<< "${image_metadata}")"
 
             tags=$(translate_tags "${allTagsPreSubstitution}" "${substitute_map}" "${labels}")
+
+            # Apply tags if present
             if [ "$(jq 'length' <<< "$tags")" -gt 0 ] ; then
               jq --argjson i "$i" --argjson updatedTags "$tags" '.components[$i].tags = $updatedTags' \
                 "${SNAPSHOT_SPEC_FILE}" > /tmp/temp && mv /tmp/temp "${SNAPSHOT_SPEC_FILE}"
             fi
 
-            # Also substitute filename values in the staged section of components
+            # Process staged files
             STAGED_FILES=$(jq '.staged.files | length' <<< "$component")
             for ((j = 0; j < STAGED_FILES; j++)) ; do
                 file=$(jq -c --argjson j "$j" '.staged.files[$j]' <<< "$component")
                 filenameArrayPreSubstitution=$(jq '.filename' <<< "$file" | jq -cs)
                 subbedFilename=$(translate_tags "${filenameArrayPreSubstitution}" \
                   "${substitute_map}" "${labels}" | jq -r '.[0]')
+
                 jq --argjson i "$i" --argjson j "$j" --arg filename "$subbedFilename" \
                   '.components[$i].staged.files[$j].filename = $filename' "${SNAPSHOT_SPEC_FILE}" > /tmp/temp \
                   && mv /tmp/temp "${SNAPSHOT_SPEC_FILE}"
             done
 
-            # apply defaults for contentGateway
+            # Process content gateway settings
             componentCGWSettings=$(jq -c '.contentGateway // {}' <<< "$component")
             updatedComponentCGWSettings=$(merge-json "$defaultCGWSettings" "$componentCGWSettings")
             componentCGWSettingsSize=$(jq '. | length' <<< "${updatedComponentCGWSettings}")
@@ -410,7 +437,7 @@ spec:
               "${SNAPSHOT_SPEC_FILE}" > /tmp/temp && mv /tmp/temp "${SNAPSHOT_SPEC_FILE}"
             fi
 
-            # Determine the format of the original repository and update keys accordingly
+            # Process repository conversions
             repository=$(jq -r '.repository' <<< "$component")
             echo "Processing component: $NAME"
             echo "Original repository: $repository"
@@ -437,6 +464,13 @@ spec:
               "${SNAPSHOT_SPEC_FILE}" > /tmp/temp && mv /tmp/temp "${SNAPSHOT_SPEC_FILE}"
             fi
         done
+
+        # No temporary files to clean up
+
+        # End timing and calculate execution time
+        END_TIME=$(date +%s)
+        EXECUTION_TIME=$((END_TIME - START_TIME))
+        echo "Task execution time: $EXECUTION_TIME seconds"
     - name: create-trusted-artifact
       ref:
         resolver: "git"
