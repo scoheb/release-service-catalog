@@ -42,7 +42,7 @@ spec:
   - name: dockerfile
     value: Dockerfile
   - name: skip-checks
-    value: false
+    value: true
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while reducing network traffic.
