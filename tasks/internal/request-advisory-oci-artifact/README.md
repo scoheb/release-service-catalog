@@ -12,5 +12,7 @@ Tekton task to request the advisory content from gitlab as an oci artifact.
 | taskGitUrl       | The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored | No       | -             |
 | taskGitRevision  | The revision in the taskGitUrl repo to be used                                                        | No       | -             |  
 
+## Changes in 0.2.0
+* Increase compute resource limits
 ## Changes in 0.1.0
 * Added compute resource limits
