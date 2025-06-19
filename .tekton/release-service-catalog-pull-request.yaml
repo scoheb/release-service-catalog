@@ -41,7 +41,12 @@ spec:
     value: 5d
   - name: dockerfile
     value: Dockerfile
+    # skip the checks since this is an image that will never
+    # be released.
   - name: skip-checks
+    value: true
+    # This is needed to ensure that the image is built despite the skip-checks flag.
+  - name: rebuild
     value: true
   pipelineSpec:
     description: |
