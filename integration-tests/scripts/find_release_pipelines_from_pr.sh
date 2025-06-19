@@ -103,7 +103,7 @@ find_release_pipelines_from_pr() {
     # remove leading spaces
     pipeline_name="${pipeline_name//[[:space:]]/}"
     case "$pipeline_name" in
-      "create-advisory"|"check-embargoed-cves"|"get-advisory-severity")
+      "create-advisory"|"check-embargoed-cves"|"get-advisory-severity"|"filter-already-released-advisory-images")
         TEMP_MANAGED_PIPELINENAMES+=("rh-advisories")
         ;;
       "update-fbc-catalog"|"publish-index-image-pipeline")
@@ -125,6 +125,9 @@ find_release_pipelines_from_pr() {
         TEMP_MANAGED_PIPELINENAMES+=("push-disk-images-to-cdn" "push-disk-images-to-marketplaces")
         ;;
       "run-collectors")
+        TEMP_MANAGED_PIPELINENAMES+=("rh-advisories")
+        ;;
+      "request-advisory-oci-artifact"|"create-advisory-oci-artifact")
         TEMP_MANAGED_PIPELINENAMES+=("rh-advisories")
         ;;
       *)
