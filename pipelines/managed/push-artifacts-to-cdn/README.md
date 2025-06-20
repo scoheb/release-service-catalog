@@ -26,6 +26,13 @@ It uses InternalRequests so that it can be run on both public and private cluste
 | trustedArtifactsDebug           | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable                                              | Yes      | ""                                                        |
 | dataDir                         | The location where data will be stored                                                                                              | Yes      | /var/workdir/release                                      |
 
+
+## Changes in 2.0.1
+* Fixed trusted artifacts references throughout the pipeline
+* Corrected `sourceDataArtifact` references in task parameters
+* Updated `update-cr-status` task to use `resultArtifacts` parameter instead of `sourceDataArtifact`
+* Fixed task execution order to ensure `update-cr-status` runs after all required results are available
+
 ## Changes in 2.0.0
 * **BREAKING**: Migrated to trusted artifacts architecture for enhanced security and traceability
 * Added trusted artifacts parameters: `ociStorage`, `orasOptions`, `trustedArtifactsDebug`, `dataDir`

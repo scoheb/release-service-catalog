@@ -4,7 +4,7 @@ kind: Pipeline
 metadata:
   name: push-artifacts-to-cdn
   labels:
-    app.kubernetes.io/version: "2.0.0"
+    app.kubernetes.io/version: "2.0.1"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -396,38 +396,6 @@ spec:
       runAfter:
         - verify-conforma
         - embargo-check
-    - name: update-cr-status
-      params:
-        - name: resource
-          value: $(params.release)
-        - name: resultsDirPath
-          value: $(tasks.collect-data.results.resultsDir)
-        - name: ociStorage
-          value: $(params.ociStorage)
-        - name: sourceDataArtifact
-          value: "$(tasks.push-artifacts-to-cdn.results.sourceDataArtifact)"
-        - name: dataDir
-          value: $(params.dataDir)
-        - name: trustedArtifactsDebug
-          value: "$(params.trustedArtifactsDebug)"
-        - name: taskGitUrl
-          value: "$(params.taskGitUrl)"
-        - name: taskGitRevision
-          value: "$(params.taskGitRevision)"
-      taskRef:
-        resolver: "git"
-        params:
-          - name: url
-            value: $(params.taskGitUrl)
-          - name: revision
-            value: $(params.taskGitRevision)
-          - name: pathInRepo
-            value: tasks/managed/update-cr-status/update-cr-status.yaml
-      workspaces:
-        - name: data
-          workspace: release-workspace
-      runAfter:
-        - push-artifacts-to-cdn
     - name: create-advisory
       params:
         - name: releasePlanAdmissionPath
@@ -443,7 +411,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.update-cr-status.results.sourceDataArtifact)"
+          value: "$(tasks.push-artifacts-to-cdn.results.sourceDataArtifact)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -465,7 +433,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - update-cr-status
+        - push-artifacts-to-cdn
     - name: close-advisory-issues
       params:
         - name: dataPath
@@ -493,6 +461,40 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/close-advisory-issues/close-advisory-issues.yaml
+      workspaces:
+        - name: data
+          workspace: release-workspace
+      runAfter:
+        - create-advisory
+    - name: update-cr-status
+      params:
+        - name: resource
+          value: $(params.release)
+        - name: resultsDirPath
+          value: $(tasks.collect-data.results.resultsDir)
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: resultArtifacts
+          value:
+            - "$(tasks.create-advisory.results.sourceDataArtifact)=$(params.dataDir)"
+            - "$(tasks.push-artifacts-to-cdn.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/update-cr-status/update-cr-status.yaml
       workspaces:
         - name: data
           workspace: release-workspace
