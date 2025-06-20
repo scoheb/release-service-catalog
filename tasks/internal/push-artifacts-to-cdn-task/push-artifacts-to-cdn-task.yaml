@@ -494,11 +494,19 @@ spec:
         NEW_CONTENT_DIR=\$(basename "\$CONTENT_DIR")
         zip -r "$ZIP_PATH" "\$NEW_CONTENT_DIR"
 
-        xcrun notarytool submit "$ZIP_PATH" \
-            --wait \
-            --apple-id "$APPLE_ID" \
-            --team-id "$TEAM_ID" \
-            --password "$APP_SPECIFIC_PASSWORD"
+        # Submit the zip file to Apple for notarization
+        # empty values for APPLE_ID, TEAM_ID, and APP_SPECIFIC_PASSWORD will
+        # disable the notarization step
+        if [ -n "$APPLE_ID" ] && [ -n "$TEAM_ID" ] && [ -n "$APP_SPECIFIC_PASSWORD" ]; then
+          echo "Submitting zip file to Apple for notarization..."
+          xcrun notarytool submit "$ZIP_PATH" \
+              --wait \
+              --apple-id "$APPLE_ID" \
+              --team-id "$TEAM_ID" \
+              --password "$APP_SPECIFIC_PASSWORD"
+        else
+          echo "Notarization is disabled. Skipping..."
+        fi
 
         PUSH_OUTPUT=\$(/usr/local/bin/oras push "$QUAY_URL/signed:$(context.taskRun.uid)-mac" "\$NEW_CONTENT_DIR")
         SIGNED_DIGEST=\$(echo "\$PUSH_OUTPUT" | grep 'Digest:' | awk '{print \$2}')
