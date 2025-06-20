@@ -26,10 +26,6 @@ spec:
     - name: signingKeyName
       type: string
       description: Signing key name to be used for checksum signing
-    - name: quayURL
-      type: string
-      description: quay URL of the repo where content will be shared
-      default: quay.io/konflux-artifacts/nonprod
     - name: quaySecret
       type: string
       description: Secret to interact with Quay
@@ -261,6 +257,11 @@ spec:
             secretKeyRef:
               name: $(params.quaySecret)
               key: password
+        - name: QUAY_URL
+          valueFrom:
+            secretKeyRef:
+              name: $(params.quaySecret)
+              key: url
       script: |
         #!/usr/bin/env bash
         set -eux
@@ -341,14 +342,14 @@ spec:
         set +x
         oras login quay.io -u "${QUAY_USER}" -p "${QUAY_PASS}" > /dev/null 2>&1
         set -x
-        echo "Pushing unsigned Macos content to $(params.quayURL)..."
-        output=$(oras push "$(params.quayURL)/unsigned" macos)
+        echo "Pushing unsigned Macos content to ${QUAY_URL}..."
+        output=$(oras push "${QUAY_URL}/unsigned" macos)
         mac_digest=$(echo "$output" | grep 'Digest:' | awk '{print $2}')
         echo "Digest for mac content: $mac_digest"
         echo -n "$mac_digest" > "$(results.unsignedMacDigest.path)"
 
-        echo "Pushing unsigned Windows content to $(params.quayURL)..."
-        output=$(oras push "$(params.quayURL)/unsigned" windows)
+        echo "Pushing unsigned Windows content to ${QUAY_URL}..."
+        output=$(oras push "${QUAY_URL}/unsigned" windows)
         windows_digest=$(echo "$output" | grep 'Digest:' | awk '{print $2}')
         echo "Digest for windows content: $windows_digest"
         echo -n "$windows_digest" > "$(results.unsignedWindowsDigest.path)"
@@ -413,7 +414,10 @@ spec:
               name: $(params.quaySecret)
               key: password
         - name: QUAY_URL
-          value: $(params.quayURL)
+          valueFrom:
+            secretKeyRef:
+              name: $(params.quaySecret)
+              key: url
         - name: PIPELINE_UID
           value: $(context.taskRun.uid)
       script: |
@@ -474,7 +478,7 @@ spec:
 
         cd "$TEMP_DIR"
         /usr/local/bin/oras login quay.io -u ${QUAY_USER} -p ${QUAY_PASS}
-        /usr/local/bin/oras pull $(params.quayURL)/unsigned@$unsigned_digest -o "$BINARY_PATH"
+        /usr/local/bin/oras pull ${QUAY_URL}/unsigned@$unsigned_digest -o "$BINARY_PATH"
         # This is the directory where the content was extracted
         CONTENT_DIR=\$(find "$BINARY_PATH" -maxdepth 1 -type d | tail -n 1)
 
@@ -568,6 +572,11 @@ spec:
             secretKeyRef:
               name: $(params.quaySecret)
               key: password
+        - name: QUAY_URL
+          valueFrom:
+            secretKeyRef:
+              name: $(params.quaySecret)
+              key: url
       script: |
         #!/usr/bin/env bash
         set -eux
@@ -619,7 +628,7 @@ spec:
         @echo off
         oras login quay.io -u ${QUAY_USER} -p ${QUAY_PASS}
         @echo on
-        oras pull $(params.quayURL)/unsigned@${unsigned_digest}
+        oras pull ${QUAY_URL}/unsigned@${unsigned_digest}
 
         signtool sign /v /n "Red Hat" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 ^
         %TEMP%\$(context.taskRun.uid)\windows\*
@@ -638,7 +647,7 @@ spec:
 
         echo [%DATE% %TIME%] Signing of Windows binaries completed successfully
 
-        oras push $(params.quayURL)/signed:$(context.taskRun.uid)-windows windows \
+        oras push ${QUAY_URL}/signed:$(context.taskRun.uid)-windows windows \
         > oras_push_output.txt 2>&1
 
         for /f "tokens=2,3 delims=: " %%a in ('findstr "Digest:" oras_push_output.txt') do @echo %%a:%%b > digest.txt
@@ -791,9 +800,9 @@ spec:
         signed_windows_digest=$(cat "$(results.signedWindowsDigest.path)")
         signed_windows_digest=${signed_windows_digest//[[:space:]]/}
         # shellcheck disable=SC2086,SC2046
-        oras pull $(params.quayURL)/signed@${signed_mac_digest}
+        oras pull ${QUAY_URL}/signed@${signed_mac_digest}
         # shellcheck disable=SC2086,SC2046
-        oras pull $(params.quayURL)/signed@${signed_windows_digest}
+        oras pull ${QUAY_URL}/signed@${signed_windows_digest}
 
         # Copy everything to SIGNED_DIR and remove mac,windows dirs
         cp macos/* .
