@@ -29,7 +29,7 @@ spec:
     - name: quayURL
       type: string
       description: quay URL of the repo where content will be shared
-      default: quay.io/konflux-artifacts
+      default: quay.io/konflux-artifacts/nonprod
     - name: quaySecret
       type: string
       description: Secret to interact with Quay
