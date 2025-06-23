@@ -16,11 +16,27 @@
 | enterpriseContractPolicy        | JSON representation of the policy to be applied when validating the enterprise contract                                            | No       | -                                                         |
 | enterpriseContractExtraRuleData | Extra rule data to be merged into the policy specified in params.enterpriseContractPolicy. Use syntax "key1=value1,key2=value2..." | Yes      | pipeline_intention=release                                |
 | enterpriseContractTimeout       | Timeout setting for `ec validate`                                                                                                  | Yes      | 40m0s                                                     |
+| enterpriseContractWorkerCount   | Number of parallel workers for policy evaluation                                                                                   | Yes      | 4                                                         |
 | postCleanUp                     | Cleans up workspace after finishing executing the pipeline                                                                         | Yes      | true                                                      |
-| verify_ec_task_bundle           | The location of the bundle containing the verify-enterprise-contract task                                                          | No       | -                                                         |
 | verify_ec_task_git_revision     | The git revision to be used when consuming the verify-conforma task                                                                | No       | -                                                         |
 | taskGitUrl                      | The url to the git repo where the release-service-catalog tasks to be used are stored                                              | Yes      | https://github.com/konflux-ci/release-service-catalog.git |
 | taskGitRevision                 | The revision in the taskGitUrl repo to be used                                                                                     | No       | -                                                         |
+| ociStorage                      | The OCI repository where the Trusted Artifacts are stored.                                                                         | Yes      | quay.io/konflux-ci/release-service-trusted-artifacts     |
+| orasOptions                     | oras options to pass to Trusted Artifacts calls                                                                                    | Yes      | ""                                                        |
+| trustedArtifactsDebug          | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.                                           | Yes      | ""                                                        |
+| dataDir                         | The location where data will be stored                                                                                             | Yes      | /var/workdir/release                                      |
+
+## Changes in 5.0.0
+* Updated pipeline to use trusted artifacts for secure data flow between tasks
+* Added trusted artifacts parameters: `ociStorage`, `orasOptions`, `trustedArtifactsDebug`, `dataDir`
+* Added `enterpriseContractWorkerCount` parameter for parallel policy evaluation (default: 4)
+* Replaced `verify-enterprise-contract` task with `verify-conforma` task using git resolver
+  * Changed from bundles resolver to git resolver pointing to https://github.com/enterprise-contract/ec-cli
+  * Updated parameter names: `IMAGES` → `SNAPSHOT_FILENAME`, added `WORKERS` and `SOURCE_DATA_ARTIFACT` parameters
+* Replaced `cleanup-workspace` task with `cleanup-internal-requests` task in finally section
+* Updated all tasks to use trusted artifacts parameters and data flow
+* Updated file paths to use `$(params.dataDir)` instead of workspace paths
+* Updated `update-cr-status` task to include `resultArtifacts` parameter for trusted artifacts
 
 ## Changes in 4.8.0
 * Add required taskGit* parameters for collect-slack-notification-params task
