@@ -32,6 +32,9 @@ Tekton pipeline to release a single FBC component to the Addons Registry.
 * Change file paths to use `dataDir` instead of workspace paths
 * Use the verify-conforma task to verify the enterprise contract policy
 
+## Changes in 0.5.1
+* Add retries in the pipeline
+
 ## Changes in 0.5.0
 * add new required parameters to `collect-registry-token-secret` and
   `make-repo-public` tasks

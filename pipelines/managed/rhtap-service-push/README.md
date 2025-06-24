@@ -41,6 +41,10 @@
 ## Changes in 4.8.0
 * Add required taskGit* parameters for collect-slack-notification-params task
 * Add required taskGit* parameters for send-slack-notification task
+* Add required taskGit* parameters for update-infra-deployments task
+
+## Changes in 4.7.0
+* Add retries in the pipeline
 
 ## Changes in 4.7.0
 * Update all tasks that now support trusted artifacts to specify the taskGit* parameters for the step action resolvers

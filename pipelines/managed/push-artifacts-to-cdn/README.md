@@ -41,6 +41,9 @@ It uses InternalRequests so that it can be run on both public and private cluste
 * All tasks now use trusted artifacts for data exchange instead of shared workspaces
 * Updated file paths to use `dataDir` instead of workspace paths
 
+### Changes in 1.0.1
+* Added retries in the pipline 
+
 ### Changes in 1.0.0
 * Added advisory generation tasks:
   - `populate-release-notes` - Populates release notes for the advisory
