@@ -17,6 +17,21 @@
 | sharedSecret                   | Secret in the namespace which contains private key for the GitHub App                        | true     | infra-deployments-pr-creator                                                                                                                     |
 | defaultGithubAppID             | ID of Github app used for updating PR                                                        | true     | 305606                                                                                                                                           |
 | defaultGithubAppInstallationID | Installation ID of Github app in the organization                                            | true     | 35269675                                                                                                                                         |
+| ociStorage                     | The OCI repository where the Trusted Artifacts are stored.                                   | true     | empty                                                                                                                                            |
+| ociArtifactExpiresAfter        | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire. | true | 1d                                                                                                                                               |
+| trustedArtifactsDebug         | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.      | true     |                                                                                                                                                  |
+| orasOptions                    | oras options to pass to Trusted Artifacts calls                                              | true     |                                                                                                                                                  |
+| sourceDataArtifact            | Location of trusted artifacts to be used to populate data directory                          | true     |                                                                                                                                                  |
+| dataDir                        | The location where data will be stored                                                       | true     | $(workspaces.data.path)                                                                                                                         |
+| taskGitUrl                     | The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored | false |                                                                                                                                                  |
+| taskGitRevision                | The revision in the taskGitUrl repo to be used                                               | false    |                                                                                                                                                  |
+
+## Changes in 2.0.0
+* Updated task to use trusted artifacts for secure data flow between tasks
+* Added trusted artifacts parameters: `ociStorage`, `ociArtifactExpiresAfter`, `trustedArtifactsDebug`, `orasOptions`, `sourceDataArtifact`, `dataDir`, `taskGitUrl`, `taskGitRevision`
+* Added `sourceDataArtifact` result
+* Updated file paths to use `$(params.dataDir)` instead of direct workspace paths
+* Added trusted artifacts step actions: `skip-trusted-artifact-operations`, `use-trusted-artifact`, `create-trusted-artifact`, `patch-source-data-artifact-result`
 
 ## Changes in 1.4.0
 * Added compute resource limits
