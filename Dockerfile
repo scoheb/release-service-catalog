@@ -31,6 +31,7 @@ RUN curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kusto
     chmod +x /usr/bin/kustomize
 
 ADD integration-tests/collectors /home/e2e/tests/collectors
+ADD integration-tests/fbc-release /home/e2e/tests/fbc-release
 ADD integration-tests/lib /home/e2e/tests/lib
 ADD integration-tests/scripts /home/e2e/tests/scripts
 ADD integration-tests/run-test.sh /home/e2e/tests/run-test.sh
