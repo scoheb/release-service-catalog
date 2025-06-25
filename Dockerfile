@@ -18,6 +18,7 @@ RUN tkn version --component client
 
 RUN dnf -y --setopt=tsflags=nodocs install \
     gettext \
+    procps-ng \
     && dnf clean all
 
 RUN python3 -m pip install --user ansible
@@ -32,3 +33,4 @@ RUN curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kusto
 ADD integration-tests/collectors /home/e2e/tests/collectors
 ADD integration-tests/lib /home/e2e/tests/lib
 ADD integration-tests/scripts /home/e2e/tests/scripts
+ADD integration-tests/run-test.sh /home/e2e/tests/run-test.sh
