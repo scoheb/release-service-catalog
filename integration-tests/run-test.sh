@@ -127,6 +127,7 @@ parse_options "$@" # Parses options and sets CLEANUP, NO_CVE
 decrypt_secrets
 delete_old_branches "${component_repo_name}" "${component_type}" 2
 create_github_branch
+patch_component_source
 setup_namespaces # Ensures correct context before resource creation
 cleanup_old_resources "${originating_tool}"
 create_kubernetes_resources # tmpDir is set here
