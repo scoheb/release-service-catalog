@@ -2,7 +2,7 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: test-request-and-upload-signature
+  name: test-request-and-upload-signature-2-references
 spec:
   description: |
     Run the request-and-upload-signature task and make sure that task succeeds
@@ -72,9 +72,9 @@ spec:
         - name: pipeline_image
           value: "quay.io/konflux-ci/release-service-utils:3729a54989514da6a777579feabbd9b346c73551"
         - name: manifest_digests
-          value: "sha256:0000"
+          value: "sha256:0000 sha256:1111"
         - name: references
-          value: "registry.redhat.io/myproduct/myrepo:abc"
+          value: "registry.redhat.io/myproduct/myrepo:abc registry.redhat.io/myproduct/myrepo:def"
         - name: requester
           value: tom
         - value: 4096R/55A34A82 SHA-256
@@ -148,7 +148,9 @@ spec:
 
               expected="--signing-key-name containerisvsign --signing-key containerisvsign --config-file \
               "$(workspaces.data.path)/pubtools-sign-config.yaml" \
-              --reference registry.redhat.io/myproduct/myrepo:abc --digest sha256:0000 --task-id 1234"
+              --reference registry.redhat.io/myproduct/myrepo:abc \
+              --reference registry.redhat.io/myproduct/myrepo:def \
+              --digest sha256:0000 --digest sha256:1111 --task-id 1234"
               echo "$expected" > "/tmp/expected"
               cat "$(workspaces.data.path)/mock_pubtools-sign.txt"
               diff -Naur "/tmp/expected" "$(workspaces.data.path)/mock_pubtools-sign.txt"
