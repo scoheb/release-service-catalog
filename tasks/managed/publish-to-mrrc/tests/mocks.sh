@@ -5,7 +5,7 @@ set -eux
 
 function oras(){
   echo Mock oras called with: $*
-  echo $* >> $(workspaces.data.path)/mock_oras.txt
+  echo $* >> "$(params.dataDir)/mock_oras.txt"
 
   if [[ "$*" == "pull --registry-config"* ]]
   then
@@ -23,9 +23,9 @@ function oras(){
 
 function charon(){
   echo Mock charon called with: $*
-  echo $* >> $(workspaces.data.path)/mock_charon.txt
+  echo $* >> "$(params.dataDir)/mock_charon.txt"
 
-  if [ ! test -f "$HOME/.charon/charon.yaml" ]
+  if [ ! -f "$HOME/.charon/charon.yaml" ]
   then
     echo Error: Missing charon config file
     exit 1
@@ -39,6 +39,6 @@ function charon(){
 }
 
 function select-oci-auth() {
-  echo $* >> $(workspaces.data.path)/mock_select-oci-auth.txt
+  echo $* >> "$(params.dataDir)/mock_select-oci-auth.txt"
 }
 
