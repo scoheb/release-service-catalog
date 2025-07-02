@@ -279,16 +279,41 @@ merge_github_pr() {
     echo "Commit message: \"${commit_message}\""
 
     local merge_result
-    merge_result=$(curl -L \
-      -X PUT \
-      -H "Accept: application/vnd.github+json" \
-      -H "Authorization: Bearer $GITHUB_TOKEN" \
-      -H "X-GitHub-Api-Version: 2022-11-28" \
-      "https://api.github.com/repos/${component_repo_name}/pulls/${pr_number}/merge" \
-      -d "{\"commit_title\":\"e2e test\",\"commit_message\":\"${commit_message}\"}" --silent --show-error --fail-with-body)
+    local attempt=1
+    local max_attempts=3
+    local success=false
 
-    if [ $? -ne 0 ]; then
-        log_error "Failed to merge PR. Response: ${merge_result}"
+    # Retry loop for PR merge
+    while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
+        echo "Merge attempt ${attempt}/${max_attempts}..."
+        
+        set +e
+        merge_result=$(curl -L \
+          -X PUT \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          "https://api.github.com/repos/${component_repo_name}/pulls/${pr_number}/merge" \
+          -d "{\"commit_title\":\"e2e test\",\"commit_message\":\"${commit_message}\"}" --silent --show-error --fail-with-body)
+
+        if [ $? -eq 0 ]; then
+            success=true
+            echo "✅ PR merge succeeded on attempt ${attempt}"
+        else
+            echo "❌ PR merge failed on attempt ${attempt}. Response: ${merge_result}"
+            if [ $attempt -lt $max_attempts ]; then
+                echo "Waiting 5 seconds before retry..."
+                sleep 5
+            fi
+        fi
+        set -e
+        
+        attempt=$((attempt + 1))
+    done
+
+    # Check if all attempts failed
+    if [ "$success" = false ]; then
+        log_error "Failed to merge PR after ${max_attempts} attempts. Last response: ${merge_result}"
     fi
 
     # SHA is made global by not declaring it local
