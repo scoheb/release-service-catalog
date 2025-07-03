@@ -208,7 +208,7 @@ spec:
                 AFFECTED_PIPELINES=$("/home/e2e/tests/scripts/find_release_pipelines_from_pr.sh" \
                   --repo "konflux-ci/release-service-catalog" --pull_request_number "${PR_NUMBER}")
               else
-                AFFECTED_PIPELINES=$("/home/e2e/tests/scripts/find_release_pipelines_from_branch.sh" \
+                AFFECTED_PIPELINES=$("/home/e2e/tests/scripts/find_release_pipelines_from_pr.sh" \
                   --repo "konflux-ci/release-service-catalog" --branch "${BRANCH_NAME}")
               fi
 
