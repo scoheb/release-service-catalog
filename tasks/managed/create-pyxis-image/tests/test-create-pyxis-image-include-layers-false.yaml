@@ -218,7 +218,7 @@ spec:
 
               # check that decompressed layers info is not included in the oras manifest fetch
               jq -e '. | has("uncompressed_layers") == false' \
-                "$(params.dataDir)/$(context.pipelineRun.uid)/oras-manifest-fetch.json"
+                "$(params.dataDir)/$(context.pipelineRun.uid)/oras-manifest-fetch-0-0.json"
 
       runAfter:
         - run-task
