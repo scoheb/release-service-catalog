@@ -6,6 +6,7 @@ metadata:
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
+    test: "scott"
 spec:
   description: >-
     Tekton task to collect data from release resources and verify that they do not contain any

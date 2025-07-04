@@ -8,6 +8,11 @@ log_error() {
     exit "${2:-1}" # Exit with provided code or 1 by default
 }
 
+# Helper function to log errors
+log_warning() {
+    echo "⚠️ Warning: $1"
+}
+
 # Function to check for required environment variables
 check_env_vars() {
     echo "Checking required environment variables..."
@@ -38,7 +43,7 @@ check_env_vars() {
     if [ -n "$KUBECONFIG" ] ; then
       echo "Using provided KUBECONFIG"
     else
-      echo "⚠️ Warning: KUBECONFIG is not set. Assuming kubectl is configured correctly."
+      log_warning "KUBECONFIG is not set. Assuming kubectl is configured correctly."
     fi
     echo "Environment variable check complete."
 }
@@ -92,7 +97,7 @@ get_build_pipeline_run_url() { # args are ns, app, name
   console_url=${console_url%/}
 
   if [ -z "$console_url" ]; then
-      echo "⚠️ Warning: Could not retrieve custom-console-url. URL might be incomplete."
+      log_warning "Could not retrieve custom-console-url. URL might be incomplete."
       echo "kubectl get cm/pipelines-as-code -n openshift-pipelines -ojson" # Add command for easier debugging
       echo "${ns}/applications/${app}/pipelineruns/${name}" # Fallback or partial URL
   else
@@ -150,6 +155,7 @@ cleanup_resources() {
   echo "Killing any child processes..." >> "${cleanup_log_file}"
   pkill -e  -P $$
 
+  cat "${cleanup_log_file}"
   if [ "$err" -ne 0 ]; then
     exit "$err"
   fi
@@ -239,21 +245,54 @@ create_kubernetes_resources() {
 # Modifies global variables: component_pr, pr_number
 # Relies on global variables: component_name, tenant_namespace
 wait_for_component_initialization() {
-    echo -n "Waiting for component ${component_name} in namespace ${tenant_namespace} to be initialized: "
+    echo "Waiting for component ${component_name} in namespace ${tenant_namespace} to be initialized..."
+
+    local max_attempts=60  # 10 minutes with 10-second intervals
+    local attempt=1
     local component_annotations=""
-    while [ -z "${component_annotations}" ]; do
-      sleep 1
-      echo -n "."
+    local initialization_success=false
+
+    while [ $attempt -le $max_attempts ]; do
+      echo "Initialization check attempt ${attempt}/${max_attempts}..."
+
+      # Try to get component annotations
       component_annotations=$(kubectl get component/"${component_name}" -n "${tenant_namespace}" -ojson 2>/dev/null | \
         jq -r --arg k "build.appstudio.openshift.io/status" '.metadata.annotations[$k] // ""')
-    done
-    echo ""
-    echo "️✅️ Initialized."
 
-    # component_pr is made global by not declaring it local
-    component_pr=$(jq -r '.pac."merge-url" // ""' <<< "${component_annotations}")
-    if [ -z "${component_pr}" ]; then
-      log_error "Could not get component PR from annotations: ${component_annotations}"
+      if [ -n "${component_annotations}" ]; then
+        # component_pr is made global by not declaring it local
+        component_pr=$(jq -r '.pac."merge-url" // ""' <<< "${component_annotations}")
+        if [ -n "${component_pr}" ]; then
+            echo "✅ Component initialized successfully"
+            initialization_success=true
+            break
+        else
+            log_warning "Could not get component PR from annotations: ${component_annotations}"
+            echo "Requesting a new configure-pac..."
+            kubectl annotate components/${component_name} build.appstudio.openshift.io/request=configure-pac -n "${tenant_namespace}"
+            echo "Waiting 10 seconds before retry..."
+            sleep 10
+        fi
+
+      else
+        log_warning "Component not yet initialized (attempt ${attempt}/${max_attempts})"
+
+        # Wait before retrying (except on the last attempt)
+        if [ $attempt -lt $max_attempts ]; then
+          echo "Waiting 10 seconds before retry..."
+          sleep 10
+        fi
+      fi
+
+      attempt=$((attempt + 1))
+    done
+
+    # Check if initialization ultimately succeeded
+    if [ "$initialization_success" = false ]; then
+      echo "🔴 error: component ${component_name} failed to initialize after ${max_attempts} attempts ($(($max_attempts * 10 / 60)) minutes)"
+      echo "   - Component may not exist in namespace ${tenant_namespace}"
+      echo "   - Component creation may have failed"
+      exit 1
     fi
 
     # pr_number is made global by not declaring it local
@@ -286,7 +325,7 @@ merge_github_pr() {
     # Retry loop for PR merge
     while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
         echo "Merge attempt ${attempt}/${max_attempts}..."
-        
+
         set +e
         merge_result=$(curl -L \
           -X PUT \
