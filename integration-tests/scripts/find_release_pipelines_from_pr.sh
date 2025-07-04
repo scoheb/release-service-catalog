@@ -195,7 +195,7 @@ _find_and_process_pipelines() {
     export FOUND_PIPELINES="${FOUND_PIPELINENAMES[*]}"
   fi
 
-  ALL_TESTCASES=("rh-advisories" "fbc-release" "release-to-github" "push-to-external-registry" "rhtap-service-push" "rh-push-to-registry-redhat-io" "rh-push-to-external-registry")
+  ALL_TESTCASES=("rh-advisories" "fbc-release" "release-to-github" "push-to-external-registry" "rhtap-service-push" "rh-push-to-registry-redhat-io" "rh-push-to-external-registry" "push-to-addons-registry")
   SELECTED_TESTCASES=()
 
   for pplname in "${FOUND_PIPELINENAMES[@]}"; do
