@@ -5,7 +5,7 @@ metadata:
   name: push-to-addons-registry
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
-    tekton.dev/tags: release
+    tekton.dev/tags: release3
 spec:
   description: >-
     Tekton pipeline to release a single FBC component to the Addons Registry.
