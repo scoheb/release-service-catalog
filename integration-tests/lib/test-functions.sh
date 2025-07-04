@@ -454,16 +454,18 @@ wait_for_releases() {
 # Function to clean up old resources based on originating tool label
 # Arguments:
 #   $1: originating_tool label value
-#   $2: age in minutes (optional, defaults to 7)
+#   $2: age in minutes (optional, defaults to 1440 or 24 hours)
 cleanup_old_resources() {
     local originating_tool="$1"
-    local age_minutes="${2:-7}"
+    local age_minutes="${2:-1440}"
 
     if [ -z "$originating_tool" ]; then
         echo "🔴 Error: originating_tool parameter is required"
         return 1
     fi
 
+    # disable exit on error to allow for cleanup of old resources
+    set +e
     # Create temporary file and ensure it's cleaned up on exit
     local temp_dir
     temp_dir=$(mktemp -d)
@@ -497,6 +499,8 @@ cleanup_old_resources() {
     else
         echo "No old resources found to clean up"
     fi
+    # re-enable exit on error
+    set -e
 }
 
 # Function to delete old branches from a GitHub repository

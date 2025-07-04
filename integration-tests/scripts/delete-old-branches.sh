@@ -57,7 +57,7 @@ if [ -z "$repo_name" ] ; then
   exit 1
 fi
 
-CUTOFF_DATE="1 day"
+CUTOFF_DATE="${CUTOFF_DATE:-1 day}"
 CUTOFF_SECONDS=$(date -d "$CUTOFF_DATE ago" +%s)
 
 echo "Finding branches in $repo_name with no commits for $CUTOFF_DATE..."
