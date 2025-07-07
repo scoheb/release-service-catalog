@@ -196,7 +196,7 @@ spec:
         - name: TIMEOUT
           value: $(params.enterpriseContractTimeout)
         - name: SOURCE_DATA_ARTIFACT
-          value: "$(tasks.check-data-keys.results.sourceDataArtifact)"
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: TRUSTED_ARTIFACTS_DEBUG
           value: "$(params.trustedArtifactsDebug)"
       runAfter:
@@ -219,7 +219,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.verify-conforma.results.sourceDataArtifact)"
+          value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
