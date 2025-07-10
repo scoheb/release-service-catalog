@@ -137,11 +137,23 @@ jobs:
     name: Tektor
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Important for git history
           token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: scoheb/tektor@v1
+      - name: Get changed files
+        uses: tj-actions/changed-files@ed68ef82c095e0d48ec87eccea555d944a631a4c  # v45.0.6
+        id: changed-files
+        with:
+          files: |
+            pipelines/**/*.yaml
+      - name: Run Tektor
+        uses: scoheb/tektor@v2
         with:
           verbose: true
-          file-patterns: '**/*.yaml,**/*.yml'
+          changed-files: ${{ steps.changed-files.outputs.all_changed_files }}
+          tektor-args: |
+            --param taskGitRevision=${{ github.event.pull_request.head.ref }} 
+            --param taskGitUrl=${{ github.event.pull_request.head.repo.clone_url }}
+            --param verify_ec_task_git_revision=main
+            --param verify_ec_task_bundle=quay.io/conforma/tekton-task:latest
