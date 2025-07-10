@@ -7,8 +7,8 @@ metadata:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
 spec:
-  description: >-
-    Tekton task to push snapshot images to an image registry using `cosign copy`
+  description: |-
+    Tekton task to push snapshot images to an image registry using `cosign copy`.
   params:
     - name: snapshotPath
       description: Path to the JSON string of the mapped Snapshot spec in the data workspace
@@ -24,28 +24,28 @@ spec:
       type: string
       default: "10"
     - name: retries
-      description: Retry copy N times.
+      description: Retry copy N times
       type: string
       default: "3"
     - name: caTrustConfigMapName
       type: string
-      description: The name of the ConfigMap to read CA bundle data from.
+      description: The name of the ConfigMap to read CA bundle data from
       default: trusted-ca
     - name: caTrustConfigMapKey
       type: string
-      description: The name of the key in the ConfigMap that contains the CA bundle data.
+      description: The name of the key in the ConfigMap that contains the CA bundle data
       default: ca-bundle.crt
     - name: ociStorage
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
       type: string
       default: "empty"
     - name: ociArtifactExpiresAfter
       description: Expiration date for the trusted artifacts created in the
-        OCI repository. An empty string means the artifacts do not expire.
+        OCI repository. An empty string means the artifacts do not expire
       type: string
       default: "1d"
     - name: trustedArtifactsDebug
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       type: string
       default: ""
     - name: orasOptions

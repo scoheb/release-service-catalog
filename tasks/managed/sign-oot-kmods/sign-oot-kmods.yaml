@@ -8,14 +8,14 @@ metadata:
     tekton.dev/tags: release
 spec:
   description: >-
-    Task to sign OOT kernel modules using the internal signing server
+    Task to sign out-of-tree kernel modules using the internal signing server
   params:
     - name: dataPath
       type: string
       description: Path to the data JSON in the data workspace
     - name: signedKmodsPath
       type: string
-      description: Path where the kernel modules are stored in the workspace.
+      description: Path where the kernel modules are stored in the workspace
     - name: kerberosRealm
       type: string
       description: Name of the key used to sign the kernel modules
@@ -32,7 +32,7 @@ spec:
       type: string
       description: Secret containing the fields signHost, SignKey and SignUser
     - name: ociStorage
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
       type: string
       default: "empty"
     - name: ociArtifactExpiresAfter
@@ -41,7 +41,7 @@ spec:
       type: string
       default: "1d"
     - name: trustedArtifactsDebug
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       type: string
       default: ""
     - name: orasOptions

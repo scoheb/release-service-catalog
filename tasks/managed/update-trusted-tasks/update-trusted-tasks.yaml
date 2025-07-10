@@ -7,18 +7,19 @@ metadata:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
 spec:
-  description: >-
-    Tekton task to update trusted-tasks list bundles.
+  description: |-
+    Tekton task to update trusted-tasks list OCI artifact.
     Once a task is released as a bundle, the list of trusted-tasks should be 
     updated with the new task.
-    If an OCI artifact named data-acceptable-bundles is already in place we will use
-    it as an input and append it, else we will create a new artifact
+    The OCI artifact containing the trusted-tasks list is named `acceptable-data-bundles` and should reside in the same
+    org in the registry. If it is already in place, it will be used as an input to which the results will be appended,
+    else a new artifact will be created.
   params:
     - name: snapshotPath
       type: string
       description: Path to the JSON string of the Snapshot spec in the data workspace
     - name: ociStorage
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
       type: string
       default: "empty"
     - name: orasOptions
@@ -31,7 +32,7 @@ spec:
       type: string
       default: "1d"
     - name: trustedArtifactsDebug
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       type: string
       default: ""
     - name: dataDir

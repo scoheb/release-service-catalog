@@ -7,31 +7,33 @@ metadata:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: push-koji
 spec:
+  description: |-
+    Tekton task to push konflux build rpms to koji instance.
   params:
     - name: snapshotPath
       type: string
       description: |
-        Path to the JSON file of the mapped Snapshot spec in the data workspace.
+        Path to the JSON file of the mapped Snapshot spec in the data workspace
     - name: dataPath
       type: string
       description: |
-        Path to the JSON file of the merged data to use in the data workspace.
+        Path to the JSON file of the merged data to use in the data workspace
     - name: pushSecret
       type: string
       description: |
-        The secret that is used for login koji instance.
+        The secret that is used for login koji instance
     - name: subdirectory
       type: string
       description: |
-        The pipeline specific directory.
+        The pipeline specific directory
     - name: pipelineImage
       type: string
       description: |
         The image url with koji (1.34 or higher), jq and kinit installed for
         running the push-rpm-to-koji task, please make sure you have such image
-        or you build this image first.
+        or you build this image first
     - name: ociStorage
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
       type: string
       default: "empty"
     - name: sourceDataArtifact
@@ -44,7 +46,7 @@ spec:
       type: string
       default: "1d"
     - name: trustedArtifactsDebug
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       type: string
       default: ""
     - name: orasOptions

@@ -8,7 +8,7 @@ metadata:
     tekton.dev/tags: release
 spec:
   description: >-
-    Task to upload OOT kernel modules to private vendor repo
+    Task to upload out-of-tree kernel modules to private vendor repo
   params:
     - name: signedKmodsPath 
       type: string
@@ -27,7 +27,7 @@ spec:
       type: string
       description: Secret containing the Project Access Token for the artifact repos
     - name: ociStorage
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
       type: string
       default: "empty"
     - name: ociArtifactExpiresAfter
@@ -36,7 +36,7 @@ spec:
       type: string
       default: "1d"
     - name: trustedArtifactsDebug
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       type: string
       default: ""
     - name: orasOptions
