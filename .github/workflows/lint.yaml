@@ -134,11 +134,14 @@ jobs:
           README_ITEMS: >-
             ${{ steps.changed-dirs.outputs.all_changed_files }}
   check-tektor:
-    name: Check tektor files
+    name: Tektor
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Important for git history
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: scoheb/tektor@v1
         with:
           verbose: true
-          file-patterns: '**/*.yaml,**/*.yml'            
+          file-patterns: '**/*.yaml,**/*.yml'
