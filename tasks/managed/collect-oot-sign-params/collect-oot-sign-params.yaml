@@ -18,26 +18,36 @@ spec:
       description: Path to the JSON string of the mapped Snapshot spec in the data workspace
     - name: ociStorage
       type: string
+      description: The OCI repository where the Trusted Artifacts are stored
       default: "empty"
     - name: ociArtifactExpiresAfter
       type: string
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire
       default: "1d"
     - name: trustedArtifactsDebug
       type: string
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       default: ""
     - name: orasOptions
       type: string
+      description: oras options to pass to Trusted Artifacts calls
       default: ""
     - name: sourceDataArtifact
       type: string
+      description: >
+        The Trusted Artifact URI pointing to the artifact with the application snapshot spec and the release data
       default: ""
     - name: dataDir
       type: string
+      description: The location where data will be stored
       default: $(workspaces.data.path)
     - name: taskGitUrl
       type: string
+      description: The url to the git repo where the release-service-catalog tasks to be used are stored
     - name: taskGitRevision
       type: string
+      description: The revision in the taskGitUrl repo to be used
   workspaces:
     - name: data
       description: The workspace where the snapshot spec json file resides

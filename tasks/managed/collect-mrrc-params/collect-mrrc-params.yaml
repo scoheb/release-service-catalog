@@ -7,6 +7,13 @@ metadata:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
 spec:
+  description: |-
+    Tekton task that collects MRRC(maven.repository.redhat.com) configuration options from
+    the data file. MRRC is used to host maven artifacts of Red Hat Middleware products.
+    This task looks at the data file in the workspace to extract the params like
+    `mrrc.*`, `cosignPubKeySecret` and `charonAWSSecret` keys for MRRC.
+    `mrrc.*` will be stored in a mrrc.env file and are emitted as task results with
+    other three for downstream tasks to use.
   params:
     - name: dataJsonPath
       type: string
@@ -15,7 +22,7 @@ spec:
       description: Path to the JSON string of the Snapshot spec in the data workspace
       type: string
     - name: ociStorage
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
       type: string
       default: "empty"
     - name: ociArtifactExpiresAfter
@@ -24,7 +31,7 @@ spec:
       type: string
       default: "1d"
     - name: trustedArtifactsDebug
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       type: string
       default: ""
     - name: orasOptions

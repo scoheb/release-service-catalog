@@ -8,12 +8,15 @@ metadata:
     tekton.dev/tags: release
 spec:
   description: >
-    Tekton task to check if any issues or CVEs in the releaseNotes key of the data.json
-    are embargoed. It checks the issues by server using curl and checks the CVEs via an
-    InternalRequest. If any issue does not exist or any CVE is embargoed, the task will
-    fail. The task will also fail if a Jira issue listed is for a component that does
-    not exist in the releaseNotes.content.images section or if said component does not
-    list the CVE from the issue.
+    Tekton task to check if any issues or CVEs in the releaseNotes key of
+    the data.json are embargoed. It checks the issues by server using curl and
+    checks the CVEs via an InternalRequest. If any issue does not exist or any CVE is embargoed,
+    the task will fail. The task will also fail if a Jira issue listed is
+    for a component that does not exist in the releaseNotes.content.[images|artifacts] section
+    or if said component does not list the CVE from the issue.
+
+    Finally, the task will inject the `public` key to each issue listed for `issues.redhat.com`.
+    This is a boolean value that is set based on the issues visibility.
   params:
     - name: dataPath
       description: Path to the JSON string of the merged data to use in the data workspace
@@ -26,16 +29,16 @@ spec:
       type: string
       description: The uid of the current pipelineRun. Used as a label value when creating internal requests
     - name: ociStorage
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
       type: string
       default: "empty"
     - name: ociArtifactExpiresAfter
       description: Expiration date for the trusted artifacts created in the
-        OCI repository. An empty string means the artifacts do not expire.
+        OCI repository. An empty string means the artifacts do not expire
       type: string
       default: "1d"
     - name: trustedArtifactsDebug
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       type: string
       default: ""
     - name: orasOptions

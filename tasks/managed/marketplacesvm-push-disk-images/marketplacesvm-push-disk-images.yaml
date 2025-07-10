@@ -7,38 +7,40 @@ metadata:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
 spec:
-  description: >-
-    Tekton task to push disk images to Cloud Marketplaces
+  description: |-
+    Tekton Task to publish VM disk images into various cloud marketplaces using `pubtools-marketplacesvm`.
+    
+    It currently supports images in `raw` and `vhd` formats for `AWS` and `Azure` respectively.
   params:
     - name: snapshotPath
       type: string
       description: |
         Path to the JSON string of the mapped snapshot spec in the data workspace.
-        It must be processed by the "apply-mapping" task first.
+        It must be processed by the "apply-mapping" task first
     - name: cloudMarketplacesSecret
       type: string
-      description: Env specific secret containing the marketplaces credentials.
+      description: Env specific secret containing the marketplaces credentials
     - name: prePush
       type: string
-      description: Whether perform a pre-push (true) or not (false). When true it will not publish PROD.
+      description: Whether perform a pre-push (true) or not (false). When true it will not publish PROD
       default: false
     - name: concurrentLimit
       type: string
-      description: The maximum number of images to be pulled at once.
+      description: The maximum number of images to be pulled at once
       default: 3
     - name: uploadContainerName
       type: string
-      description: The name of the container to upload the images to.
+      description: The name of the container to upload the images to
       default: "konfluxupload"
     - name: ociStorage
       type: string
-      description: The OCI repository where the Trusted Artifacts are stored.
+      description: The OCI repository where the Trusted Artifacts are stored
     - name: ociArtifactExpiresAfter
       type: string
       description: >
         Expiration date for the trusted artifacts created in the OCI repository.
         An empty string means the artifacts do not expire.
-        The format is YYYY-MM-DD.
+        The format is YYYY-MM-DD
       default: ""
     - name: orasOptions
       type: string
@@ -47,13 +49,13 @@ spec:
     - name: sourceDataArtifact
       type: string
       description: >
-        The Trusted Artifact URI pointing to the artifact with the application snapshot spec and the release data.
+        The Trusted Artifact URI pointing to the artifact with the application snapshot spec and the release data
     - name: dataDir
       type: string
       description: The location where data will be stored
     - name: trustedArtifactsDebug
       type: string
-      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable.
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
       default: ""
     - name: taskGitUrl
       type: string
