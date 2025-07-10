@@ -17,7 +17,7 @@ spec:
     - name: advisory_json
       type: string
       description: |
-          String containing a JSON representation of the advisory data (e.g. '{"product_id":123,"type":"RHSA"}').
+          String containing a JSON representation of the advisory data (e.g. '{"product_id":123,"type":"RHSA"}')
     - name: application
       type: string
       description: Application being released

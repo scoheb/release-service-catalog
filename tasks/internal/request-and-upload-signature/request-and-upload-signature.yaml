@@ -7,14 +7,12 @@ metadata:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
 spec:
-  description: >-
+  description: |-
     Tekton task to request and upload a simple signature.
-
     - This task is meant to be used in an internal pipeline that can be triggered frequently
       and is expected to complete as quickly as possible.
-
   params:
-    - description: A docker image of operator-pipeline-images for the steps to run in.
+    - description: A docker image of operator-pipeline-images for the steps to run in
       name: pipeline_image
       default: "quay.io/konflux-ci/release-service-utils:7312e2ecbe67e973edd1f0031acb490d6c961a41"
       type: string
@@ -40,10 +38,10 @@ spec:
     - description: Kubernetes secret name that contains the Pyxis SSL files
       name: pyxis_ssl_cert_secret_name
       type: string
-    - description: The key within the Kubernetes secret that contains the Pyxis SSL cert.
+    - description: The key within the Kubernetes secret that contains the Pyxis SSL cert
       name: pyxis_ssl_cert_file_name
       type: string
-    - description: The key within the Kubernetes secret that contains the Pyxis SSL key.
+    - description: The key within the Kubernetes secret that contains the Pyxis SSL key
       name: pyxis_ssl_key_file_name
       type: string
     - description: Number of threads used to upload signatures to pyxis
@@ -69,14 +67,14 @@ spec:
     - description: Kubernetes secret name that contains the umb SSL files
       name: umb_ssl_cert_secret_name
       type: string
-    - description: The key within the Kubernetes secret that contains the umb SSL cert.
+    - description: The key within the Kubernetes secret that contains the umb SSL cert
       name: umb_ssl_cert_file_name
       type: string
-    - description: The key within the Kubernetes secret that contains the umb SSL key.
+    - description: The key within the Kubernetes secret that contains the umb SSL key
       name: umb_ssl_key_file_name
       type: string
     - default: https://pyxis.engineering.redhat.com
-      description: Pyxis instance to upload the signature to.
+      description: Pyxis instance to upload the signature to
       name: pyxis_url
       type: string
     - name: signature_data_file
