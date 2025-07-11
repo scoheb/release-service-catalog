@@ -221,7 +221,8 @@ spec:
               fi
 
               # check if PIPELINE is found as an affected pipeline
-              if string_has_word "${PIPELINE}" "${AFFECTED_PIPELINES}"; then
+              if string_has_word "${PIPELINE}" "${AFFECTED_PIPELINES}" || \
+                [[ "${AFFECTED_PIPELINES}" == "release-pipelines" ]]; then
                 echo "This Test Suite is affected by changes in PR ${PR_NUMBER}"
                 # initially, there was a run-test.sh in every test suite directory.
                 # then we moved to have a generic run-test.sh in the root.
