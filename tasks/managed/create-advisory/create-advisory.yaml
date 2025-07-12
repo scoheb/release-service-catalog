@@ -375,11 +375,12 @@ spec:
         IR_FILE="$(params.dataDir)/$(context.task.name)/ir-result.txt"
         mkdir -p "$(dirname "$IR_FILE")"
 
+        advisoryDataCompressed=$(gzip <<< "${advisoryData}" | base64 -w0)
         echo "Creating InternalRequest to create advisory..."
         internal-request --pipeline "$(params.request)" \
                          -p application="${application}" \
                          -p origin="${origin}" \
-                         -p advisory_json="${advisoryData}" \
+                         -p advisory_json="${advisoryDataCompressed}" \
                          -p config_map_name="${configMapName}" \
                          -p contentType="${content_type}" \
                          -p advisory_secret_name="${advisorySecretName}" \
