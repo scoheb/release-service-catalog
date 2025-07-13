@@ -348,13 +348,17 @@ spec:
             exit 1
         fi
 
-        PUSHES=$(jq -s . "$TMP_RESULTS_DIR"/*.json)
-        jq --argjson PUSHES "$PUSHES" '
-          reduce $PUSHES[] as $p (.; (.images[] | select(.name == $p.name).urls) += [$p.url])
+        # Create a temporary file for the pushes data to avoid command line argument length limits
+        PUSHES_FILE=$(mktemp)
+        jq -s . "$TMP_RESULTS_DIR"/*.json > "$PUSHES_FILE"
+        
+        # Use file input instead of command line arguments to avoid argument length limits
+        jq --slurpfile PUSHES "$PUSHES_FILE" '
+          reduce $PUSHES[0][] as $p (.; (.images[] | select(.name == $p.name).urls) += [$p.url])
         ' "$RESULTS_JSON_FILE" | tee "$RESULTS_FILE"
-
-        # Clean up temporary file
-        rm -f "$RESULTS_JSON_FILE" "$RESULTS_JSON_FILE.tmp"
+        
+        # Clean up temporary files
+        rm -f "$RESULTS_JSON_FILE" "$RESULTS_JSON_FILE.tmp" "$PUSHES_FILE"
 
         printf 'Completed "%s" for "%s"\n\n' "$(context.task.name)" "$application"
       volumeMounts:
