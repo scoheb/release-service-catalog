@@ -14,8 +14,8 @@ spec:
       stagedIndex: false
       targetIndex: "quay.io/redhat/redhat----preview-operator-index:{{ OCP_VERSION }}"
       publishingCredentials: "fbc-preview-publishing-credentials"
-      requestTimeoutSeconds: 1500
-      buildTimeoutSeconds: 1500
+      requestTimeoutSeconds: 3000
+      buildTimeoutSeconds: 3000
       hotfix: false
       issueId: ""
       preGA: false
