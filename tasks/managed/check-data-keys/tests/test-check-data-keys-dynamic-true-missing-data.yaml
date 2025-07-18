@@ -2,13 +2,11 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: test-check-data-keys-fail-missing-releasenotes-key
-  annotations:
-    test/assert-task-failure: "run-task"
+  name: test-check-data-keys-dynamic-true-missing-data
 spec:
   description: |
-    Run the check-data-keys task with the releaseNotes key missing the product_id in the data json and
-    verify that the task fails as expected.
+    Run the check-data-keys task with releaseNotes system set to dynamic: true and no releaseNotes data present.
+    This should pass because dynamic: true means the system is only required if data is present.
   workspaces:
     - name: tests-workspace
   params:
@@ -66,42 +64,8 @@ spec:
               mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
               cat > "$(params.dataDir)/$(context.pipelineRun.uid)/data.json" << EOF
               {
-                "releaseNotes": {
-                  "product_name": "Red Hat Openstack Product",
-                  "product_version": "1.2.3",
-                  "product_stream": "rhtas-tp1",
-                  "cpe": "cpe:/a:example:openstack:el8",
-                  "type": "RHSA",
-                  "content": {
-                    "images": [
-                      {
-                        "containerImage": "quay.io/example/openstack@sha256:abcde",
-                        "repository": "rhosp16-rhel8/openstack",
-                        "tags": [
-                          "latest"
-                        ],
-                        "architecture": "amd64",
-                        "signingKey": "abcde",
-                        "purl": "pkg:example/openstack@sha256:abcde?repository_url=quay.io/example/rhosp16-rhel8",
-                        "cves": {
-                          "fixed": {
-                            "CVE-2022-1234": {
-                              "components": [
-                                "pkg:golang/golang.org/x/net/http2@1.11.1"
-                              ]
-                            }
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "synopsis": "test synopsis",
-                  "topic": "test topic",
-                  "description": "test description",
-                  "solution": "test solution",
-                  "references": [
-                    "https://docs.example.com/some/example/release-notes"
-                  ]
+                "someOtherData": {
+                  "value": "test"
                 }
               }
               EOF
@@ -140,7 +104,7 @@ spec:
         - name: systems
           value: |
             [
-              {"systemName": "releaseNotes", "dynamic": false}
+              {"systemName": "releaseNotes", "dynamic": true}
             ]
         - name: ociStorage
           value: $(params.ociStorage)
