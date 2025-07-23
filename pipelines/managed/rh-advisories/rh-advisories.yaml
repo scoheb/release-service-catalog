@@ -805,6 +805,8 @@ spec:
       params:
         - name: snapshotSpec
           value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: releaseId
+          value: $(context.pipelineRun.uid)
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
@@ -833,6 +835,12 @@ spec:
           operator: in
           values: ["false"]
       params:
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
+        - name: snapshotSpec
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: releaseId
+          value: $(context.pipelineRun.uid)
         - name: sbomDir
           value: "$(tasks.update-component-sbom.results.sbomPath)"
         - name: atlasSecretName
@@ -1006,6 +1014,8 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
+        - name: releaseId
+          value: $(context.pipelineRun.uid)
         - name: snapshotSpec
           value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: ociStorage
