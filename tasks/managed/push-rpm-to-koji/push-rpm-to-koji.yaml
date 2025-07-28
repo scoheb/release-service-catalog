@@ -82,6 +82,8 @@ spec:
         value: "$(params.orasOptions)"
       - name: "DEBUG"
         value: "$(params.trustedArtifactsDebug)"
+    securityContext:
+      runAsUser: 1001
   steps:
     - name: skip-trusted-artifact-operations
       computeResources:
@@ -181,7 +183,7 @@ spec:
         KRB5CCNAME=FILE:/tmp/krb5cc_"$(id -u)"
         export KRB5CCNAME
 
-        cd "$(dirname "$(params.snapshotPath)")"
+        cd "$(params.dataDir)/$(dirname "$(params.snapshotPath)")"
 
         # The secrets are base64 when it is mounted as remote secrets otherwise we can directly use.
         if [ -f /tmp/secret/base64_keytab ]; then
@@ -304,7 +306,6 @@ spec:
         done
 
         printf 'Completed "%s" for "%s"\n\n' "$(context.task.name)" "$APPLICATION"
-      workingDir: $(params.dataDir)
       volumeMounts:
         - mountPath: /tmp/secret
           name: secret-volume

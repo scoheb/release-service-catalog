@@ -111,6 +111,8 @@ spec:
         value: "$(params.orasOptions)"
       - name: "DEBUG"
         value: "$(params.trustedArtifactsDebug)"
+    securityContext:
+      runAsUser: 1001
   steps:
     - name: skip-trusted-artifact-operations
       computeResources:
