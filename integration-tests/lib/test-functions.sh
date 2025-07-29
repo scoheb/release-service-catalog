@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+#
 # --- Function Definitions ---
 
 # Helper function to log errors
