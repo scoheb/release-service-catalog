@@ -147,6 +147,8 @@ jobs:
           files: |
             **/*.yaml
       - name: Run task runAsUser check script
+        if: |
+          steps.changed-files.outputs.any_changed == 'true'
         run: .github/scripts/tkn_check_task_runasuser.sh
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
