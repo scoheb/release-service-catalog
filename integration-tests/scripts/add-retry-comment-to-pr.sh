@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #
+#
 # Summary:
 #   Adds a "/retest" comment to a specified pull request in a GitHub repository
 #   to trigger retesting.
