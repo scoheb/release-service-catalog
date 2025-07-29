@@ -275,8 +275,14 @@ find_changed_tekton_tasks_pipelines() {
       SELECT_ALL_TESTCASES=true
       break
     elif echo "$file" | grep -q "^integration-tests/"; then
-      IFS='/' read -ra parts <<< "$file"
-      INTEGRATION_SUITES+=("${parts[1]}")
+      # Check if the file is in lib/, scripts/, or is run-test.sh - these should trigger all test suites
+      if echo "$file" | grep -q -E "^integration-tests/(lib|scripts)/|^integration-tests/run-test\.sh$"; then
+        SELECT_ALL_TESTCASES=true
+        break
+      else
+        IFS='/' read -ra parts <<< "$file"
+        INTEGRATION_SUITES+=("${parts[1]}")
+      fi
     elif [[ "$file" =~ ^tasks/internal/[^/]+/[^/]+\.ya?ml$ ]] && [ -f "$file" ]; then
       if grep -q -E 'kind: *Task' "$file"; then
         TEKTON_INTERNAL_TASKS+=("$file")
