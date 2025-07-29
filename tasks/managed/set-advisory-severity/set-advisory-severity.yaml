@@ -170,7 +170,7 @@ spec:
             exit 0
         fi
 
-        RELEASENOTESIMAGES=$(jq -c '.releaseNotes.content.images' "${DATA_FILE}")
+        RELEASENOTESIMAGES=$(jq -c '.releaseNotes.content.images' "${DATA_FILE}" | gzip -c | base64 -w 0)
 
         IR_FILE="$(params.dataDir)/$(context.task.name)/ir-result.txt"
         mkdir -p "$(dirname "$IR_FILE")"

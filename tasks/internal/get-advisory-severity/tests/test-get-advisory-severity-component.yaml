@@ -13,7 +13,10 @@ spec:
         name: get-advisory-severity
       params:
         - name: releaseNotesImages
-          value: '[{"repository":"component","cves":{"fixed":{"CVE-moderate":{"components":[]}}}}]'
+          value: >-
+            H4sIAAAAAAAAA4uuVipKLcgvzizJL6pUslJKzs8tyM9LzStR0lFKLkstVrKqVkrLrEhNATGcw1x1c/NTUosSS1JBfLhioLLo2FogiOUCAAt58ApRAAAA
+          # value before before `gzip -c|base64 -w 0` encoding:
+          # [{"repository":"component","cves":{"fixed":{"CVE-moderate":{"components":[]}}}}]
         - name: internalRequestPipelineRunName
           value: $(context.pipelineRun.name)
     - name: check-result

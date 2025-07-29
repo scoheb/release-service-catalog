@@ -15,7 +15,7 @@ spec:
   params:
     - name: releaseNotesImages
       type: string
-      description: Json array of image specific details for the advisory
+      description: Base64 string of gzipped JSON array of image specific details for the advisory
     - name: internalRequestPipelineRunName
       type: string
       description: name of the PipelineRun that called this task
@@ -53,7 +53,7 @@ spec:
             secretKeyRef:
               name: osidb-service-account
               key: osidb_url
-        - name: IMAGES
+        - name: IMAGES_ENCODED
           value: $(params.releaseNotesImages)
       script: |
           #!/usr/bin/env bash
@@ -84,6 +84,9 @@ spec:
           trap 'exitfunc $? $LINENO "$BASH_COMMAND"' EXIT
 
           echo -n "" > "$(results.severity.path)"
+
+          # Decode and decompress the releaseNotesImages data
+          IMAGES=$(echo "${IMAGES_ENCODED}" | base64 --decode | gzip -d)
 
           # write keytab to file
           set +x
