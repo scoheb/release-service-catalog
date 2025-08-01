@@ -156,3 +156,36 @@ jobs:
         run: .github/scripts/tkn_check_task_runasuser.sh
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+  check-resources-with-tektor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*.yaml
+            **/*.yml
+
+      - name: Checkout Tektor action
+        uses: actions/checkout@v4
+        with:
+          repository: konflux-ci/tektor
+          path: .github/actions/tektor
+          ref: main
+
+      - name: Validate Tekton resources
+        uses: ./.github/actions/tektor
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        with:
+          fail-on-error: true
+          verbose: true
+          params: |
+            taskGitRevision=${{ github.event.pull_request.head.ref }}
+            taskGitUrl=${{ github.event.pull_request.head.repo.html_url }}
+            verify_ec_task_git_revision=main
+            mobster_tasks_git_revision=main

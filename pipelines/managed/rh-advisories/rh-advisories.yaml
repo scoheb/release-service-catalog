@@ -740,8 +740,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.filter-already-released-advisory-images.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -791,8 +789,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.filter-already-released-advisory-images.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
