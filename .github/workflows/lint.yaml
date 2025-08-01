@@ -152,3 +152,31 @@ jobs:
         run: .github/scripts/tkn_check_task_runasuser.sh
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+  check-resources-with-tektor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*.yaml
+            **/*.yml
+
+      - name: Checkout Tektor action
+        uses: actions/checkout@v4
+        with:
+          repository: scoheb/tektor
+          path: .github/actions/tektor
+          ref: github-action
+
+      - name: Validate Tekton resources
+        uses: ./.github/actions/tektor
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        with:
+          fail-on-error: true
+          verbose: true
