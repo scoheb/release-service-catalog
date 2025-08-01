@@ -562,8 +562,6 @@ spec:
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
-        - name: sourceIndex
-          value: $(tasks.extract-index-image.results.indexImageResolved)
         - name: targetIndex
           value: $(tasks.add-fbc-contribution-to-index-image.results.requestTargetIndex)
         - name: internalRequestResultsFile

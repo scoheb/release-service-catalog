@@ -369,8 +369,6 @@ spec:
           value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
-        - name: subdirectory
-          value: $(tasks.collect-data.results.subdirectory)
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -428,8 +426,6 @@ spec:
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
-        - name: resultsDirName
-          value: "results"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: resultArtifacts
