@@ -320,8 +320,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-        - name: subdirectory
-          value: "$(tasks.collect-data.results.subdirectory)"
       workspaces:
         - name: data
           workspace: release-workspace
@@ -1166,8 +1164,6 @@ spec:
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
-        - name: resultsDirName
-          value: "results"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: resultArtifacts

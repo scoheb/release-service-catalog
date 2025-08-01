@@ -644,8 +644,6 @@ spec:
           value: $(params.release)
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
-        - name: resultsDirName
-          value: "results"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: resultArtifacts
