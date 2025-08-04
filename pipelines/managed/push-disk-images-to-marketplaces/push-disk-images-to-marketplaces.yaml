@@ -291,8 +291,6 @@ spec:
       params:
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
-        - name: dataPath
-          value: "$(tasks.collect-data.results.data)"
         - name: cloudMarketplacesSecret
           value: "$(tasks.collect-task-params.results.extractedValues[1])"
         - name: prePush
