@@ -31,11 +31,30 @@ fi
 
 # Verify repository exists before attempting deletion
 echo "Verifying repository ${repo_name} exists..."
-REPO_CHECK=$(curl -L \
+REPO_RESPONSE=$(curl -L \
+  --silent \
+  --max-time 30 \
+  --connect-timeout 10 \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer $GITHUB_TOKEN" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
-  https://api.github.com/repos/${repo_name} 2> /dev/null | jq -r '.full_name // ""')
+  https://api.github.com/repos/${repo_name} 2>&1)
+
+if [ $? -ne 0 ]; then
+  echo "🔴 error: Failed to verify repository ${repo_name}"
+  echo "   Check network connectivity and GITHUB_TOKEN validity"
+  echo "   Curl response: ${REPO_RESPONSE}"
+  exit 1
+fi
+
+REPO_CHECK=$(echo "${REPO_RESPONSE}" | jq -r '.full_name // ""' 2>/dev/null)
+
+if [ $? -ne 0 ]; then
+  echo "🔴 error: Failed to parse GitHub API response as JSON"
+  echo "   Raw response: ${REPO_RESPONSE}"
+  echo "   This might be an HTML error page or invalid response"
+  exit 1
+fi
 
 if [ -z "${REPO_CHECK}" ]; then
   echo "🔴 error: repository ${repo_name} not found or not accessible"
@@ -47,13 +66,23 @@ if [ -z "${REPO_CHECK}" ]; then
 fi
 
 # Perform the deletion
+echo "Deleting repository ${repo_name}..."
 DELETE_RESPONSE=$(curl -L \
+  --silent \
+  --max-time 60 \
+  --connect-timeout 10 \
   -X DELETE \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer $GITHUB_TOKEN" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   https://api.github.com/repos/${repo_name} \
   -w "%{http_code}" -o /dev/null -s)
+
+if [ $? -ne 0 ]; then
+  echo "🔴 error: Failed to delete repository ${repo_name}"
+  echo "   Check network connectivity and GITHUB_TOKEN validity"
+  exit 1
+fi
 
 # Check the HTTP response code
 if [ "${DELETE_RESPONSE}" = "204" ]; then
