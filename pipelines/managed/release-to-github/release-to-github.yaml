@@ -53,10 +53,6 @@ spec:
     - name: taskGitRevision
       type: string
       description: The revision in the taskGitUrl repo to be used
-    - name: ociStorage
-      type: string
-      description: The OCI repository where the Trusted Artifacts are stored
-      default: "quay.io/konflux-ci/release-service-trusted-artifacts"
     - name: orasOptions
       description: oras options to pass to Trusted Artifacts calls
       type: string
@@ -97,6 +93,21 @@ spec:
           value: $(params.snapshot)
         - name: requireInternalServices
           value: "false"
+    - name: collect-oci-storage
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/collect-oci-storage/collect-oci-storage.yaml
+      params:
+        - name: releaseServiceConfig
+          value: $(params.releaseServiceConfig)
+      runAfter:
+        - verify-access-to-resources
     - name: collect-data
       taskRef:
         resolver: "git"
@@ -121,7 +132,7 @@ spec:
         - name: subdirectory
           value: $(context.pipelineRun.uid)
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -134,7 +145,7 @@ spec:
         - name: data
           workspace: release-workspace
       runAfter:
-        - verify-access-to-resources
+        - collect-oci-storage
     - name: collect-task-params
       taskRef:
         resolver: "git"
@@ -161,7 +172,7 @@ spec:
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: trustedArtifactsDebug
@@ -190,7 +201,7 @@ spec:
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: dataDir
@@ -222,7 +233,7 @@ spec:
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -291,7 +302,7 @@ spec:
         - name: sourceDataArtifact
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -325,7 +336,7 @@ spec:
         - name: sourceDataArtifact
           value: "$(tasks.extract-binaries-from-image.results.sourceDataArtifact)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -343,7 +354,7 @@ spec:
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: sourceDataArtifact
           value: "$(tasks.extract-binaries-from-image.results.sourceDataArtifact)"
         - name: dataDir
@@ -391,7 +402,7 @@ spec:
         - name: sourceDataArtifact
           value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -421,7 +432,7 @@ spec:
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: sourceDataArtifact
           value: "$(tasks.check-data-keys.results.sourceDataArtifact)"
         - name: dataDir
@@ -492,7 +503,7 @@ spec:
         - name: sourceDataArtifact
           value: "$(tasks.extract-binaries-from-image.results.sourceDataArtifact)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -531,7 +542,7 @@ spec:
         - name: sourceDataArtifact
           value: "$(tasks.extract-binaries-from-image.results.sourceDataArtifact)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -570,7 +581,7 @@ spec:
         - name: sourceDataArtifact
           value: "$(tasks.sign-base64-blob.results.sourceDataArtifact)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -594,7 +605,7 @@ spec:
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: sourceDataArtifact
           value: "$(tasks.populate-release-notes.results.sourceDataArtifact)"
         - name: dataDir
@@ -628,7 +639,7 @@ spec:
         - name: advisoryUrl
           value: "$(tasks.create-advisory.results.advisory_url)"
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: sourceDataArtifact
           value: "$(tasks.create-advisory.results.sourceDataArtifact)"
         - name: dataDir
@@ -660,7 +671,7 @@ spec:
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
         - name: ociStorage
-          value: $(params.ociStorage)
+          value: "$(tasks.collect-oci-storage.results.ociStorage)"
         - name: resultArtifacts
           value:
             - "$(tasks.create-github-release.results.sourceDataArtifact)=$(params.dataDir)"

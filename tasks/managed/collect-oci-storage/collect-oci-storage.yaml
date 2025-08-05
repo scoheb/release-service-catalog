@@ -1,0 +1,61 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: collect-oci-storage
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: release
+spec:
+  description: |-
+    Tekton task to collect the value of releaseServiceConfig.spec.ociStorage. 
+    This is needed for Trusted Artifacts operations.
+    A task result is returned for the value of ociStorage.
+  params:
+    - name: releaseServiceConfig
+      type: string
+      description: The namespaced name of the ReleaseServiceConfig
+    - name: pipelineName
+      type: string
+      description: The name of the pipeline being executed
+  results:
+    - name: ociStorage
+      type: string
+      description: The OCI repository where the Trusted Artifacts are stored
+  steps:
+    - name: collect-oci-storage
+      image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+      computeResources:
+        limits:
+          memory: 32Mi
+        requests:
+          memory: 32Mi
+          cpu: 10m
+      env:
+        - name: "RELEASE_SERVICE_CONFIG"
+          value: '$(params.releaseServiceConfig)'
+      script: |
+        #!/bin/bash
+        set -ex
+
+        # spec:
+        #   ociStorage:
+        #      default: <some pullspec>
+        #      overrides:
+        #       - pipelinesName: fbc-release
+        #         ociStorage: <another pullspec>
+
+        RSC_PATH=$(mktemp)
+        get-resource "releaseserviceconfig" "${RELEASE_SERVICE_CONFIG}" | tee "${RSC_PATH}"
+        pipelineName=$(params.pipelineName)
+        echo "pipelineName: $pipelineName"
+
+        #defaultOciStorage=$(jq -r '.spec.ociStorage?.default // "empty"' "${RSC_PATH}")
+        #overridesOciStorage=$(jq -r '.spec.ociStorage?.overrides[] | select(.pipelinesName == $pipelineName) | .ociStorage // "empty"' "${RSC_PATH}" --arg pipelineName "$pipelineName")
+        #if [ -z "$overridesOciStorage" ]; then
+        #  ociStorage="$defaultOciStorage"
+        #else
+        #  ociStorage="$overridesOciStorage"
+        #fi
+        ociStorage="quay.io/konflux-ci/release-service-trusted-artifacts"
+        echo -n "$ociStorage" > $(results.ociStorage.path)

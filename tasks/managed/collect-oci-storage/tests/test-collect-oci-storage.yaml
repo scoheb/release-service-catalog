@@ -1,0 +1,74 @@
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: test-collect-oci-storage
+spec:
+  description: |
+    Run the collect-oci-storage task and verify that the value of ociStorage is available as a task result.
+  params:
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored.
+      type: string
+  tasks:
+    - name: setup
+      taskSpec:
+        volumes:
+          - name: workdir
+            emptyDir: {}
+        steps:
+          - name: create-crs
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+
+              cat > releaseserviceconfig << EOF
+              apiVersion: appstudio.redhat.com/v1alpha1
+              kind: ReleaseServiceConfig
+              metadata:
+                name: releaseserviceconfig-sample
+                namespace: default
+              spec:
+              #ociStorage: $(params.ociStorage)
+              EOF
+              kubectl apply -f releaseserviceconfig
+
+    - name: run-task
+      taskRef:
+        name: collect-oci-storage
+      params:
+        - name: releaseServiceConfig
+          value: default/releaseserviceconfig-sample
+      runAfter:
+        - setup
+    - name: check-result
+      params:
+        - name: ociStorage
+          value: $(tasks.run-task.results.ociStorage)
+      runAfter:
+        - run-task
+      taskSpec:
+        params:
+          - name: ociStorage
+            type: string
+        steps:
+          - name: check-result
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env bash
+              set -eux
+
+              echo Test that the ociStorage result was properly set
+              test "$(params.ociStorage)" == "empty"
+  finally:
+    - name: cleanup
+      taskSpec:
+        steps:
+          - name: delete-crs
+            image: quay.io/konflux-ci/release-service-utils:e633d51cd41d73e4b3310face21bb980af7a662f
+            script: |
+              #!/usr/bin/env sh
+              set -eux
+
+              kubectl delete releaseserviceconfig releaseserviceconfig-sample

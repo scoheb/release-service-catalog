@@ -185,11 +185,11 @@ do
   # while we are converting tasks to use TA, it is possible that a PR will include a Task that does not have the
   # ociStorage or dataDir params. Therefore we cannot pass them when we start the test pipelinerun. Otherwise, you will
   # see the error: "Error: param 'ociStorage' not present in spec"
-  ociStorageParamCheck=$(yq '(.spec.params[] | select(.name == "ociStorage"))' "$TASK_COPY")
-  ociStorageParam=""
-  if [ ! -z "${ociStorageParamCheck}" ]; then
-    ociStorageParam="-p ociStorage=${TRUSTED_ARTIFACT_OCI_STORAGE}"
-  fi
+  #ociStorageParamCheck=$(yq '(.spec.params[] | select(.name == "ociStorage"))' "$TASK_COPY")
+  #ociStorageParam=""
+  #if [ ! -z "${ociStorageParamCheck}" ]; then
+  ociStorageParam="-p ociStorage=${TRUSTED_ARTIFACT_OCI_STORAGE}"
+  #fi
   dataDirParamCheck=$(yq '(.spec.params[] | select(.name == "dataDir"))' "$TASK_COPY")
   dataDirParam=""
   if [ ! -z "${dataDirParamCheck}" ]; then
