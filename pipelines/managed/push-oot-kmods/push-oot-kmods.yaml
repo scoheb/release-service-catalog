@@ -67,8 +67,6 @@ spec:
       type: string
       description: The url to the git repo where the release-service-catalog tasks to be used are stored
       default: https://github.com/konflux-ci/release-service-catalog.git
-  workspaces:
-    - name: release-workspace
   tasks:
     - name: verify-access-to-resources
       taskRef:
@@ -126,9 +124,6 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - verify-access-to-resources
     - name: collect-task-params
@@ -172,9 +167,6 @@ spec:
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: check-data-keys
@@ -209,9 +201,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/check-data-keys/check-data-keys.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: reduce-snapshot
@@ -247,9 +236,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: apply-mapping
@@ -281,9 +267,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - reduce-snapshot
     - name: validate-single-component
@@ -311,9 +294,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: verify-conforma
@@ -382,9 +362,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: input-data
-          workspace: release-workspace
       runAfter:
         - verify-access-to-resources
         - collect-task-params
@@ -425,9 +402,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: kmods
-          workspace: release-workspace
       runAfter:
         - extract-oot-kmods
         - collect-task-params
@@ -464,9 +438,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: signed-kmods
-          workspace: release-workspace
       runAfter:
         - sign-oot-kmods
         - collect-task-params

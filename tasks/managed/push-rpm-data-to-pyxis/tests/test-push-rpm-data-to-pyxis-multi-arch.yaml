@@ -7,8 +7,6 @@ spec:
   description: |
     Run the push-rpm-data-to-pyxis task with required parameters and multi arch
     images
-  workspaces:
-    - name: tests-workspace
   params:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
@@ -34,9 +32,6 @@ spec:
       params:
         - name: subdirectory
           value: $(context.pipelineRun.uid)
-      workspaces:
-        - name: data
-          workspace: tests-workspace
       taskSpec:
         results:
           - name: sourceDataArtifact
@@ -44,8 +39,6 @@ spec:
         params:
           - name: subdirectory
             type: string
-        workspaces:
-          - name: data
         volumes:
           - name: workdir
             emptyDir: {}
@@ -112,14 +105,6 @@ spec:
                 ]
               }
               EOF
-          - name: skip-trusted-artifact-operations
-            ref:
-              name: skip-trusted-artifact-operations
-            params:
-              - name: ociStorage
-                value: $(params.ociStorage)
-              - name: workDir
-                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
@@ -128,14 +113,6 @@ spec:
                 value: $(params.ociStorage)
               - name: workDir
                 value: $(params.dataDir)
-              - name: sourceDataArtifact
-                value: $(results.sourceDataArtifact.path)
-          - name: patch-source-data-artifact-result
-            ref:
-              name: patch-source-data-artifact-result
-            params:
-              - name: ociStorage
-                value: $(params.ociStorage)
               - name: sourceDataArtifact
                 value: $(results.sourceDataArtifact.path)
     - name: run-task
@@ -166,21 +143,13 @@ spec:
           value: "main"
       runAfter:
         - setup
-      workspaces:
-        - name: data
-          workspace: tests-workspace
     - name: check-result
-      workspaces:
-        - name: data
-          workspace: tests-workspace
       params:
         - name: sourceDataArtifact
           value: "$(tasks.run-task.results.sourceDataArtifact)=$(params.dataDir)"
         - name: dataDir
           value: $(params.dataDir)
       taskSpec:
-        workspaces:
-          - name: data
         params:
           - name: sourceDataArtifact
             type: string
@@ -201,14 +170,6 @@ spec:
             - name: "DEBUG"
               value: "$(params.trustedArtifactsDebug)"
         steps:
-          - name: skip-trusted-artifact-operations
-            ref:
-              name: skip-trusted-artifact-operations
-            params:
-              - name: ociStorage
-                value: $(params.ociStorage)
-              - name: workDir
-                value: $(params.dataDir)
           - name: use-trusted-artifact
             ref:
               name: use-trusted-artifact

@@ -27,8 +27,6 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
-  workspaces:
-    - name: tests-workspace
   tasks:
     - name: setup
       taskSpec:
@@ -37,8 +35,6 @@ spec:
             type: string
           - name: resultArtifact2
             type: string
-        workspaces:
-          - name: data
         volumes:
           - name: workdir
             emptyDir: {}
@@ -94,14 +90,6 @@ spec:
                 releasePlan: foo
               EOF
               kubectl apply -f release
-          - name: skip-trusted-artifact-operations
-            ref:
-              name: skip-trusted-artifact-operations
-            params:
-              - name: ociStorage
-                value: $(params.ociStorage)
-              - name: workDir
-                value: $(params.dataDir)
           - name: create-trusted-artifact-array
             ref:
               name: create-trusted-artifact-array
@@ -125,9 +113,6 @@ spec:
                 echo -n "$(params.ociStorage)" > "$(results.resultArtifact1.path)"
                 echo -n "$(params.ociStorage)" > "$(results.resultArtifact2.path)"
               fi
-      workspaces:
-        - name: data
-          workspace: tests-workspace
     - name: run-task
       taskRef:
         name: update-cr-status
@@ -156,9 +141,6 @@ spec:
           value: "main"
       runAfter:
         - setup
-      workspaces:
-        - name: data
-          workspace: tests-workspace
     - name: check-result
       taskSpec:
         steps:
