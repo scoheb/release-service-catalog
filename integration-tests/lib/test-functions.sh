@@ -292,8 +292,6 @@ wait_for_component_initialization() {
             break
         else
             log_warning "Could not get component PR from annotations: ${component_annotations}"
-            echo "Requesting a new configure-pac..."
-            kubectl annotate components/${component_name} build.appstudio.openshift.io/request=configure-pac -n "${tenant_namespace}"
             echo "Waiting 10 seconds before retry..."
             sleep 10
         fi
