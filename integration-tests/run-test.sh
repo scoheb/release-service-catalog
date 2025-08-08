@@ -117,9 +117,9 @@ fi
 
 # --- Main Script Execution ---
 
-# Trap EXIT signal to call cleanup function
+# Trap EXIT SIGTERM SIGINT SIGKILL signals to call cleanup function
 # Pass error code, line number, and command to the cleanup function
-trap 'cleanup_resources $? $LINENO "$BASH_COMMAND"' EXIT
+trap 'cleanup_resources $? $LINENO "$BASH_COMMAND"' EXIT SIGTERM SIGINT SIGKILL
 
 check_env_vars "$@" # Pass all args for consistency, though check_env_vars doesn't use them
 parse_options "$@" # Parses options and sets CLEANUP, NO_CVE
