@@ -371,9 +371,6 @@ spec:
         - update-ocp-tag
     - name: add-fbc-contribution-to-index-image
       retries: 3
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
