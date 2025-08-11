@@ -126,9 +126,6 @@ spec:
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - verify-access-to-resources
     - name: collect-task-params
