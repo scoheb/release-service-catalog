@@ -939,9 +939,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/check-data-keys/check-data-keys.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - populate-release-notes
     - name: collect-atlas-params
@@ -1064,9 +1061,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/close-advisory-issues/close-advisory-issues.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - create-advisory
     - name: update-cr-status

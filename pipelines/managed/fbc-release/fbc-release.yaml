@@ -215,9 +215,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/check-data-keys/check-data-keys.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: verify-conforma
@@ -352,9 +349,6 @@ spec:
       runAfter:
         - update-ocp-tag
     - name: check-fbc-packages
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
