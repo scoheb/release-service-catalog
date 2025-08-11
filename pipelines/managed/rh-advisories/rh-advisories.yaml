@@ -283,9 +283,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - reduce-snapshot
     - name: filter-already-released-advisory-images

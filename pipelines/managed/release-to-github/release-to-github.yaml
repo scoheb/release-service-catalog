@@ -198,9 +198,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: validate-single-component
@@ -471,9 +468,6 @@ spec:
       runAfter:
         - embargo-check
     - name: base64-encode-checksum
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
