@@ -300,9 +300,6 @@ spec:
       runAfter:
         - verify-conforma
     - name: collect-gh-params
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
