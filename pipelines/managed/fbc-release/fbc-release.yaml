@@ -517,9 +517,6 @@ spec:
       runAfter:
         - add-fbc-contribution-to-index-image
     - name: publish-index-image
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
