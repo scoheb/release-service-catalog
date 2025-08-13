@@ -270,9 +270,6 @@ spec:
         - validate-single-component
         - collect-task-params
     - name: extract-binaries-from-image
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
@@ -432,9 +429,6 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/embargo-check/embargo-check.yaml
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - check-data-keys
     - name: extract-requester-from-release

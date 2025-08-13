@@ -430,9 +430,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/embargo-check/embargo-check.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - check-data-keys
         - populate-release-notes
@@ -656,9 +653,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - push-snapshot
         - collect-task-params

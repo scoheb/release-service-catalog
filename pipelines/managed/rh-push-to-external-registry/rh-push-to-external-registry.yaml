@@ -389,9 +389,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - push-snapshot
         - collect-task-params
