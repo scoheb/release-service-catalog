@@ -529,9 +529,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/run-file-updates/run-file-updates.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
     - name: update-cr-status
       params:
         - name: resource

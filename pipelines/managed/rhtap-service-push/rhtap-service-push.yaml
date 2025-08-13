@@ -540,9 +540,6 @@ spec:
         - input: $(tasks.collect-slack-notification-params.results.slack-notification-secret)
           operator: notin
           values: [""]
-      workspaces:
-        - name: data
-          workspace: release-workspace
       params:
         - name: message
           value: $(tasks.collect-slack-notification-params.results.message)
