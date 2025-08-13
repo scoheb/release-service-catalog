@@ -53,7 +53,7 @@ export -f get-resource
 skopeo() {
   echo "Mock skopeo called with: $*"
   # Write to workspace since the task runs there initially
-  echo "$*" >> /workspace/input-data/mock_skopeo.txt
+  echo "$*" >> "$(params.dataDir)/mock_skopeo.txt"
 
   case "$*" in
     "copy docker://quay.io/mock/image@sha256:dummy dir:"* | "copy docker://quay.io/mock/image:mocksha123 dir:"*)
