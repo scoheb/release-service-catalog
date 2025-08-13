@@ -457,9 +457,6 @@ spec:
         - input: "$(tasks.collect-registry-token-secret.results.registrySecret)"
           operator: notin
           values: [""]
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
