@@ -543,9 +543,6 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/update-cr-status/update-cr-status.yaml
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - run-file-updates
   finally:

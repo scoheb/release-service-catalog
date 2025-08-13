@@ -278,9 +278,6 @@ spec:
       runAfter:
         - verify-conforma
     - name: update-ocp-tag
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
@@ -663,9 +660,6 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/update-cr-status/update-cr-status.yaml
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - extract-index-image
   finally:
