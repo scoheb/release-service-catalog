@@ -294,9 +294,6 @@ spec:
           value: "$(params.taskGitRevision)"
         - name: charonSignCASecret
           value: "$(tasks.collect-mrrc-params.results.charonSignCASecret)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-mrrc-params
   finally:
