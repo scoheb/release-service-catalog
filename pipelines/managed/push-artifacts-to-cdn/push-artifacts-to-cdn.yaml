@@ -303,9 +303,6 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/populate-release-notes/populate-release-notes.yaml
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - verify-conforma
     - name: check-data-keys

@@ -396,9 +396,6 @@ spec:
         resolver: git
       runAfter:
         - filter-already-released-advisory-images
-      workspaces:
-        - name: data
-          workspace: release-workspace
     - name: embargo-check
       when:
         - input: "$(tasks.filter-already-released-advisory-images.results.skip_release)"
