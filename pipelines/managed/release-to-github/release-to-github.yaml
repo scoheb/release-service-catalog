@@ -478,9 +478,6 @@ spec:
         - extract-requester-from-release
     - name: sign-base64-blob
       retries: 3
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
