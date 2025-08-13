@@ -370,9 +370,6 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/embargo-check/embargo-check.yaml
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - check-data-keys
     - name: push-artifacts-to-cdn
