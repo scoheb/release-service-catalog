@@ -163,9 +163,6 @@ spec:
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: apply-mapping
@@ -535,9 +532,6 @@ spec:
         - base64-encode-checksum
     - name: create-github-release
       retries: 3
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
@@ -607,9 +601,6 @@ spec:
             value: $(params.taskGitRevision)
           - name: pathInRepo
             value: tasks/managed/create-advisory/create-advisory.yaml
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - create-github-release
     - name: close-advisory-issues

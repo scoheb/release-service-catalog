@@ -68,7 +68,7 @@ spec:
     - name: dataDir
       description: The location where data will be stored
       type: string
-      default: $(workspaces.data.path)
+      default: /var/workdir/release
     - name: cgwHostname
       type: string
       description: >
@@ -86,9 +86,6 @@ spec:
     - name: taskGitRevision
       type: string
       description: The revision in the taskGitUrl repo to be used
-  workspaces:
-    - name: data
-      description: Workspace where the json files are stored
   results:
     - name: advisory_url
       description: The advisory url if one was created
@@ -114,27 +111,6 @@ spec:
     securityContext:
       runAsUser: 1001
   steps:
-    - name: skip-trusted-artifact-operations
-      computeResources:
-        limits:
-          memory: 32Mi
-        requests:
-          memory: 32Mi
-          cpu: 20m
-      ref:
-        resolver: "git"
-        params:
-          - name: url
-            value: $(params.taskGitUrl)
-          - name: revision
-            value: $(params.taskGitRevision)
-          - name: pathInRepo
-            value: stepactions/skip-trusted-artifact-operations/skip-trusted-artifact-operations.yaml
-      params:
-        - name: ociStorage
-          value: $(params.ociStorage)
-        - name: workDir
-          value: $(params.dataDir)
     - name: use-trusted-artifact
       computeResources:
         limits:
@@ -456,26 +432,5 @@ spec:
           value: $(params.ociStorage)
         - name: workDir
           value: $(params.dataDir)
-        - name: sourceDataArtifact
-          value: $(results.sourceDataArtifact.path)
-    - name: patch-source-data-artifact-result
-      computeResources:
-        limits:
-          memory: 32Mi
-        requests:
-          memory: 32Mi
-          cpu: 20m
-      ref:
-        resolver: "git"
-        params:
-          - name: url
-            value: $(params.taskGitUrl)
-          - name: revision
-            value: $(params.taskGitRevision)
-          - name: pathInRepo
-            value: stepactions/patch-source-data-artifact-result/patch-source-data-artifact-result.yaml
-      params:
-        - name: ociStorage
-          value: $(params.ociStorage)
         - name: sourceDataArtifact
           value: $(results.sourceDataArtifact.path)
