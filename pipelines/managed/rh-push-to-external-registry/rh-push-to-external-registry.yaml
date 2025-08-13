@@ -165,9 +165,6 @@ spec:
           value: "$(tasks.collect-data.results.sourceDataArtifact)"
         - name: trustedArtifactsDebug
           value: "$(params.trustedArtifactsDebug)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: check-data-keys
