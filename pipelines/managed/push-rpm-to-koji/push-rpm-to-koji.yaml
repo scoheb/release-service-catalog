@@ -198,9 +198,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - collect-data
     - name: verify-conforma
