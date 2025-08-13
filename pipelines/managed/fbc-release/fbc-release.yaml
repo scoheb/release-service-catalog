@@ -446,9 +446,6 @@ spec:
         - verify-access-to-resources
     - name: sign-index-image
       retries: 3
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:

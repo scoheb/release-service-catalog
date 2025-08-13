@@ -413,9 +413,6 @@ spec:
           value: "$(params.taskGitUrl)"
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
-      workspaces:
-        - name: kmods
-          workspace: release-workspace
       runAfter:
         - extract-oot-kmods
         - collect-task-params

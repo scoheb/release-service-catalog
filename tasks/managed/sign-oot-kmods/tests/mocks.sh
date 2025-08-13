@@ -5,14 +5,8 @@ set -eux
 
 function kinit() {
   echo "Mock kinit called with: $*"
-
-  # Write to both locations to support both modes
-  if [ -d /workspace/kmods ]; then
-    echo "$*" >> /workspace/kmods/mock_kinit.txt
-  fi
-  if [ -d "$(params.dataDir)" ]; then
-    echo "$*" >> "$(params.dataDir)"/mock_kinit.txt
-  fi
+  
+  echo "$*" >> "$(params.dataDir)/mock_kinit.txt"
 
   case "$*" in
     "-kt /etc/sec-keytab/keytab-build-and-sign.keytab"*)
@@ -26,14 +20,8 @@ function kinit() {
 
 function ssh() {
   echo "Mock ssh called with: $*"
-
-  # Write to both locations to support both modes
-  if [ -d /workspace/kmods ]; then
-    echo "$*" >> /workspace/kmods/mock_ssh.txt
-  fi
-  if [ -d "$(params.dataDir)" ]; then
-    echo "$*" >> "$(params.dataDir)"/mock_ssh.txt
-  fi
+  
+  echo "$*" >> "$(params.dataDir)/mock_ssh.txt"
 
   case "$*" in
     "-o UserKnownHostsFile=/root/.ssh/known_hosts -o GSSAPIAuthentication=yes -o GSSAPIDelegateCredentials=yes"*)
@@ -47,14 +35,8 @@ function ssh() {
 
 function scp() {
   echo "Mock scp called with: $*"
-
-  # Write to both locations to support both modes
-  if [ -d /workspace/kmods ]; then
-    echo "$*" >> /workspace/kmods/mock_scp.txt
-  fi
-  if [ -d "$(params.dataDir)" ]; then
-    echo "$*" >> "$(params.dataDir)"/mock_scp.txt
-  fi
+  
+  echo "$*" >> "$(params.dataDir)/mock_scp.txt"
 
   case "$*" in
     "-o UserKnownHostsFile=/root/.ssh/known_hosts -o GSSAPIAuthentication=yes -o GSSAPIDelegateCredentials=yes"*)
@@ -65,6 +47,3 @@ function scp() {
       ;;
   esac
 }
-
-# The retry script won't see the kinit function unless we export it
-export -f kinit
