@@ -458,9 +458,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/set-advisory-severity/set-advisory-severity.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       runAfter:
         - populate-release-notes
         - embargo-check
@@ -882,9 +879,6 @@ spec:
           - name: pathInRepo
             value: tasks/managed/run-file-updates/run-file-updates.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
     - name: check-data-keys
       when:
         - input: "$(tasks.filter-already-released-advisory-images.results.skip_release)"
