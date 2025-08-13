@@ -504,9 +504,6 @@ spec:
         - add-fbc-contribution-to-index-image
         - collect-task-params
     - name: extract-index-image
-      workspaces:
-        - name: data
-          workspace: release-workspace
       taskRef:
         resolver: "git"
         params:
