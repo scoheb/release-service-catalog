@@ -51,7 +51,7 @@ spec:
     - name: mobster_tasks_git_revision
       type: string
       description: The git revision to be used when consuming Mobster tasks for SBOM processing
-      default: 08671895267141cb814d146689ede738677071af
+      default: 423db31868bbecb6c934f2eca6ff6a31b4f2f003
     - name: taskGitUrl
       type: string
       description: The url to the git repo where the release-service-catalog tasks to be used are stored
@@ -727,11 +727,8 @@ spec:
           - name: revision
             value: $(params.mobster_tasks_git_revision)
           - name: pathInRepo
-            value: tasks/augment-component-sboms-ta/0.1/augment-component-sboms-ta.yaml
+            value: tasks/augment-component-sboms-ta/0.2/augment-component-sboms-ta.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       params:
         - name: snapshotSpec
           value: "$(tasks.collect-data.results.snapshotSpec)"
@@ -779,11 +776,8 @@ spec:
           - name: revision
             value: $(params.mobster_tasks_git_revision)
           - name: pathInRepo
-            value: tasks/create-product-sbom-ta/0.1/create-product-sbom-ta.yaml
+            value: tasks/create-product-sbom-ta/0.2/create-product-sbom-ta.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       params:
         - name: snapshotSpec
           value: "$(tasks.collect-data.results.snapshotSpec)"
