@@ -422,8 +422,10 @@ wait_for_plr_to_complete() {
     local elapsed_time
     local completed=""
     local retry_attempted="false"
+    local taskStatus="" # taskrun status from last output
+    local previousTaskStatus="" # to avoid duplicate output
 
-    echo -n "Waiting for PipelineRun ${component_push_plr_name} to complete"
+    echo "Waiting for PipelineRun ${component_push_plr_name} to complete"
     while [ -z "$completed" ]; do
         current_time=$(date +%s)
         elapsed_time=$((current_time - start_time))
@@ -441,7 +443,11 @@ wait_for_plr_to_complete() {
 
         # If completed, check the status
         if [ -n "$completed" ]; then
-          echo -n "."
+          taskStatus=$("${SUITE_DIR}/../scripts/print-taskrun-status.sh" "${component_push_plr_name}" "${tenant_namespace}" compact)
+          if [ "${taskStatus}" != "${previousTaskStatus}" ]; then
+            echo -e "${taskStatus}"
+            previousTaskStatus="${taskStatus}"
+          fi
           if [ "$completed" == "True" ]; then
             echo ""
             echo "✅ PipelineRun completed successfully"
