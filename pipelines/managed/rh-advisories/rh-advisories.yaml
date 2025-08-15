@@ -727,11 +727,8 @@ spec:
           - name: revision
             value: $(params.mobster_tasks_git_revision)
           - name: pathInRepo
-            value: tasks/augment-component-sboms-ta/0.1/augment-component-sboms-ta.yaml
+            value: tasks/augment-component-sboms-ta/0.2/augment-component-sboms-ta.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       params:
         - name: snapshotSpec
           value: "$(tasks.collect-data.results.snapshotSpec)"
@@ -779,11 +776,8 @@ spec:
           - name: revision
             value: $(params.mobster_tasks_git_revision)
           - name: pathInRepo
-            value: tasks/create-product-sbom-ta/0.1/create-product-sbom-ta.yaml
+            value: tasks/create-product-sbom-ta/0.2/create-product-sbom-ta.yaml
         resolver: git
-      workspaces:
-        - name: data
-          workspace: release-workspace
       params:
         - name: snapshotSpec
           value: "$(tasks.collect-data.results.snapshotSpec)"
