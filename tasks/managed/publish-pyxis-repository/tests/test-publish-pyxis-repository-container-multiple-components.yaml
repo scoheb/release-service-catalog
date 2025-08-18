@@ -68,7 +68,7 @@ spec:
                   {
                     "repository": "quay.io/redhat-prod/my-product----my-image2",
                     "pushSourceContainer": "false"
-                  }, 
+                  },
                   {
                     "repository": "quay.io/redhat-prod/my-product----my-image3"
                   }
@@ -85,14 +85,6 @@ spec:
                 }
               }
               EOF
-          - name: skip-trusted-artifact-operations
-            ref:
-              name: skip-trusted-artifact-operations
-            params:
-              - name: ociStorage
-                value: $(params.ociStorage)
-              - name: workDir
-                value: $(params.dataDir)
           - name: create-trusted-artifact
             ref:
               name: create-trusted-artifact
