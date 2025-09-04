@@ -186,6 +186,7 @@ jobs:
         with:
           fail-on-error: true
           verbose: true
+          task-dir: ./tasks
           params: |
             taskGitRevision=${{ github.event.pull_request.head.ref }}
             taskGitUrl=${{ github.event.pull_request.head.repo.html_url }}
