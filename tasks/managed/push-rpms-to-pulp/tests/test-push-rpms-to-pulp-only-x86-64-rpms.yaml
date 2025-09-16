@@ -88,12 +88,10 @@ spec:
       params:
         - name: SNAPSHOT_PATH
           value: "$(context.pipelineRun.uid)/snapshot_spec.json"
-        - name: PULP_BASE_URL
-          value: "https://pulp"
         - name: PULP_DOMAIN
           value: "mydomain"
-        - name: PULP_REPOSITORY
-          value: "myrepo"
+        - name: PULP_SECRET_NAME
+          value: "pulp-task-pulp-secret"
         - name: resultsDirPath
           value: "$(context.pipelineRun.uid)/results"
         - name: ociStorage

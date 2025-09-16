@@ -9,15 +9,13 @@ spec:
     - name: SNAPSHOT_PATH
       type: string
       description: Path to the snapshot spec file containing image information
-    - name: PULP_SECRET_NAME
-      type: string
-      description: >-
-        The name of the secret containing the Pulp credentials. It must have the cert and key data
-        attributes.
-      default: pulp-task-pulp-secret
     - name: PULP_DOMAIN
       type: string
       description: The domain to use for Pulp operations
+    - name: PULP_SECRET_NAME
+      type: string
+      description: >-
+        The name of the secret containing the Pulp cli.toml file. It must have the cli.toml key.
     - name: DEFAULT_EXCLUDES
       type: string
       description: comman, delimited list of file patterns to exclude from the upload
@@ -61,19 +59,22 @@ spec:
       name: sourceDataArtifact
       type: string
   volumes:
-    - name: pulp-secret
-      secret:
-        secretName: $(params.PULP_SECRET_NAME)
     - name: workdir
       emptyDir: {}
   stepTemplate:
     env:
       - name: SNAPSHOT_PATH
         value: $(params.dataDir)/$(params.SNAPSHOT_PATH)
-      - name: PULP_DOMAIN
-        value: $(params.PULP_DOMAIN)
       - name: DEFAULT_EXCLUDES
         value: $(params.DEFAULT_EXCLUDES)
+      - name: DATA_DIR
+        value: $(params.dataDir)
+      - name: PULP_DOMAIN
+        value: $(params.PULP_DOMAIN)
+      - name: PULP_SECRET_NAME
+        value: $(params.PULP_SECRET_NAME)
+      - name: RESULTS_DIR_PATH
+        value: $(params.resultsDirPath)
       - name: ociStorage
         value: $(params.ociStorage)
       - name: ociArtifactExpiresAfter
@@ -91,9 +92,6 @@ spec:
       - name: DEBUG
         value: $(params.trustedArtifactsDebug)
     volumeMounts:
-      - name: pulp-secret
-        mountPath: "/etc/pulp-secret"
-        readOnly: true
       - name: workdir
         mountPath: "/var/workdir"
     workingDir: "/var/workdir"
@@ -121,17 +119,23 @@ spec:
           value: $(params.sourceDataArtifact)
     - name: push-rpms-to-pulp
       image: quay.io/scoheb/release-service-utils:latest
+      env:
+        - name: CONFIG_FILE_CONTENT
+          valueFrom:
+            secretKeyRef:
+              name: $(params.PULP_SECRET_NAME)
+              key: cli.toml
       script: |
         #!/bin/bash
         set -euo pipefail
 
-        PULP_CONFIG_FILE="/etc/pulp-secret/cli.toml"
-        if [ ! -f "$PULP_CONFIG_FILE" ]; then
-          echo "Pulp config file not found at $PULP_CONFIG_FILE"
-          exit 1
-        fi
+        set +x
+        echo "${CONFIG_FILE_CONTENT:?}" > "/tmp/cli.toml"
+        export PULP_CONFIG_FILE="/tmp/cli.toml"
+        set -x
 
-        DOMAIN_EXISTS=$(pulp --config "$PULP_CONFIG_FILE" domain show --name "${PULP_DOMAIN}" | jq -r ".name // \"\"")
+        DOMAIN_EXISTS=$(pulp --config "$PULP_CONFIG_FILE" domain show --name "${PULP_DOMAIN}" \
+          | jq -r ".name // \"\"" || echo "")
         if [[ "$DOMAIN_EXISTS" == "$PULP_DOMAIN" ]]; then
             echo "Domain '${PULP_DOMAIN}' exists"
         else
@@ -139,7 +143,7 @@ spec:
             exit 1
         fi
 
-        RESULTS_FILE="$(params.dataDir)/$(params.resultsDirPath)/push-rpms-to-pulp-results.json"
+        RESULTS_FILE="${DATA_DIR}/${RESULTS_DIR_PATH}/push-rpms-to-pulp-results.json"
         mkdir -p "$(dirname "${RESULTS_FILE}")"
 
         # Initialize results file with empty rpmfiles array
