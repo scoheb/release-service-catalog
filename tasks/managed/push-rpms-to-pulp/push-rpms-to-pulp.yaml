@@ -156,7 +156,7 @@ spec:
         # Initialize results file with empty rpmfiles array
         echo '{"rpmfiles": []}' > "$RESULTS_FILE"
 
-        < "${SNAPSHOT_PATH}" jq -r '.components[].containerImage' | tee "${IMAGES_TXT}"
+        jq -r '.components[].containerImage' "${SNAPSHOT_PATH}" | tee "${IMAGES_TXT}"
 
         AUTHFILE='/tmp/auth.json'
         mkdir -p "${FILES_DIR}"
