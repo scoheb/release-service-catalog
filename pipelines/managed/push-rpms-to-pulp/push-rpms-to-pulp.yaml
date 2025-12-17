@@ -3,6 +3,8 @@ apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: push-rpms-to-pulp
+  annotations:
+    tekton.dev/pipeline.max-concurrency: "1"
 spec:
   description: >-
     Release Components in a Snapshot to a Pulp repository.
