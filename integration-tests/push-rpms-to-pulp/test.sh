@@ -96,5 +96,21 @@ patch_component_source_before_merge() {
         "${encoded_contents}"
   done
 
+  echo "Patching hello.spec..."
+
+  template_file="${SUITE_DIR}/resources/tenant/templates/hello.spec"
+  file_name="hello.spec"
+
+  template_contents=$(cat "$template_file" | envsubst)
+
+  encoded_contents=$(base64 -w 0 <<< "${template_contents}")
+
+  "${SCRIPT_DIR}/scripts/update-file-in-pull-request.sh" \
+      "${component_repo_name}" \
+      "${pr_number}" \
+      "${file_name}" \
+      "Update component source before merge" \
+      "${encoded_contents}"
+
   echo "✅️ Successfully patched component source!"
 }
