@@ -73,6 +73,10 @@ spec:
       description: Name of secret containing needed credentials
       type: string
       default: konflux-advisory-jira-secret
+    - name: rpmResultsPath
+      description: Path to the RPM results file
+      type: string
+      default: ""
   results:
     - description: Produced trusted data artifact
       name: sourceDataArtifact
@@ -385,8 +389,8 @@ spec:
         content_type=$(jq -r '.mapping.components[]? |
           (.contentGateway?.contentType // .contentType) // empty' "$DATA_FILE" | head -n1)
 
-        if [ "$content_type" != "binary" ] && [ "$content_type" != "disk-image" ]; then
-            echo "Not binary or disk-image content. Skipping artifact-specific logic."
+        if [ "$content_type" != "binary" ] && [ "$content_type" != "disk-image" ] && [ "$content_type" != "rpm" ]; then
+            echo "Not binary or disk-image or rpm content. Skipping artifact-specific logic."
             exit 0
         fi
 
@@ -395,6 +399,25 @@ spec:
             echo "No valid snapshot file was provided."
             exit 1
         fi
+
+        # generate_purl_rpm name version release arch sha256 repository_id [vendor]
+        # Example:
+        #   generate_purl_rpm "zlib-devel" "1.2.11" "40.el9" "x86_64" \
+        #     "9775022716a2b6dd51d151a40aa4a6bcb466edeb01b747f48072703e509be097" \
+        #     "ubi-9-for-x86_64-appstream-rpms" "redhat"
+        generate_purl_rpm() {
+          local name="$1"
+          local version="$2"
+          local release="$3"
+          local arch="$4"
+          local sha256="$5"
+          local repository_id="$6"
+          local vendor="${7:-redhat}"
+
+          # Assemble purl: pkg:rpm/<vendor>/<name>@<version>-<release>?arch=<arch>&checksum=sha256:<sha256>&repository_id=<repo>
+          printf 'pkg:rpm/%s/%s@%s-%s?arch=%s&checksum=sha256:%s&repository_id=%s\n' \
+            "$vendor" "$name" "$version" "$release" "$arch" "$sha256" "$repository_id"
+        }
 
         append_artifact_entry() {
           local component="$1" arch="$2" os="$3" purl="$4"
@@ -465,7 +488,7 @@ spec:
 
                     append_artifact_entry "$name" "$arch" "$os" "$purl"
                 done
-            else
+            elif [ "$content_type" = "disk-image" ]; then
                 # Get the number of staged files for this component (disk-images use staged.files structure)
                 FILES_LENGTH=$(jq --arg name "$name" \
                   '[.mapping.components[]
@@ -505,8 +528,32 @@ spec:
 
                     append_artifact_entry "$name" "$arch" "$os" "$purl"
                 done
+            elif [ "$content_type" = "rpm" ]; then
+              # Get the number of rpm files from the results file
+              RPM_RESULTS_FILE="$(params.dataDir)/$(params.rpmResultsPath)"
+              if [ ! -f "${RPM_RESULTS_FILE}" ] ; then
+                echo "No RPM results file was provided."
+                exit 1
+              fi
+              os="linux"
+              RPM_FILES_LENGTH=$(jq '.rpmfiles | length' "${RPM_RESULTS_FILE}")
+              for ((k = 0; k < RPM_FILES_LENGTH; k++)); do
+                rpmfile=$(jq -c --argjson k "$k" '.rpmfiles[$k]' "${RPM_RESULTS_FILE}")
+                rpm=$(jq -r '.rpm' <<< "$rpmfile")
+                rpm_name=$(jq -r '.rpmname' <<< "$rpmfile")
+                arch=$(jq -r '.arch' <<< "$rpmfile")
+                pulprepo=$(jq -r '.pulprepo' <<< "$rpmfile")
+                epoch=$(jq -r '.epoch' <<< "$rpmfile")
+                version=$(jq -r '.version' <<< "$rpmfile")
+                release=$(jq -r '.release' <<< "$rpmfile")
+                sha256=$(jq -r '.sha256' <<< "$rpmfile")
+                purl=$(generate_purl_rpm "$rpm_name" "$version" "$release" "$arch" "$sha256" "$pulprepo")
+                echo "purl: $purl"
+                append_artifact_entry "$name" "$arch" "$os" "$purl"
+              done
             fi
         done
+        cat "${DATA_FILE}"
     - name: populate-release-notes-github
       image: quay.io/konflux-ci/release-service-utils@sha256:f10b4ad888634a7633f76ede29003ce1471aec2b76a7d9e01ad282a3011eb78f
       computeResources:

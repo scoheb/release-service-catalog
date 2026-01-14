@@ -582,8 +582,21 @@ spec:
               # Add href to collection
               HREFS_JSON=$(jq --arg href "$href" '. += [{"pulp_href": $href}]' <<< "$HREFS_JSON")
 
-              jq --arg pkg "${pkg}" --arg arch "${arch}" --arg pulprepo "${PULP_DOMAIN}/${arch}" \
-                '.rpmfiles += [{rpm: $pkg, arch: $arch, pulprepo: $pulprepo}]' \
+              # Parse NEVRA to capture epoch, version, release for results
+              nevra="$(parse_nevra "${pkg}")"
+              IFS='|' read -r _name epoch version release _archParsed <<< "${nevra}"
+              # Compute local sha256 for results
+              local_sha="$(sha256sum "${pkg}" | awk '{print $1}')"
+
+              jq --arg pkg "${pkg}" \
+                 --arg rpmname "${_name}" \
+                 --arg arch "${arch}" \
+                 --arg pulprepo "${PULP_DOMAIN}/${arch}" \
+                 --arg epoch "${epoch}" \
+                 --arg version "${version}" \
+                 --arg release "${release}" \
+                 --arg sha256 "${local_sha}" \
+                '.rpmfiles += [{rpm: $pkg, rpmname: $rpmname, arch: $arch, pulprepo: $pulprepo, epoch: $epoch, version: $version, release: $release, sha256: $sha256}]' \
                 "$RESULTS_FILE" > tmp.json && mv tmp.json "$RESULTS_FILE"
             fi
             # Upload .noarch.rpm files to this arch repository
@@ -613,8 +626,21 @@ spec:
               # Add href to collection
               HREFS_JSON=$(jq --arg href "$href" '. += [{"pulp_href": $href}]' <<< "$HREFS_JSON")
 
-              jq --arg pkg "${pkg}" --arg arch "noarch" --arg pulprepo "${PULP_DOMAIN}/${arch}" \
-                '.rpmfiles += [{rpm: $pkg, arch: $arch, pulprepo: $pulprepo}]' \
+              # Parse NEVRA to capture epoch, version, release for results
+              nevra="$(parse_nevra "${pkg}")"
+              IFS='|' read -r _name epoch version release _archParsed <<< "${nevra}"
+              # Compute local sha256 for results
+              local_sha="$(sha256sum "${pkg}" | awk '{print $1}')"
+
+              jq --arg pkg "${pkg}" \
+                 --arg rpmname "${_name}" \
+                 --arg arch "noarch" \
+                 --arg pulprepo "${PULP_DOMAIN}/${arch}" \
+                 --arg epoch "${epoch}" \
+                 --arg version "${version}" \
+                 --arg release "${release}" \
+                 --arg sha256 "${local_sha}" \
+                '.rpmfiles += [{rpm: $pkg, rpmname: $rpmname, arch: $arch, pulprepo: $pulprepo, epoch: $epoch, version: $version, release: $release, sha256: $sha256}]' \
                 "$RESULTS_FILE" > tmp.json && mv tmp.json "$RESULTS_FILE"
             fi
           done
@@ -654,8 +680,21 @@ spec:
             # Add href to collection
             SRC_HREFS_JSON=$(jq --arg href "$href" '. += [{"pulp_href": $href}]' <<< "$SRC_HREFS_JSON")
 
-            jq --arg pkg "${pkg}" --arg arch "source" --arg pulprepo "${PULP_DOMAIN}/source" \
-              '.rpmfiles += [{rpm: $pkg, arch: $arch, pulprepo: $pulprepo}]' \
+            # Parse NEVRA to capture epoch, version, release for results
+            nevra="$(parse_nevra "${pkg}")"
+            IFS='|' read -r _name epoch version release _archParsed <<< "${nevra}"
+            # Compute local sha256 for results
+            local_sha="$(sha256sum "${pkg}" | awk '{print $1}')"
+
+            jq --arg pkg "${pkg}" \
+               --arg rpmname "${_name}" \
+               --arg arch "source" \
+               --arg pulprepo "${PULP_DOMAIN}/source" \
+               --arg epoch "${epoch}" \
+               --arg version "${version}" \
+               --arg release "${release}" \
+               --arg sha256 "${local_sha}" \
+              '.rpmfiles += [{rpm: $pkg, rpmname: $rpmname, arch: $arch, pulprepo: $pulprepo, epoch: $epoch, version: $version, release: $release, sha256: $sha256}]' \
               "$RESULTS_FILE" > tmp.json && mv tmp.json "$RESULTS_FILE"
           fi
         done
