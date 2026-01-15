@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # --- Global Script Variables (Defaults) ---
 CLEANUP="true"
+NO_CVE="false" # Default to false
 
 # Function to verify Release contents
 verify_release_contents() {
