@@ -172,15 +172,54 @@ spec:
         echo "${CONFIG_FILE_CONTENT:?}" > "/tmp/cli.toml"
         export PULP_CONFIG_FILE="/tmp/cli.toml"
 
-        # Extract OAuth2 credentials from cli.toml
-        PULP_BASE_URL=$(grep -E "^base_url\s*=" "$PULP_CONFIG_FILE" | sed 's/.*=\s*"\(.*\)"/\1/' | sed 's:/*$::')
-        CLIENT_ID=$(grep -E "^client_id\s*=" "$PULP_CONFIG_FILE" | sed 's/.*=\s*"\(.*\)"/\1/')
-        CLIENT_SECRET=$(grep -E "^client_secret\s*=" "$PULP_CONFIG_FILE" | sed 's/.*=\s*"\(.*\)"/\1/')
+        # Helpers to read cli.toml values (return empty string when not found)
+        toml_get_optional() {
+          local key="$1"
+          local line value
+          line="$(grep -E "^${key}\\s*=" "$PULP_CONFIG_FILE" | head -n1 || true)"
+          if [[ -z "${line}" ]]; then
+            echo ""
+            return 0
+          fi
+          value="$(sed 's/.*=\s*"\(.*\)".*/\1/' <<< "${line}")"
+          echo "${value}"
+        }
+
+        toml_get_required() {
+          local key="$1"
+          local value
+          value="$(toml_get_optional "${key}")"
+          if [[ -z "${value}" ]]; then
+            echo "Error: Missing required '${key}' in cli.toml" >&2
+            return 1
+          fi
+          echo "${value}"
+        }
+
+        # Extract credentials from cli.toml
+        PULP_BASE_URL="$(toml_get_required "base_url" | sed 's:/*$::')" || exit 1
+        CLIENT_ID="$(toml_get_optional "client_id")"
+        CLIENT_SECRET="$(toml_get_optional "client_secret")"
+        PULP_USERNAME="$(toml_get_optional "username")"
+        PULP_PASSWORD="$(toml_get_optional "password")"
         TOKEN_URL="https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
+
+        # Detect auth method (do not log secrets)
+        AUTH_METHOD="unknown"
+        if [[ -n "${PULP_USERNAME}" && -n "${PULP_PASSWORD}" ]]; then
+          AUTH_METHOD="basic"
+        elif [[ -n "${CLIENT_ID}" && -n "${CLIENT_SECRET}" ]]; then
+          AUTH_METHOD="oauth2-bearer"
+        fi
+        echo "Auth method detected for Pulp API calls: ${AUTH_METHOD}"
 
         # Function to get OAuth2 access token
 
         get_access_token() {
+          if [[ -z "${CLIENT_ID}" || -z "${CLIENT_SECRET}" ]]; then
+            echo "Error: client_id/client_secret not present in cli.toml; cannot use OAuth2 Bearer token flow" >&2
+            return 1
+          fi
           local token
           token=$(curl --retry 3 -s -X POST "$TOKEN_URL" \
             -u "${CLIENT_ID}:${CLIENT_SECRET}" \
@@ -194,6 +233,29 @@ spec:
           echo "$token"
         }
 
+        # Get Authorization header for curl based on available credentials.
+        # Prefers Basic auth (username/password) when present, otherwise uses OAuth2 Bearer (client_id/client_secret).
+        get_auth_header() {
+          # Basic auth path
+          if [[ -n "${PULP_USERNAME}" && -n "${PULP_PASSWORD}" ]]; then
+            local basic
+            basic="$(printf '%s' "${PULP_USERNAME}:${PULP_PASSWORD}" | base64 -w0)"
+            echo "Authorization: Basic ${basic}"
+            return 0
+          fi
+
+          # Bearer auth path
+          if [[ -n "${CLIENT_ID}" && -n "${CLIENT_SECRET}" ]]; then
+            local access_token
+            access_token="$(get_access_token)" || return 1
+            echo "Authorization: Bearer ${access_token}"
+            return 0
+          fi
+
+          echo "Error: No supported credentials found in cli.toml. Provide either username/password or client_id/client_secret." >&2
+          return 1
+        }
+
         # Function to add content to a repository via API
         add_content_to_repo() {
           local repo_name="$1"
@@ -202,14 +264,14 @@ spec:
 
           # Disable command echoing for sensitive operations
           set +x
-          local access_token
-          access_token=$(get_access_token) || return 1
+          local auth_header
+          auth_header="$(get_auth_header)" || return 1
 
           # Get repository href
           local repo_href
           repo_href=$(
             set +x
-            curl --retry 3 -s -H "Authorization: Bearer $access_token" \
+            curl --retry 3 -s -H "${auth_header}" \
               "${PULP_BASE_URL}/api/pulp/${domain}/api/v3/repositories/rpm/rpm/?name=${repo_name}" \
               | jq -r '.results[0].pulp_href'
           )
@@ -229,7 +291,7 @@ spec:
           {
             set +x
             curl --retry 3 -s -X POST "${PULP_BASE_URL}${repo_href}modify/" \
-              -H "Authorization: Bearer $access_token" \
+              -H "${auth_header}" \
               -H "Content-Type: application/json" \
               -d "{\"add_content_units\": $add_content_units}"
             set -x
@@ -309,14 +371,14 @@ spec:
         # Resolve repository latest version href
         get_repo_latest_version_href() {
           local repo_name="$1"
-          local access_token repo_href
+          local auth_header repo_href
           set +x
-          access_token=$(get_access_token) || return 1
+          auth_header="$(get_auth_header)" || return 1
           set -x
           repo_href=$(
             set +x
             curl --retry 3 -s \
-              -H "Authorization: Bearer $access_token" \
+              -H "${auth_header}" \
               "${PULP_BASE_URL}/api/pulp/${PULP_DOMAIN}/api/v3/repositories/rpm/rpm/?name=${repo_name}" \
               | jq -r '.results[0].pulp_href'
           )
@@ -326,7 +388,7 @@ spec:
           fi
           {
             set +x
-            curl --retry 3 -s -H "Authorization: Bearer $access_token" \
+            curl --retry 3 -s -H "${auth_header}" \
               "${PULP_BASE_URL}${repo_href}" | jq -r '.latest_version_href'
             set -x
           }
@@ -380,11 +442,11 @@ spec:
           fi
 
           # Perform query
-          local access_token response count
+          local auth_header response count
           {
             set +x
-            access_token=$(get_access_token) || return 1
-            response="$(curl --retry 3 -s -H "Authorization: Bearer ${access_token}" \
+            auth_header="$(get_auth_header)" || return 1
+            response="$(curl --retry 3 -s -H "${auth_header}" \
               "${query_url}")"
             set -x
           }
@@ -400,7 +462,7 @@ spec:
           for chref in "${content_hrefs[@]}"; do
             content_json="$(
               set +x
-              curl --retry 3 -s -H "Authorization: Bearer ${access_token}" \
+              curl --retry 3 -s -H "${auth_header}" \
                 "${PULP_BASE_URL}${chref}"
             )"
             artifact_href="$(jq -r '.artifact // empty' <<< "${content_json}")"
@@ -412,7 +474,7 @@ spec:
             fi
             artifact_json="$(
               set +x
-              curl --retry 3 -s -H "Authorization: Bearer ${access_token}" \
+              curl --retry 3 -s -H "${auth_header}" \
                 "${PULP_BASE_URL}${artifact_href}"
             )"
             server_sha="$(jq -r '.sha256 // empty' <<< "${artifact_json}")"
