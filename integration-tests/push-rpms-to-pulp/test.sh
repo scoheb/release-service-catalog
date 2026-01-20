@@ -15,6 +15,11 @@ verify_release_contents() {
     if [ -z "$release_json" ]; then
         log_error "Could not retrieve Release JSON for ${RELEASE_NAME}"
     fi
+
+    echo "${release_json}"
+    advisory_url=$(jq -r '.status.artifacts.advisory.url // ""' <<< "${release_json}")
+    advisory_internal_url=$(jq -r '.status.artifacts.advisory.internal_url // ""' <<< "${release_json}")
+
     # first 2 arches are specified in the pipelinerun templates, the last one is source.
     arches=("x86_64" "source")
     echo "Checking RPM files count..."
@@ -24,16 +29,50 @@ verify_release_contents() {
       echo "🔴 rpmfiles count was not equal to the number of arches"
       failures=$((failures+1))
     fi
-   for arch in "${arches[@]}"; do
-    echo "Checking RPM files for ${arch}..."
-    arch_rpmfiles=$(jq -r '.[]? | select(.arch == "'"${arch}"'") | .rpm // ""' <<< "${rpmfiles}")
-    if [ -n "${arch_rpmfiles}" ]; then
-      echo "✅️ rpmfiles for ${arch}: ${arch_rpmfiles}"
+    for arch in "${arches[@]}"; do
+      echo "Checking RPM files for ${arch}..."
+      arch_rpmfiles=$(jq -r '.[]? | select(.arch == "'"${arch}"'") | .rpm // ""' <<< "${rpmfiles}")
+      if [ -n "${arch_rpmfiles}" ]; then
+        echo "✅️ rpmfiles for ${arch}: ${arch_rpmfiles}"
+      else
+        echo "🔴 rpmfiles for ${arch} was empty"
+        failures=$((failures+1))
+      fi
+    done
+
+    if [ -z "$advisory_internal_url" ]; then
+        echo "Warning: advisory_internal_url is empty. Skipping advisory content check."
     else
-      echo "🔴 rpmfiles for ${arch} was empty"
+        # advisory_yaml_dir is made global by not declaring it local
+        advisory_yaml_dir=$(mktemp -d -p "$(pwd)")
+        echo "Fetching advisory content to ${advisory_yaml_dir}..."
+        "${SUITE_DIR}/../scripts/get-advisory-content.sh" "${managed_namespace}" "${managed_sa_name}" "${advisory_internal_url}" "${advisory_yaml_dir}"
+        if [ ! -f "${advisory_yaml_dir}/advisory.yaml" ]; then
+            echo "🔴 Advisory YAML not found at ${advisory_yaml_dir}/advisory.yaml"
+            failures=$((failures+1))
+        else
+            severity=$(yq '.spec.severity // "null"' "${advisory_yaml_dir}/advisory.yaml")
+            echo "Found severity: ${severity}"
+            topic=$(yq '.spec.topic // ""' "${advisory_yaml_dir}/advisory.yaml")
+            echo "Found topic: ${topic}"
+            description=$(yq '.spec.description // ""' "${advisory_yaml_dir}/advisory.yaml")
+            echo "Found description: ${description}"
+        fi
+    fi
+
+    echo "Checking advisory URLs..."
+    if [ -n "${advisory_url}" ]; then
+      echo "✅️ advisory_url: ${advisory_url}"
+    else
+      echo "🔴 advisory_url was empty!"
       failures=$((failures+1))
     fi
-   done
+    if [ -n "${advisory_internal_url}" ]; then
+      echo "✅️ advisory_internal_url: ${advisory_internal_url}"
+    else
+      echo "🔴 advisory_internal_url was empty!"
+      failures=$((failures+1))
+    fi
 
     if [ "${failures}" -gt 0 ]; then
       echo "🔴 Test has FAILED with ${failures} failure(s)!"
