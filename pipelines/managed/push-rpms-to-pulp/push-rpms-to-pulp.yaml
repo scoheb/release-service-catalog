@@ -277,6 +277,10 @@ spec:
         - reduce-snapshot
         - collect-task-params
     - name: populate-release-notes
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
@@ -285,7 +289,7 @@ spec:
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
-          value: "$(tasks.push-rpms-to-pulp.results.sourceDataArtifact)"
+          value: "$(tasks.filter-already-released-advisory-rpms.results.sourceDataArtifact)"
         - name: dataDir
           value: $(params.dataDir)
         - name: trustedArtifactsDebug
@@ -296,8 +300,6 @@ spec:
           value: "$(params.taskGitRevision)"
         - name: jiraSecretName
           value: "$(tasks.collect-task-params.results.extractedValues[4])"
-        - name: rpmResultsPath
-          value: "$(tasks.collect-data.results.resultsDir)/push-rpms-to-pulp-results.json"
       taskRef:
         params:
           - name: url
@@ -308,8 +310,44 @@ spec:
             value: tasks/managed/populate-release-notes/populate-release-notes.yaml
         resolver: git
       runAfter:
-        - push-rpms-to-pulp
+        - filter-already-released-advisory-rpms
+    - name: filter-already-released-advisory-rpms
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/filter-already-released-advisory-rpms/filter-already-released-advisory-rpms.yaml
+      params:
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: PULP_DOMAIN
+          value: "$(tasks.collect-task-params.results.extractedValues[0])"
+        - name: PULP_SECRET_NAME
+          value: "$(tasks.collect-task-params.results.extractedValues[1])"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: sourceDataArtifact
+          value: "$(tasks.reduce-snapshot.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
+      runAfter:
+        - verify-conforma
+        - collect-task-params
     - name: embargo-check
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
@@ -340,6 +378,10 @@ spec:
         - check-data-keys
         - populate-release-notes
     - name: set-advisory-severity
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       timeout: "2h0m0s"
       params:
         - name: dataPath
@@ -371,6 +413,10 @@ spec:
         - populate-release-notes
         - embargo-check
     - name: push-rpms-to-pulp
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       taskRef:
         resolver: "git"
         params:
@@ -390,7 +436,7 @@ spec:
         - name: resultsDirPath
           value: $(tasks.collect-data.results.resultsDir)
         - name: sourceDataArtifact
-          value: "$(tasks.reduce-snapshot.results.sourceDataArtifact)=$(params.dataDir)"
+          value: "$(tasks.filter-already-released-advisory-rpms.results.sourceDataArtifact)=$(params.dataDir)"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: dataDir
@@ -402,8 +448,12 @@ spec:
         - name: taskGitRevision
           value: "$(params.taskGitRevision)"
       runAfter:
-        - verify-conforma
+        - embargo-check
     - name: check-data-keys
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       params:
         - name: dataPath
           value: "$(tasks.collect-data.results.data)"
@@ -441,6 +491,10 @@ spec:
       runAfter:
         - populate-release-notes
     - name: collect-atlas-params
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       taskRef:
         resolver: "git"
         params:
@@ -467,8 +521,12 @@ spec:
           value: "$(params.taskGitRevision)"
       runAfter:
         - collect-data
-        - push-rpms-to-pulp
+        - filter-already-released-advisory-rpms
     - name: create-advisory
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       retries: 5
       params:
         - name: releasePlanAdmissionPath
@@ -511,8 +569,12 @@ spec:
         - check-data-keys
         - embargo-check
         - set-advisory-severity
+        - push-rpms-to-pulp
     - name: close-advisory-issues
       when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
         #- input: "$(tasks.filter-already-released-advisory-images.results.environment)"
         - input: "staging-changeme"
           operator: in
@@ -546,6 +608,10 @@ spec:
       runAfter:
         - create-advisory
     - name: update-cr-status
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
       params:
         - name: resource
           value: $(params.release)

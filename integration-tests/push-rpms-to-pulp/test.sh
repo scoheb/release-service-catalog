@@ -60,6 +60,38 @@ verify_release_contents() {
         fi
     fi
 
+    # Verify the managed PipelineRun executed the RPM filtering task (this is a key pipeline behavior).
+    managed_plr_full=$(jq -r '.status.managedProcessing.pipelineRun // ""' <<< "${release_json}")
+    if [ -z "${managed_plr_full}" ]; then
+      echo "🔴 managedProcessing.pipelineRun is empty for ${RELEASE_NAME}"
+      failures=$((failures+1))
+    else
+      managed_plr_name=$(basename "${managed_plr_full}")
+      echo "Checking managed PipelineRun ${managed_plr_name} for filter task execution..."
+
+      filter_tr_count=$(kubectl get taskrun -n "${managed_namespace}" \
+        -l "tekton.dev/pipelineRun=${managed_plr_name}" -o json \
+        | jq -r '[.items[] | select(.metadata.labels."tekton.dev/pipelineTask"=="filter-already-released-advisory-rpms")] | length')
+
+      if [ "${filter_tr_count}" -ne 1 ]; then
+        echo "🔴 Expected exactly 1 TaskRun for filter-already-released-advisory-rpms, got ${filter_tr_count}"
+        failures=$((failures+1))
+      else
+        filter_tr_name=$(kubectl get taskrun -n "${managed_namespace}" \
+          -l "tekton.dev/pipelineRun=${managed_plr_name}" -o json \
+          | jq -r '.items[] | select(.metadata.labels."tekton.dev/pipelineTask"=="filter-already-released-advisory-rpms") | .metadata.name')
+        filter_tr_status=$(kubectl get taskrun "${filter_tr_name}" -n "${managed_namespace}" \
+          -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}' 2>/dev/null || echo "")
+
+        if [ "${filter_tr_status}" != "True" ]; then
+          echo "🔴 filter-already-released-advisory-rpms TaskRun did not succeed: ${filter_tr_name} (status=${filter_tr_status})"
+          failures=$((failures+1))
+        else
+          echo "✅️ filter-already-released-advisory-rpms TaskRun succeeded: ${filter_tr_name}"
+        fi
+      fi
+    fi
+
     echo "Checking advisory URLs..."
     if [ -n "${advisory_url}" ]; then
       echo "✅️ advisory_url: ${advisory_url}"
@@ -78,6 +110,92 @@ verify_release_contents() {
       echo "🔴 Test has FAILED with ${failures} failure(s)!"
       failed_releases="${RELEASE_NAME} ${failed_releases}"
     else
+      # Create and validate a retriggered Release using the same releasePlan/snapshot.
+      # This verifies idempotency: the second run should detect that RPMs are already published
+      # and filter them out (skip_release=true).
+      echo "Creating retrigger Release for ${RELEASE_NAME}..."
+
+      local prev_author prev_releaseplan prev_snapshot retrigger_name retrigger_yaml retrigger_suffix
+      prev_author="$(jq -r '.metadata.labels["release.appstudio.openshift.io/author"] // .status.attribution.author // ""' <<< "${release_json}")"
+      prev_releaseplan="$(jq -r '.spec.releasePlan // ""' <<< "${release_json}")"
+      prev_snapshot="$(jq -r '.spec.snapshot // ""' <<< "${release_json}")"
+      # Release names must be <= 63 chars; use a short unique suffix.
+      retrigger_suffix="${uuid:-$(date +%s)}"
+      retrigger_suffix="${retrigger_suffix:0:8}"
+      retrigger_name="retrigger-${retrigger_suffix}"
+
+      if [[ -z "${prev_author}" || -z "${prev_releaseplan}" || -z "${prev_snapshot}" ]]; then
+        echo "🔴 Could not determine author/releasePlan/snapshot from ${RELEASE_NAME} for retrigger test"
+        echo "  author='${prev_author}' releasePlan='${prev_releaseplan}' snapshot='${prev_snapshot}'"
+        failures=$((failures+1))
+      else
+        # Ensure re-runs don't fail due to name collisions.
+        kubectl delete release "${retrigger_name}" -n "${RELEASE_NAMESPACE}" --ignore-not-found >/dev/null 2>&1 || true
+
+        retrigger_yaml="$(cat <<EOF
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Release
+metadata:
+  name: ${retrigger_name}
+  namespace: ${RELEASE_NAMESPACE}
+  labels:
+    release.appstudio.openshift.io/automated: "false"
+    release.appstudio.openshift.io/author: "${prev_author}"
+spec:
+  releasePlan: ${prev_releaseplan}
+  snapshot: ${prev_snapshot}
+EOF
+)"
+
+        echo "${retrigger_yaml}" | kubectl create -f - >/dev/null
+
+        # Wait for the retrigger release to reach a terminal state using the shared helper.
+        # Do not immediately fail the whole test if it fails; we still want to assert it failed
+        # for the expected (filtering) reason.
+        echo "Waiting for retrigger Release ${retrigger_name} to complete..."
+        local retrigger_rc=0
+        set +e
+        RELEASE_NAME="${retrigger_name}" RELEASE_NAMESPACE="${RELEASE_NAMESPACE}" \
+          "${SUITE_DIR}/../scripts/wait-for-release.sh"
+        retrigger_rc=$?
+        set -e
+
+        local released_status released_reason released_message retrigger_json
+        retrigger_json="$(kubectl get release/"${retrigger_name}" -n "${RELEASE_NAMESPACE}" -ojson 2>/dev/null || echo "")"
+        released_status="$(jq -r '.status.conditions[]? | select(.type=="Released") | .status // ""' <<< "${retrigger_json}")"
+        released_reason="$(jq -r '.status.conditions[]? | select(.type=="Released") | .reason // ""' <<< "${retrigger_json}")"
+        released_message="$(jq -r '.status.conditions[]? | select(.type=="Released") | .message // ""' <<< "${retrigger_json}")"
+
+        if [[ ${retrigger_rc} -eq 0 ]]; then
+          echo "✅ Retrigger Release succeeded: ${RELEASE_NAMESPACE}/${retrigger_name}"
+        else
+          echo "⚠️ Retrigger Release failed: ${RELEASE_NAMESPACE}/${retrigger_name}"
+          echo "  message: ${released_message}"
+        fi
+
+        # Verify filter task produced skip_release=true in the managed PipelineRun.
+        local retrigger_managed_plr_full retrigger_managed_plr_name skip_release_value
+        retrigger_managed_plr_full="$(jq -r '.status.managedProcessing.pipelineRun // ""' <<< "${retrigger_json}")"
+        if [[ -z "${retrigger_managed_plr_full}" ]]; then
+          echo "🔴 retrigger managedProcessing.pipelineRun is empty for ${retrigger_name}"
+          failures=$((failures+1))
+        else
+          retrigger_managed_plr_name="$(basename "${retrigger_managed_plr_full}")"
+          skip_release_value="$("${SUITE_DIR}/../scripts/get-taskrun-result.sh" \
+            "${retrigger_managed_plr_name}" \
+            "filter-already-released-advisory-rpms" \
+            "skip_release" \
+            "${managed_namespace}" 2>/dev/null || echo "")"
+
+          if [[ "${skip_release_value}" != "true" ]]; then
+            echo "🔴 Expected skip_release=true for retrigger run; got '${skip_release_value}'"
+            failures=$((failures+1))
+          else
+            echo "✅ skip_release=true for retrigger run (already-released RPMs were filtered)"
+          fi
+        fi
+      fi
+
       echo "✅️ All release checks passed. Success!"
     fi
   done
