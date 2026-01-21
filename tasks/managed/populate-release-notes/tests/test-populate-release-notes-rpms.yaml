@@ -98,34 +98,29 @@ spec:
                         "revision": "32c8f78c26e5831a87aa865ea80452fadbb3a95e",
                         "url": "https://github.com/hummingbird-project/hello.git"
                       }
-                    }
-                  }
-                ]
-              }
-              EOF
-
-              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/rpm-results.json" << EOF
-              {
-                "rpmfiles": [
-                  {
-                    "rpm": "hello-1.0-1.fc38.x86_64.rpm",
-                    "rpmname": "hello",
-                    "arch": "x86_64",
-                    "pulprepo": "public/x86_64",
-                    "epoch": "0",
-                    "version": "1.0",
-                    "release": "1.fc38",
-                    "sha256": "1234567890"
-                  },
-                  {
-                    "rpm": "hello-1.0-1.fc38.src.rpm",
-                    "rpmname": "hello",
-                    "arch": "source",
-                    "pulprepo": "public/source",
-                    "epoch": "0",
-                    "version": "1.0",
-                    "release": "1.fc38",
-                    "sha256": "0987654321"
+                    },
+                    "rpmsToPublish": [
+                      {
+                        "rpm": "hello-1.0-1.fc38.x86_64.rpm",
+                        "rpmname": "hello",
+                        "arch": "x86_64",
+                        "epoch": "0",
+                        "version": "1.0",
+                        "release": "1.fc38",
+                        "sha256": "1234567890",
+                        "targetRepos": ["x86_64"]
+                      },
+                      {
+                        "rpm": "hello-1.0-1.fc38.src.rpm",
+                        "rpmname": "hello",
+                        "arch": "src",
+                        "epoch": "0",
+                        "version": "1.0",
+                        "release": "1.fc38",
+                        "sha256": "0987654321",
+                        "targetRepos": ["source"]
+                      }
+                    ]
                   }
                 ]
               }
@@ -148,8 +143,6 @@ spec:
           value: "$(context.pipelineRun.uid)/data.json"
         - name: snapshotPath
           value: "$(context.pipelineRun.uid)/snapshot_spec.json"
-        - name: rpmResultsPath
-          value: "$(context.pipelineRun.uid)/rpm-results.json"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: orasOptions
