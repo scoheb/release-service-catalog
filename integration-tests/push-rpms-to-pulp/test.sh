@@ -47,7 +47,12 @@ verify_release_contents() {
     # When the release includes noarch RPMs, assert they are published to all default arch repos.
     if [ "${noarch_count}" -gt 0 ]; then
       echo "Checking noarch RPM fanout to default arch repos..."
-      for default_arch in x86_64 aarch64 s390x ppc64le; do
+      # Get arches from the rpm-repositories mapping in the RPA (excluding source)
+      default_arches=$(kubectl get releaseplanadmission "${release_plan_admission_name}" \
+        -n "${managed_namespace}" -ojson \
+        | jq -r '.spec.data.mapping["rpm-repositories"][]? | select(.arch != "source") | .arch' \
+        | sort -u)
+      for default_arch in ${default_arches}; do
         local noarch_for_arch
         noarch_for_arch=$(jq -r '[.[]? | select(.arch == "noarch" and (.pulprepo | test("'"${default_arch}"'")))] | length' <<< "${rpmfiles}")
         if [ "${noarch_for_arch}" -lt 1 ]; then
