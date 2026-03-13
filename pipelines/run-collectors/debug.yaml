@@ -1,0 +1,17 @@
+# no-op-tenant-pipeline.yaml
+  apiVersion: tekton.dev/v1
+  kind: Pipeline
+  metadata:
+    name: debug-pipeline
+  spec:
+    tasks:
+      - name: no-op
+        taskSpec:
+          steps:
+            - name: skip
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              script: |
+                #!/bin/bash
+                echo "No-op tenant pipeline - collector debugging mode"
+                echo "Collectors have already executed at this point"
+                exit 0
