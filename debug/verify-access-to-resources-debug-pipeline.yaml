@@ -3,6 +3,9 @@ apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: verify-access-to-resources-debug
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: release
 spec:
   description: Debug pipeline to test verify-access-to-resources task in isolation
   params:
