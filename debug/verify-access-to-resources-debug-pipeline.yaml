@@ -1,0 +1,180 @@
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: verify-access-to-resources-debug
+spec:
+  description: Debug pipeline to test verify-access-to-resources task in isolation
+  params:
+    - name: release
+      description: Namespace/name of the Release
+      type: string
+    - name: releasePlan
+      description: Namespace/name of the ReleasePlan
+      type: string
+    - name: releasePlanAdmission
+      description: Namespace/name of the ReleasePlanAdmission
+      type: string
+    - name: releaseServiceConfig
+      description: Namespace/name of the ReleaseServiceConfig
+      type: string
+    - name: snapshot
+      description: Namespace/name of the Snapshot
+      type: string
+    - name: requireInternalServices
+      description: Whether internal services are required
+      type: string
+      default: "true"
+    - name: caTrustConfigMapName
+      type: string
+      description: The name of the ConfigMap to read CA bundle data from
+      default: trusted-ca
+    - name: caTrustConfigMapKey
+      type: string
+      description: The name of the key in the ConfigMap that contains the CA bundle data
+      default: ca-bundle.crt
+  tasks:
+    - name: verify-access-to-resources
+      taskSpec:
+        params:
+          - name: release
+            type: string
+          - name: releasePlan
+            type: string
+          - name: releasePlanAdmission
+            type: string
+          - name: releaseServiceConfig
+            type: string
+          - name: snapshot
+            type: string
+          - name: requireInternalServices
+            type: string
+          - name: caTrustConfigMapName
+            type: string
+          - name: caTrustConfigMapKey
+            type: string
+        volumes:
+          - name: trusted-ca
+            configMap:
+              name: $(params.caTrustConfigMapName)
+              items:
+                - key: $(params.caTrustConfigMapKey)
+                  path: ca-bundle.crt
+              optional: true
+        stepTemplate:
+          volumeMounts:
+            - name: trusted-ca
+              mountPath: /mnt/trusted-ca
+              readOnly: true
+          securityContext:
+            runAsUser: 1001
+        steps:
+          - name: verify-access-to-resources
+            image: quay.io/konflux-ci/release-service-utils@sha256:5546fa78d3c88d7b6a2e8cff8902f7757f00541d0bbaf113b9f293133894afa3
+            computeResources:
+              limits:
+                memory: 100Mi
+                cpu: 10m
+              requests:
+                memory: 100Mi
+                cpu: 10m
+            script: |
+              #!/usr/bin/env bash
+              set -x
+
+              echo "=== Starting verify-access-to-resources debug ==="
+              echo "Time: $(date)"
+
+              ORIGIN_NAMESPACE="$(cut -f1 -d/ <<< "$(params.release)")"
+              TARGET_NAMESPACE="$(cut -f1 -d/ <<< "$(params.releasePlanAdmission)")"
+              RSC_NAMESPACE="$(cut -f1 -d/ <<< "$(params.releaseServiceConfig)")"
+
+              RELEASE_NAME="$(cut -f2 -d/ <<< "$(params.release)")"
+              RELEASEPLAN_NAME="$(cut -f2 -d/ <<< "$(params.releasePlan)")"
+              RELEASEPLANADMISSION_NAME="$(cut -f2 -d/ <<< "$(params.releasePlanAdmission)")"
+              RELEASESERVICECONFIG_NAME="$(cut -f2 -d/ <<< "$(params.releaseServiceConfig)")"
+              SNAPSHOT_NAME="$(cut -f2 -d/ <<< "$(params.snapshot)")"
+
+              echo ""
+              echo "=== Parsed parameters ==="
+              echo "ORIGIN_NAMESPACE: ${ORIGIN_NAMESPACE}"
+              echo "TARGET_NAMESPACE: ${TARGET_NAMESPACE}"
+              echo "RSC_NAMESPACE: ${RSC_NAMESPACE}"
+              echo "RELEASE_NAME: ${RELEASE_NAME}"
+              echo "RELEASEPLAN_NAME: ${RELEASEPLAN_NAME}"
+              echo "RELEASEPLANADMISSION_NAME: ${RELEASEPLANADMISSION_NAME}"
+              echo "RELEASESERVICECONFIG_NAME: ${RELEASESERVICECONFIG_NAME}"
+              echo "SNAPSHOT_NAME: ${SNAPSHOT_NAME}"
+              echo ""
+
+              echo "=== Checking release access ($(date)) ==="
+              time CAN_I_READ_RELEASES="$(kubectl auth can-i get release/"${RELEASE_NAME}" -n "${ORIGIN_NAMESPACE}")"
+              echo "Done: CAN_I_READ_RELEASES=${CAN_I_READ_RELEASES}"
+
+              echo "=== Checking releasePlan access ($(date)) ==="
+              time CAN_I_READ_RELEASEPLANS="$(kubectl auth can-i get releaseplan/"${RELEASEPLAN_NAME}" -n "${ORIGIN_NAMESPACE}")"
+              echo "Done: CAN_I_READ_RELEASEPLANS=${CAN_I_READ_RELEASEPLANS}"
+
+              echo "=== Checking releasePlanAdmission access ($(date)) ==="
+              time CAN_I_READ_RELEASEPLANADMISSIONS="$(kubectl auth can-i get releaseplanadmission/"${RELEASEPLANADMISSION_NAME}" -n "${TARGET_NAMESPACE}")"
+              echo "Done: CAN_I_READ_RELEASEPLANADMISSIONS=${CAN_I_READ_RELEASEPLANADMISSIONS}"
+
+              echo "=== Checking releaseServiceConfig access ($(date)) ==="
+              time CAN_I_READ_RELEASESERVICECONFIG="$(kubectl auth can-i get releaseserviceconfig/"${RELEASESERVICECONFIG_NAME}" -n "${RSC_NAMESPACE}")"
+              echo "Done: CAN_I_READ_RELEASESERVICECONFIG=${CAN_I_READ_RELEASESERVICECONFIG}"
+
+              echo "=== Checking snapshot access ($(date)) ==="
+              time CAN_I_READ_SNAPSHOTS="$(kubectl auth can-i get snapshot/"${SNAPSHOT_NAME}" -n "${ORIGIN_NAMESPACE}")"
+              echo "Done: CAN_I_READ_SNAPSHOTS=${CAN_I_READ_SNAPSHOTS}"
+
+              if [ "$(params.requireInternalServices)" = "true" ]; then
+                echo "=== Checking internalrequest create access ($(date)) ==="
+                time CAN_I_CREATE_INTERNALREQUESTS="$(kubectl auth can-i create internalrequest -n "${TARGET_NAMESPACE}")"
+                echo "Done: CAN_I_CREATE_INTERNALREQUESTS=${CAN_I_CREATE_INTERNALREQUESTS}"
+              else
+                CAN_I_CREATE_INTERNALREQUESTS="skipped"
+              fi
+
+              echo ""
+              echo "=== Summary ==="
+              echo "CAN_I_READ_RELEASES? ${CAN_I_READ_RELEASES}"
+              echo "CAN_I_READ_RELEASEPLANS? ${CAN_I_READ_RELEASEPLANS}"
+              echo "CAN_I_READ_RELEASEPLANADMISSIONS? ${CAN_I_READ_RELEASEPLANADMISSIONS}"
+              echo "CAN_I_READ_RELEASESERVICECONFIG? ${CAN_I_READ_RELEASESERVICECONFIG}"
+              echo "CAN_I_READ_SNAPSHOTS? ${CAN_I_READ_SNAPSHOTS}"
+              echo ""
+              echo "CAN_I_CREATE_INTERNALREQUESTS? ${CAN_I_CREATE_INTERNALREQUESTS}"
+              echo ""
+              echo "=== Finished at $(date) ==="
+
+              if [ "${CAN_I_READ_RELEASES}" = "no" ] ||\
+                  [ "${CAN_I_READ_RELEASEPLANS}" = "no" ] ||\
+                  [ "${CAN_I_READ_RELEASEPLANADMISSIONS}" = "no" ] ||\
+                  [ "${CAN_I_READ_RELEASESERVICECONFIG}" = "no" ] ||\
+                  [ "${CAN_I_READ_SNAPSHOTS}" = "no" ] ||\
+                  [ "${CAN_I_CREATE_INTERNALREQUESTS}" = "no" ] ; then
+                echo "Error: Cannot read or create required Release resources!"
+                echo ""
+                echo "This indicates that your workspace is not correctly setup"
+                echo "Please reach out to a workspace administrator"
+                exit 1
+              fi
+
+              echo "Access to Release resources verified"
+      params:
+        - name: release
+          value: $(params.release)
+        - name: releasePlan
+          value: $(params.releasePlan)
+        - name: releasePlanAdmission
+          value: $(params.releasePlanAdmission)
+        - name: releaseServiceConfig
+          value: $(params.releaseServiceConfig)
+        - name: snapshot
+          value: $(params.snapshot)
+        - name: requireInternalServices
+          value: $(params.requireInternalServices)
+        - name: caTrustConfigMapName
+          value: $(params.caTrustConfigMapName)
+        - name: caTrustConfigMapKey
+          value: $(params.caTrustConfigMapKey)
