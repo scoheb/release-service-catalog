@@ -1,0 +1,179 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: rh-rpm-signing
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: release
+spec:
+  description: |
+    STUB TASK - Signs RPMs and uploads them to the public Pulp domain.
+
+    This is a placeholder task that passes through artifacts unchanged.
+    It will be replaced with the real signing implementation when delivered
+    by the signing team.
+
+    When fully implemented, this task will:
+    - Read unsigned RPMs from the unsigned Pulp domain
+    - Sign the RPMs using the specified signing key
+    - Upload signed RPMs to the public Pulp domain
+    - Output the final signed RPM locations and digests
+  params:
+    - name: pulpSecretName
+      type: string
+      description: >-
+        The name of the secret containing the Pulp cli.toml file
+    - name: unsignedDomain
+      type: string
+      description: The Pulp domain to read unsigned RPMs from
+    - name: publicDomain
+      type: string
+      description: The Pulp domain to write signed RPMs to
+    - name: signingKey
+      type: string
+      description: The signing key ID to use for signing RPMs
+      default: ""
+    - name: artifactsJsonPath
+      type: string
+      description: Path to the artifacts.json file containing RPM information
+      default: ""
+    - name: snapshotPath
+      type: string
+      description: Path to the JSON Snapshot spec in the data workspace
+      default: ""
+    - name: resultsDirPath
+      type: string
+      description: Path to the results directory in the data workspace
+      default: ""
+    - name: ociStorage
+      description: The OCI repository where the Trusted Artifacts are stored
+      type: string
+      default: "empty"
+    - name: ociArtifactExpiresAfter
+      description: Expiration date for the trusted artifacts created in the
+        OCI repository. An empty string means the artifacts do not expire
+      type: string
+      default: "1d"
+    - name: trustedArtifactsDebug
+      description: Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable
+      type: string
+      default: ""
+    - name: orasOptions
+      description: oras options to pass to Trusted Artifacts calls
+      type: string
+      default: ""
+    - name: sourceDataArtifact
+      type: string
+      description: Location of trusted artifacts to be used to populate data directory
+      default: ""
+    - name: dataDir
+      description: The location where data will be stored
+      type: string
+      default: /var/workdir/release
+    - name: taskGitUrl
+      type: string
+      description: The url to the git repo where the release-service-catalog tasks and stepactions to be used are stored
+    - name: taskGitRevision
+      type: string
+      description: The revision in the taskGitUrl repo to be used
+  results:
+    - description: Produced trusted data artifact
+      name: sourceDataArtifact
+      type: string
+  volumes:
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+    env:
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.ociArtifactExpiresAfter)
+      - name: ORAS_OPTIONS
+        value: "$(params.orasOptions)"
+      - name: DEBUG
+        value: "$(params.trustedArtifactsDebug)"
+    securityContext:
+      runAsUser: 1001
+  steps:
+    - name: use-trusted-artifact
+      computeResources:
+        limits:
+          memory: 64Mi
+          cpu: 30m
+        requests:
+          memory: 64Mi
+          cpu: 30m
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/use-trusted-artifact/use-trusted-artifact.yaml
+      params:
+        - name: workDir
+          value: $(params.dataDir)
+        - name: sourceDataArtifact
+          value: $(params.sourceDataArtifact)
+    - name: stub-signing
+      image: registry.access.redhat.com/ubi8/ubi-minimal:latest
+      computeResources:
+        limits:
+          memory: 128Mi
+          cpu: 100m
+        requests:
+          memory: 128Mi
+          cpu: 100m
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+
+        echo "=============================================="
+        echo "STUB: rh-rpm-signing task"
+        echo "=============================================="
+        echo ""
+        echo "This is a placeholder task. When fully implemented, it will:"
+        echo "  - Read unsigned RPMs from domain: $(params.unsignedDomain)"
+        echo "  - Sign RPMs using key: $(params.signingKey)"
+        echo "  - Upload signed RPMs to domain: $(params.publicDomain)"
+        echo ""
+        echo "Parameters received:"
+        echo "  pulpSecretName: $(params.pulpSecretName)"
+        echo "  unsignedDomain: $(params.unsignedDomain)"
+        echo "  publicDomain: $(params.publicDomain)"
+        echo "  signingKey: $(params.signingKey)"
+        echo "  artifactsJsonPath: $(params.artifactsJsonPath)"
+        echo "  snapshotPath: $(params.snapshotPath)"
+        echo "  resultsDirPath: $(params.resultsDirPath)"
+        echo ""
+        echo "For now, passing through artifacts unchanged."
+        echo "=============================================="
+    - name: create-trusted-artifact
+      computeResources:
+        limits:
+          memory: 128Mi
+          cpu: 250m
+        requests:
+          memory: 128Mi
+          cpu: 250m
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: "$(params.taskGitUrl)"
+          - name: revision
+            value: "$(params.taskGitRevision)"
+          - name: pathInRepo
+            value: stepactions/create-trusted-artifact/create-trusted-artifact.yaml
+      params:
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: workDir
+          value: $(params.dataDir)
+        - name: sourceDataArtifact
+          value: $(results.sourceDataArtifact.path)

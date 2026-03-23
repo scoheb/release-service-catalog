@@ -164,7 +164,10 @@ spec:
               {"resultIndex": 2, "key": ".conforma.workerCount", "default": "4"},
               {"resultIndex": 3, "key": ".jira.jiraAdvisorySecret", "default": "konflux-advisory-jira-secret"},
               {"resultIndex": 4, "key": ".sign.cosignSecretName", "default": ""},
-              {"resultIndex": 5, "key": ".intention", "default": "staging"}
+              {"resultIndex": 5, "key": ".intention", "default": "staging"},
+              {"resultIndex": 6, "key": ".pulp.unsignedDomain", "default": ""},
+              {"resultIndex": 7, "key": ".signing.keyId", "default": ""},
+              {"resultIndex": 8, "key": ".pulp.publicDomain", "default": ""}
             ]
         - name: taskGitUrl
           value: "$(params.taskGitUrl)"
@@ -532,6 +535,53 @@ spec:
           value: "$(params.taskGitRevision)"
       runAfter:
         - check-data-keys
+    - name: rh-rpm-signing
+      when:
+        - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
+          operator: in
+          values: ["false"]
+        - input: "$(tasks.collect-task-params.results.extractedValues[6])"
+          operator: notin
+          values: ["", "null"]
+        - input: "$(tasks.collect-task-params.results.extractedValues[8])"
+          operator: notin
+          values: ["", "null"]
+      taskRef:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: tasks/managed/rh-rpm-signing/rh-rpm-signing.yaml
+      params:
+        - name: pulpSecretName
+          value: "$(tasks.collect-task-params.results.extractedValues[1])"
+        - name: unsignedDomain
+          value: "$(tasks.collect-task-params.results.extractedValues[6])"
+        - name: publicDomain
+          value: "$(tasks.collect-task-params.results.extractedValues[8])"
+        - name: signingKey
+          value: "$(tasks.collect-task-params.results.extractedValues[7])"
+        - name: snapshotPath
+          value: "$(tasks.collect-data.results.snapshotSpec)"
+        - name: resultsDirPath
+          value: "$(tasks.collect-data.results.resultsDir)"
+        - name: sourceDataArtifact
+          value: "$(tasks.push-rpms-to-pulp.results.sourceDataArtifact)=$(params.dataDir)"
+        - name: ociStorage
+          value: $(params.ociStorage)
+        - name: dataDir
+          value: $(params.dataDir)
+        - name: trustedArtifactsDebug
+          value: "$(params.trustedArtifactsDebug)"
+        - name: taskGitUrl
+          value: "$(params.taskGitUrl)"
+        - name: taskGitRevision
+          value: "$(params.taskGitRevision)"
+      runAfter:
+        - push-rpms-to-pulp
     - name: process-component-sbom
       when:
         - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
