@@ -31,7 +31,13 @@ spec:
       description: Path to the JSON string of the ReleasePlanAdmission in the data workspace
     - name: PULP_DOMAIN
       type: string
-      description: The domain to use for Pulp operations
+      description: The domain to use for Pulp operations (used when PULP_PUBLIC_DOMAIN is empty)
+    - name: PULP_PUBLIC_DOMAIN
+      type: string
+      description: >-
+        When set, overrides PULP_DOMAIN for checking existing RPMs.
+        Used in signing workflows to check the public domain where signed RPMs end up.
+      default: ""
     - name: PULP_SECRET_NAME
       type: string
       description: >-
@@ -139,6 +145,8 @@ spec:
         value: "$(params.trustedArtifactsDebug)"
       - name: PULP_DOMAIN
         value: "$(params.PULP_DOMAIN)"
+      - name: PULP_PUBLIC_DOMAIN
+        value: "$(params.PULP_PUBLIC_DOMAIN)"
     securityContext:
       runAsUser: 1001
   steps:
@@ -197,6 +205,13 @@ spec:
         if [[ ! -f "${RPA_FILE}" ]]; then
           echo "Error: No valid ReleasePlanAdmission file at ${RPA_FILE}" >&2
           exit 1
+        fi
+
+        # Override PULP_DOMAIN with PULP_PUBLIC_DOMAIN if set (signing workflow)
+        # For idempotency checks, we need to check the public domain where signed RPMs end up
+        if [[ -n "${PULP_PUBLIC_DOMAIN:-}" ]]; then
+          echo "Signing workflow: checking public domain '${PULP_PUBLIC_DOMAIN}' instead of '${PULP_DOMAIN}'"
+          PULP_DOMAIN="${PULP_PUBLIC_DOMAIN}"
         fi
 
         origin=$(jq -r '.spec.origin' "$RPA_FILE")

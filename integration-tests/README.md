@@ -90,6 +90,8 @@ Example:
 ### Command Line Options
 
 - **`--skip-cleanup`** or **`-sc`** - Skip cleanup operations after test completion (useful for debugging)
+- **`--no-cve`** or **`-nocve`** - Skip CVE simulation in commit messages
+- **`--interactive`** or **`-i`** - Enable interactive mode for iterative development (see below)
 
 ### Examples
 
@@ -99,13 +101,71 @@ Example:
 
 # Run test with debugging (skip cleanup)
 ./run-test.sh fbc-release --skip-cleanup
+
+# Run test in interactive mode (pause on failure, allow retries)
+./run-test.sh push-rpms-to-pulp -i
 ```
+
+## Interactive Mode
+
+Interactive mode (`-i`) is designed for iterative development. When enabled, the test pauses on failure instead of exiting, allowing you to fix issues and retry **without rebuilding RPMs or recreating resources**.
+
+### Usage
+
+```bash
+./run-test.sh <test-suite-name> -i
+```
+
+### On Failure
+
+When a test fails in interactive mode, you'll see:
+
+```
+🔴 Release verification failed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 Release Context
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Release:        dev-release-team-tenant/push-rpms-abc123
+  Snapshot:       my-snapshot-abc123
+  ReleasePlan:    push-rpms-to-pulp-rp-abc123
+  Managed PLR:    push-rpms-to-pulp-xyz789
+  PLR URL:        https://console.../pipelineruns/...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🛑 Interactive Mode - Test paused
+
+  [r] Retry    - Create new Release with same snapshot
+  [i] Info     - Show release context again
+  [s] Shell    - Drop into bash shell for debugging
+  [c] Cleanup  - Run cleanup and exit
+  [q] Quit     - Exit without cleanup (keep resources)
+
+Select option:
+```
+
+### Workflow
+
+1. Run test with `-i` flag
+2. Test fails → script pauses with context info
+3. Fix task/pipeline YAML in your editor
+4. Push changes or update local git reference
+5. Press `r` to retry with the **same snapshot** (no RPM rebuild!)
+6. Repeat until the test passes
+
+This dramatically speeds up the edit-test cycle when developing pipeline changes.
 
 ## Debugging
 
 ### Debug Options
 
-When debugging test failures, use the `--skip-cleanup` option to preserve resources for examination:
+**Interactive mode** (`-i`) is the recommended approach for iterative debugging - it pauses on failure and allows retries with the same snapshot:
+
+```bash
+./run-test.sh <test-suite-name> -i
+```
+
+Alternatively, use `--skip-cleanup` to preserve resources for post-mortem examination:
 
 ```bash
 ./run-test.sh <test-suite-name> --skip-cleanup
@@ -194,8 +254,9 @@ For issues with integration tests:
 
 1. Check the test-specific README files for additional details
 2. Review the test logs for specific error messages
-3. Use the `--skip-cleanup` option to examine resources after failure
-4. Contact the Release team for vault password or cluster access issues
+3. Use `-i` (interactive mode) to pause on failure and retry with fixes
+4. Use `--skip-cleanup` to examine resources after failure
+5. Contact the Release team for vault password or cluster access issues
 
 ## Contributing
 

@@ -12,7 +12,13 @@ spec:
       description: Path to the snapshot spec file containing image information
     - name: PULP_DOMAIN
       type: string
-      description: The domain to use for Pulp operations
+      description: The domain to use for Pulp operations (used when PULP_UNSIGNED_DOMAIN is empty)
+    - name: PULP_UNSIGNED_DOMAIN
+      type: string
+      description: >-
+        When set, overrides PULP_DOMAIN for push operations.
+        Used in signing workflows where RPMs are first pushed to an unsigned staging domain.
+      default: ""
     - name: PULP_SECRET_NAME
       type: string
       description: >-
@@ -112,6 +118,8 @@ spec:
         value: $(params.dataDir)
       - name: PULP_DOMAIN
         value: $(params.PULP_DOMAIN)
+      - name: PULP_UNSIGNED_DOMAIN
+        value: $(params.PULP_UNSIGNED_DOMAIN)
       - name: PULP_SECRET_NAME
         value: $(params.PULP_SECRET_NAME)
       - name: RESULTS_DIR_PATH
@@ -250,6 +258,12 @@ spec:
           fi
           echo "${value}"
         }
+
+        # Override PULP_DOMAIN with PULP_UNSIGNED_DOMAIN if set (signing workflow)
+        if [[ -n "${PULP_UNSIGNED_DOMAIN:-}" ]]; then
+          echo "Signing workflow: using unsigned domain '${PULP_UNSIGNED_DOMAIN}' instead of '${PULP_DOMAIN}'"
+          PULP_DOMAIN="${PULP_UNSIGNED_DOMAIN}"
+        fi
 
         # Extract credentials from cli.toml
         PULP_BASE_URL="$(toml_get_required "base_url" | sed 's:/*$::')" || exit 1

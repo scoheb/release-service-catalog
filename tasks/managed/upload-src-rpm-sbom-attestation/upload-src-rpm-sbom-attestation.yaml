@@ -23,7 +23,13 @@ spec:
       description: Path to the JSON Snapshot spec in the data workspace
     - name: PULP_DOMAIN
       type: string
-      description: The domain to use for Pulp operations
+      description: The domain to use for Pulp operations (used when PULP_PUBLIC_DOMAIN is empty)
+    - name: PULP_PUBLIC_DOMAIN
+      type: string
+      description: >-
+        When set, overrides PULP_DOMAIN for uploading SBOMs and attestations.
+        Used in signing workflows to upload metadata to the public domain.
+      default: ""
     - name: PULP_SECRET_NAME
       type: string
       description: >-
@@ -103,6 +109,8 @@ spec:
         value: "$(params.trustedArtifactsDebug)"
       - name: PULP_DOMAIN
         value: "$(params.PULP_DOMAIN)"
+      - name: PULP_PUBLIC_DOMAIN
+        value: "$(params.PULP_PUBLIC_DOMAIN)"
     securityContext:
       runAsUser: 1001
   steps:
@@ -158,6 +166,13 @@ spec:
         fi
         echo "${CONFIG_FILE_CONTENT:?}" > "/tmp/cli.toml"
         export PULP_CONFIG_FILE="/tmp/cli.toml"
+
+        # Override PULP_DOMAIN with PULP_PUBLIC_DOMAIN if set (signing workflow)
+        # SBOMs and attestations should be uploaded to the public domain with signed RPMs
+        if [[ -n "${PULP_PUBLIC_DOMAIN:-}" ]]; then
+          echo "Signing workflow: uploading to public domain '${PULP_PUBLIC_DOMAIN}' instead of '${PULP_DOMAIN}'"
+          PULP_DOMAIN="${PULP_PUBLIC_DOMAIN}"
+        fi
 
         METADATA_REPO_NAME="metadata"
         metadata_repo_exists=$(pulp --config "$PULP_CONFIG_FILE" --domain "${PULP_DOMAIN}" \

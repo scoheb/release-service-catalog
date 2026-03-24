@@ -15,6 +15,7 @@ spec:
     pulp:
       domain: konflux-release-integration-tests
       secretName: pulp-credentials-${component_name}
+${PULP_SIGNING_CONFIG}
     mapping:
       "rpm-repositories": [
         {

@@ -266,6 +266,32 @@ verify_release_contents() {
 
       # Cleanup
       rm -rf "${artifacts_dir}" 2>/dev/null || true
+
+      # When signing is enabled, verify the rh-sign-rpm task executed
+      if [[ "${SIGNING_ENABLED}" == "true" ]]; then
+        echo "Checking rh-sign-rpm task execution (signing flow enabled)..."
+        signing_tr_count=$(kubectl get taskrun -n "${managed_namespace}" \
+          -l "tekton.dev/pipelineRun=${managed_plr_name}" -o json \
+          | jq -r '[.items[] | select(.metadata.labels."tekton.dev/pipelineTask"=="rh-sign-rpm")] | length')
+
+        if [ "${signing_tr_count}" -ne 1 ]; then
+          echo "🔴 Expected exactly 1 TaskRun for rh-sign-rpm, got ${signing_tr_count}"
+          failures=$((failures+1))
+        else
+          signing_tr_name=$(kubectl get taskrun -n "${managed_namespace}" \
+            -l "tekton.dev/pipelineRun=${managed_plr_name}" -o json \
+            | jq -r '.items[] | select(.metadata.labels."tekton.dev/pipelineTask"=="rh-sign-rpm") | .metadata.name')
+          signing_tr_status=$(kubectl get taskrun "${signing_tr_name}" -n "${managed_namespace}" \
+            -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}' 2>/dev/null || echo "")
+
+          if [ "${signing_tr_status}" != "True" ]; then
+            echo "🔴 rh-sign-rpm TaskRun did not succeed: ${signing_tr_name} (status=${signing_tr_status})"
+            failures=$((failures+1))
+          else
+            echo "✅️ rh-sign-rpm TaskRun succeeded: ${signing_tr_name}"
+          fi
+        fi
+      fi
     fi
 
     echo "Checking advisory URLs..."
@@ -378,9 +404,34 @@ EOF
 
   if [ -n "${failed_releases}" ]; then
     echo "🔴 Releases FAILED: ${failed_releases}"
-    exit 1
+
+    # Interactive mode: allow retry with same snapshot
+    if [ "${INTERACTIVE_MODE:-false}" == "true" ]; then
+      # Use first failed release for context
+      local first_failed
+      first_failed=$(echo "${failed_releases}" | awk '{print $1}')
+      
+      while true; do
+        if handle_test_failure "Release verification failed" "${first_failed}" "${RELEASE_NAMESPACE}"; then
+          echo ""
+          echo "🔄 Re-running verification for retry release: ${RELEASE_NAME}"
+          # Reset for re-verification
+          failed_releases=""
+          RELEASE_NAMES="${RELEASE_NAME}"
+          # Recursive call to verify the retry
+          verify_release_contents
+          return $?
+        else
+          # User chose cleanup or quit
+          return 1
+        fi
+      done
+    fi
+
+    return 1
   else
     echo "✅️ Success!"
+    return 0
   fi
 }
 
