@@ -166,7 +166,7 @@ spec:
               {"resultIndex": 4, "key": ".sign.cosignSecretName", "default": ""},
               {"resultIndex": 5, "key": ".intention", "default": "staging"},
               {"resultIndex": 6, "key": ".pulp.unsignedDomain", "default": ""},
-              {"resultIndex": 7, "key": ".signing.keyId", "default": ""},
+              {"resultIndex": 7, "key": ".sign.configMapName", "default": ""},
               {"resultIndex": 8, "key": ".pulp.publicDomain", "default": ""}
             ]
         - name: taskGitUrl
@@ -541,7 +541,7 @@ spec:
           value: "$(params.taskGitRevision)"
       runAfter:
         - check-data-keys
-    - name: rh-rpm-signing
+    - name: rh-sign-rpm
       when:
         - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
           operator: in
@@ -560,7 +560,7 @@ spec:
           - name: revision
             value: $(params.taskGitRevision)
           - name: pathInRepo
-            value: tasks/managed/rh-rpm-signing/rh-rpm-signing.yaml
+            value: tasks/managed/rh-sign-rpm/rh-sign-rpm.yaml
       params:
         - name: pulpSecretName
           value: "$(tasks.collect-task-params.results.extractedValues[1])"
@@ -568,8 +568,8 @@ spec:
           value: "$(tasks.collect-task-params.results.extractedValues[6])"
         - name: publicDomain
           value: "$(tasks.collect-task-params.results.extractedValues[8])"
-        - name: signingKey
-          value: "$(tasks.collect-task-params.results.extractedValues[7])"
+        - name: dataPath
+          value: "$(tasks.collect-data.results.data)"
         - name: snapshotPath
           value: "$(tasks.collect-data.results.snapshotSpec)"
         - name: resultsDirPath

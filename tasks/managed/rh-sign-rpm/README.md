@@ -1,4 +1,4 @@
-# rh-rpm-signing
+# rh-sign-rpm
 
 STUB TASK - Signs RPMs and uploads them to the public Pulp domain.
 
@@ -8,9 +8,13 @@ by the signing team.
 
 When fully implemented, this task will:
 - Read unsigned RPMs from the unsigned Pulp domain
-- Sign the RPMs using the specified signing key
+- Sign the RPMs using the signing key(s) from the ConfigMap specified in `.sign.configMapName`
 - Upload signed RPMs to the public Pulp domain
 - Output the final signed RPM locations and digests
+
+The signing key is read from a ConfigMap (matching rh-sign-image approach):
+- ConfigMap name comes from `.sign.configMapName` in the data file
+- ConfigMap should contain `SIG_KEY_NAME` (single key) or `SIG_KEY_NAMES` (comma-separated list)
 
 ## Parameters
 
@@ -19,7 +23,7 @@ When fully implemented, this task will:
 | pulpSecretName          | The name of the secret containing the Pulp cli.toml file                                                                   | No       | -                    |
 | unsignedDomain          | The Pulp domain to read unsigned RPMs from                                                                                 | No       | -                    |
 | publicDomain            | The Pulp domain to write signed RPMs to                                                                                    | No       | -                    |
-| signingKey              | The signing key ID to use for signing RPMs                                                                                 | Yes      | ""                   |
+| dataPath                | Path to the JSON string of the merged data in the data workspace                                                           | No       | -                    |
 | artifactsJsonPath       | Path to the artifacts.json file containing RPM information                                                                 | Yes      | ""                   |
 | snapshotPath            | Path to the JSON Snapshot spec in the data workspace                                                                       | Yes      | ""                   |
 | resultsDirPath          | Path to the results directory in the data workspace                                                                        | Yes      | ""                   |

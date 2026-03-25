@@ -2,7 +2,7 @@
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: rh-rpm-signing
+  name: rh-sign-rpm
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: release
@@ -30,10 +30,9 @@ spec:
     - name: publicDomain
       type: string
       description: The Pulp domain to write signed RPMs to
-    - name: signingKey
+    - name: dataPath
       type: string
-      description: The signing key ID to use for signing RPMs
-      default: ""
+      description: Path to the JSON string of the merged data in the data workspace
     - name: artifactsJsonPath
       type: string
       description: Path to the artifacts.json file containing RPM information
@@ -121,7 +120,7 @@ spec:
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: stub-signing
-      image: registry.access.redhat.com/ubi8/ubi-minimal:latest
+      image: quay.io/konflux-ci/release-service-utils@sha256:3cb03b14ac9d90ff27070036ce2b50712e65aa285daeb28852254a745bb25dfc
       computeResources:
         limits:
           memory: 128Mi
@@ -133,20 +132,36 @@ spec:
         #!/bin/bash
         set -euo pipefail
 
+        DATA_FILE="$(params.dataDir)/$(params.dataPath)"
+        if [ ! -f "${DATA_FILE}" ] ; then
+            echo "No valid data file was provided."
+            exit 1
+        fi
+
+        # Get signing key from ConfigMap (matching rh-sign-image approach)
+        # Supports either SIG_KEY_NAME (single key) or SIG_KEY_NAMES (comma-separated)
+        jqquery='.data|if has ("SIG_KEY_NAMES")
+        then (.SIG_KEY_NAMES|split(",")|.[]|gsub("^\\s+|\\s+$";"")) else .SIG_KEY_NAME end'
+
+        config_map_name=$(jq -r '.sign.configMapName // "signing-config-map"' "${DATA_FILE}")
+        configMapJson=$(kubectl get "cm/${config_map_name:?}" -ojson)
+        SIG_KEY_NAMES=$(jq -er "$jqquery" <<< "${configMapJson}")
+
         echo "=============================================="
-        echo "STUB: rh-rpm-signing task"
+        echo "STUB: rh-sign-rpm task"
         echo "=============================================="
         echo ""
         echo "This is a placeholder task. When fully implemented, it will:"
         echo "  - Read unsigned RPMs from domain: $(params.unsignedDomain)"
-        echo "  - Sign RPMs using key: $(params.signingKey)"
+        echo "  - Sign RPMs using key(s): ${SIG_KEY_NAMES}"
         echo "  - Upload signed RPMs to domain: $(params.publicDomain)"
         echo ""
         echo "Parameters received:"
         echo "  pulpSecretName: $(params.pulpSecretName)"
         echo "  unsignedDomain: $(params.unsignedDomain)"
         echo "  publicDomain: $(params.publicDomain)"
-        echo "  signingKey: $(params.signingKey)"
+        echo "  configMapName: ${config_map_name}"
+        echo "  signingKey(s): ${SIG_KEY_NAMES}"
         echo "  artifactsJsonPath: $(params.artifactsJsonPath)"
         echo "  snapshotPath: $(params.snapshotPath)"
         echo "  resultsDirPath: $(params.resultsDirPath)"
