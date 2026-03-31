@@ -2,9 +2,9 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: test-rh-sign-rpm
+  name: test-rh-sign-rpm-dynamic-arch
 spec:
-  description: Test creating an internal request to sign RPMs
+  description: Test creating internal requests with dynamic architecture detection from artifacts.json
   params:
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored.
@@ -55,6 +55,23 @@ spec:
               mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)"
               mkdir -p "$(params.dataDir)/$(context.pipelineRun.uid)/artifacts"
 
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/snapshot_spec.json" << EOF
+              {
+                "application": "myapp",
+                "components": [
+                  {
+                    "name": "rpm-comp0",
+                    "source": {
+                      "git": {
+                        "revision": "deadbeef"
+                      }
+                    },
+                    "containerImage": "quay.io/test/rpm-component@sha256:1111"
+                  }
+                ]
+              }
+              EOF
+
               cat > "$(params.dataDir)/$(context.pipelineRun.uid)/data.json" << EOF
               {
                 "signOptions": {
@@ -63,13 +80,40 @@ spec:
                     "name": "test-keytab",
                     "secret": "test-keytab-secret"
                   },
-                  "signPipelineImage": "quay.io/konflux-ci/signing:latest",
+                  "signPipelineImage": "quay.io/redhat-isv/operator-pipelines-images:released",
                   "signKeyAlias": {
                     "key": "devkey1"
                   }
                 },
                 "sign": {
                   "request": "rpm-signing-pipeline"
+                }
+              }
+              EOF
+
+              cat > "$(params.dataDir)/$(context.pipelineRun.uid)/release_plan_admission.json" << EOF
+              {
+                "spec": {
+                  "pipeline": {
+                    "pipelineRef": {
+                      "resolver": "git",
+                      "params": [
+                        {
+                          "name": "url",
+                          "value": "https://localhost.git"
+                        },
+                        {
+                          "name": "revision",
+                          "value": "main"
+                        },
+                        {
+                          "name": "pathInRepo",
+                          "value": "pipelines/rpm-signing/rpm-signing.yaml"
+                        }
+                      ]
+                    },
+                    "serviceAccountName": "release-service-account"
+                  }
                 }
               }
               EOF
@@ -81,6 +125,11 @@ spec:
                     "labels": {"arch": "x86_64"},
                     "url": "https://pulp.example.com/pulp/content/test/x86_64/test-rpm-1.0-1.el9.x86_64.rpm",
                     "sha256": "abc123def456"
+                  },
+                  "another-rpm-2.0-1.el9.x86_64.rpm": {
+                    "labels": {"arch": "x86_64"},
+                    "url": "https://pulp.example.com/pulp/content/test/x86_64/another-rpm-2.0-1.el9.x86_64.rpm",
+                    "sha256": "xyz789abc123"
                   },
                   "test-rpm-1.0-1.el9.src.rpm": {
                     "labels": {"arch": "source"},
@@ -114,8 +163,12 @@ spec:
           value: "1800"
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
+        - name: snapshotPath
+          value: $(context.pipelineRun.uid)/snapshot_spec.json
         - name: dataPath
           value: $(context.pipelineRun.uid)/data.json
+        - name: releasePlanAdmissionPath
+          value: $(context.pipelineRun.uid)/release_plan_admission.json
         - name: artifactsJsonPath
           value: $(context.pipelineRun.uid)/artifacts/artifacts.json
         - name: ociStorage
@@ -133,15 +186,17 @@ spec:
         - name: taskGitRevision
           value: "main"
         - name: snapshotBuildId
-          value: "test-build-123"
+          value: ""
         - name: unsignedRpmsDomain
           value: "rok-storage"
         - name: signedRpmsDomain
           value: "rok-storage"
-        - name: pipelineImage
-          value: "quay.io/konflux-ci/signing:latest"
-        - name: signPipeline
-          value: "rpm-signing-pipeline"
+        - name: unsignedRpmsSubpath
+          value: ""
+        - name: signedRpmsSubpath
+          value: ""
+        - name: signedRpmsUploadSubpath
+          value: ""
       runAfter:
         - setup
     - name: check-result
@@ -186,83 +241,65 @@ spec:
 
               echo "Found ${irsLength} internal requests"
 
-              # We expect 1 internal request
-              if [ "${irsLength}" != "1" ]; then
-                echo "Expected 1 internal request, found ${irsLength}"
+              # We expect 2 internal requests (one for x86_64, one for source)
+              if [ "${irsLength}" != "2" ]; then
+                echo "Expected 2 internal requests (one per architecture), found ${irsLength}"
                 exit 1
               fi
 
-              params=$(jq -r ".items[0].spec.params" <<< "${internalRequests}")
-
-              # Verify parameters passed to internal-request
-              requester=$(jq -r '.requester' <<< "${params}")
-              if [ "${requester}" != "testuser-rpm" ]; then
-                echo "requester does not match: expected 'testuser-rpm', got '${requester}'"
+              # Check that filtered artifacts.json files were created
+              if [ ! -f "$(params.dataDir)/artifacts-x86_64.json" ]; then
+                echo "Expected filtered artifacts-x86_64.json file not found"
                 exit 1
               fi
 
-              pipelineImage=$(jq -r '.image' <<< "${params}")
-              if [ "${pipelineImage}" != "quay.io/redhat-isv/operator-pipelines-images:released" ]; then
-                echo "image does not match"
+              if [ ! -f "$(params.dataDir)/artifacts-source.json" ]; then
+                echo "Expected filtered artifacts-source.json file not found"
                 exit 1
               fi
 
-              kerberosKeytab=$(jq -r '.kerberos_keytab' <<< "${params}")
-              if [ "${kerberosKeytab}" != "test-keytab" ]; then
-                echo "kerberos_keytab does not match"
+              # Verify x86_64 filtered file contains only x86_64 artifacts
+              x86_count=$(jq '.artifacts | length' "$(params.dataDir)/artifacts-x86_64.json")
+              if [ "${x86_count}" != "2" ]; then
+                echo "Expected 2 artifacts in x86_64 filtered file, found ${x86_count}"
                 exit 1
               fi
 
-              signingAlias=$(jq -r '.signing_alias' <<< "${params}")
-              if [ "${signingAlias}" != "devkey1" ]; then
-                echo "signing_alias does not match: expected 'devkey1', got '${signingAlias}'"
+              # Verify source filtered file contains only source artifacts
+              source_count=$(jq '.artifacts | length' "$(params.dataDir)/artifacts-source.json")
+              if [ "${source_count}" != "1" ]; then
+                echo "Expected 1 artifact in source filtered file, found ${source_count}"
                 exit 1
               fi
 
-              kerberosPrincipal=$(jq -r '.kerberos_principal' <<< "${params}")
-              if [ "${kerberosPrincipal}" != "test-principal@REDHAT.COM" ]; then
-                echo "kerberos_principal does not match:" \
-                  "expected 'test-principal@REDHAT.COM', got '${kerberosPrincipal}'"
+              # Verify all artifacts in x86_64 file have arch=x86_64
+              x86_archs=$(jq -r '.artifacts[].labels.arch' "$(params.dataDir)/artifacts-x86_64.json" | sort -u)
+              if [ "${x86_archs}" != "x86_64" ]; then
+                echo "x86_64 filtered file contains non-x86_64 artifacts: ${x86_archs}"
                 exit 1
               fi
 
-              kerberosKeytabSecret=$(jq -r '.kerberos_keytab_secret' <<< "${params}")
-              if [ "${kerberosKeytabSecret}" != "test-keytab-secret" ]; then
-                echo "kerberos_keytab_secret does not match:" \
-                  "expected 'test-keytab-secret', got '${kerberosKeytabSecret}'"
+              # Verify all artifacts in source file have arch=source
+              source_archs=$(jq -r '.artifacts[].labels.arch' "$(params.dataDir)/artifacts-source.json" | sort -u)
+              if [ "${source_archs}" != "source" ]; then
+                echo "source filtered file contains non-source artifacts: ${source_archs}"
                 exit 1
               fi
 
-              artifactStorageSecret=$(jq -r '.artifact_storage_secret' <<< "${params}")
-              if [ "${artifactStorageSecret}" != "signing-artifact-storage-preprod" ]; then
-                echo "artifact_storage_secret does not match:" \
-                  "expected 'signing-artifact-storage-preprod'," \
-                  "got '${artifactStorageSecret}'"
-                exit 1
-              fi
+              # Verify the internal requests have correct unsigned_rpms_location
+              for i in 0 1; do
+                params_json=$(jq -r ".items[$i].spec.params" <<< "${internalRequests}")
+                unsigned_location=$(jq -r '.unsigned_rpms_location' <<< "${params_json}")
 
-              destinationDomain=$(jq -r '.destination_artifact_storage_domain' <<< "${params}")
-              if [ "${destinationDomain}" != "rok-storage" ]; then
-                echo "destination_artifact_storage_domain does not match:" \
-                  "expected 'rok-storage', got '${destinationDomain}'"
-                exit 1
-              fi
+                # Should be either rok-storage/x86_64 or rok-storage/source
+                if [[ "${unsigned_location}" != "rok-storage/x86_64" ]] && \
+                   [[ "${unsigned_location}" != "rok-storage/source" ]]; then
+                  echo "Unexpected unsigned_rpms_location: ${unsigned_location}"
+                  exit 1
+                fi
+              done
 
-              force=$(jq -r '.force' <<< "${params}")
-              if [ "${force}" != "false" ]; then
-                echo "force does not match: expected 'false', got '${force}'"
-                exit 1
-              fi
-
-              artifactJson=$(jq -r '.artifact_json' <<< "${params}")
-              # artifact_json is base64-encoded content, not a path - decode and verify it's valid JSON with artifacts
-              decodedArtifact=$(base64 -d <<< "${artifactJson}")
-              if ! jq -e '.artifacts' > /dev/null 2>&1 <<< "${decodedArtifact}"; then
-                echo "artifact_json does not decode to valid JSON with .artifacts key"
-                exit 1
-              fi
-
-              echo "Test passed: InternalRequest created correctly with all required parameters"
+              echo "Test passed: Multiple InternalRequests created with filtered artifacts.json files"
       runAfter:
         - run-task
   finally:
