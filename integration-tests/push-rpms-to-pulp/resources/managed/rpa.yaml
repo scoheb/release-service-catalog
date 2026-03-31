@@ -13,7 +13,7 @@ spec:
       jiraAdvisorySecret: advisory-jira-secret-${component_name}
     intention: "staging"
     pulp:
-      domain: konflux-release-integration-tests
+      domain: konflux-release-integration-tests-unsigned
       secretName: pulp-credentials-${component_name}
     mapping:
       "rpm-repositories": [
@@ -52,6 +52,16 @@ spec:
     sign:
       configMapName: "hacbs-signing-pipeline-config-staging-e2e-pq"
       cosignSecretName: "konflux-cosign-signing-stage-${component_name}"
+    signOptions:
+      signKeytab:
+        principal: "test-principal@REDHAT.COM"
+        name: "test-keytab"
+        secret: "signing-keytab-secret-${component_name}"
+      signPipelineImage: "quay.io/redhat-isv/operator-pipelines-images:released"
+      signKeyAlias:
+        key: "testkey"
+      unsignedRpmsDomain: "konflux-release-integration-tests-unsigned"
+      signedRpmsDomain: "konflux-release-integration-tests"
     releaseNotes:
       product_id:
         - 932
