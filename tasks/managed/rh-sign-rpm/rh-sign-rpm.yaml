@@ -187,6 +187,7 @@ spec:
           '.signOptions.artifactStorageSecret // "signing-artifact-storage-preprod"' \
           "${DATA_FILE}")
         SERVICE_ACCOUNT=$(jq --exit-status -r '.signOptions.signPipelineServiceAccount // "release-service-account"' "${DATA_FILE}")
+        ARTIFACT_STORAGE_SECRET=$(jq --exit-status -r '.signOptions.artifactStorageSecret // "signing-artifact-storage-preprod"' "${DATA_FILE}")
 
         # Determine repos to process and whether to filter artifacts
         FILTER_ARTIFACTS="false"
@@ -297,6 +298,7 @@ spec:
               -p kerberos_keytab="${KERBEROS_KEYTAB}" \
               -p kerberos_keytab_secret="${KERBEROS_KEYTAB_SECRET}" \
               -p signing_alias="${SIGNING_ALIAS}" \
+              -p artifact_storage_secret="${ARTIFACT_STORAGE_SECRET}" \
               -p unsigned_rpms_location="${UNSIGNED_LOCATION}" \
               -p signed_rpms_destination="${SIGNED_DESTINATION}" \
               -p requester="$(params.requester)" \
