@@ -54,12 +54,13 @@ spec:
       cosignSecretName: "konflux-cosign-signing-stage-${component_name}"
     signOptions:
       signKeytab:
-        principal: "test-principal@REDHAT.COM"
-        name: "test-keytab"
-        secret: "signing-keytab-secret-${component_name}"
-      signPipelineImage: "quay.io/redhat-isv/operator-pipelines-images:released"
+        principal: "konflux-release-signing-stage@IPA.REDHAT.COM"
+        name: "konflux-release-signing-stage.keytab"
+        secret: "konflux-release-signing-stage-sa"
+      signPipelineImage: "quay.io/konflux-ci/signing:latest"
+      signPipelineServiceAccount: "signing-pipeline-sa"
       signKeyAlias:
-        key: "testkey"
+        key: "e2epq,e2e,ima"
       unsignedRpmsDomain: "konflux-release-integration-tests-unsigned"
       signedRpmsDomain: "konflux-release-integration-tests"
     releaseNotes:
