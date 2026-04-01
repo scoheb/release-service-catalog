@@ -186,6 +186,7 @@ spec:
         ARTIFACT_STORAGE_SECRET=$(jq --exit-status -r \
           '.signOptions.artifactStorageSecret // "signing-artifact-storage-preprod"' \
           "${DATA_FILE}")
+        SERVICE_ACCOUNT=$(jq --exit-status -r '.signOptions.signPipelineServiceAccount // "release-service-account"' "${DATA_FILE}")
 
         # Determine repos to process and whether to filter artifacts
         FILTER_ARTIFACTS="false"
@@ -302,9 +303,10 @@ spec:
               -p force="false" \
               -p signed_rpms_upload_subpath="$(params.signedRpmsUploadSubpath)" \
               -p taskGitUrl="https://gitlab.cee.redhat.com/signing/signing.git" \
-              -p taskGitRevision="main" \
+              -p taskGitRevision="ISV-7017" \
               -l ${PIPELINERUN_LABEL}="$(params.pipelineRunUid)" \
               -t "$(params.requestTimeout)" \
+              --service-account "${SERVICE_ACCOUNT}" \
               --pipeline-timeout "0h30m0s" \
               --task-timeout "0h25m0s" \
               -s true
