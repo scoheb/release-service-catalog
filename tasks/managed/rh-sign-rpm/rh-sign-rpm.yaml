@@ -316,8 +316,8 @@ spec:
               -p requester="$(params.requester)" \
               -p force="false" \
               -p signed_rpms_upload_subpath="$(params.signedRpmsUploadSubpath)" \
-              -p taskGitUrl="https://gitlab.cee.redhat.com/signing/signing.git" \
-              -p taskGitRevision="ISV-7017" \
+              -p taskGitUrl="https://gitlab.cee.redhat.com/shebert/signing.git" \
+              -p taskGitRevision="ISV-7017-sh" \
               -l ${PIPELINERUN_LABEL}="$(params.pipelineRunUid)" \
               -t "$(params.requestTimeout)" \
               --service-account "${SERVICE_ACCOUNT}" \
