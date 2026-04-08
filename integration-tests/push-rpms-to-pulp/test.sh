@@ -2,6 +2,7 @@
 # --- Global Script Variables (Defaults) ---
 CLEANUP="true"
 NO_CVE="false" # Default to false
+FAIL_FIRST_ADVISORY="false" # Default to false - set via --fail-first-advisory flag
 
 # Override merge_github_pr to include JIRA reference for simple-jira collector
 merge_github_pr() {
@@ -63,6 +64,144 @@ merge_github_pr() {
 verify_release_contents() {
   local failures=0
   local failed_releases
+
+  # Handle --fail-first-advisory scenario (test signing idempotency)
+  # Strategy: After first release succeeds, create a new Release with a different origin
+  # so filter-already-released-advisory-rpms won't find the existing advisory.
+  # This forces the pipeline to run signing again, where it should detect existing signed RPMs.
+  if [ "${FAIL_FIRST_ADVISORY:-false}" == "true" ]; then
+    echo ""
+    echo "=== SIGNING IDEMPOTENCY TEST ==="
+    echo "Testing that rh-sign-rpm skips signing when signed RPMs already exist in Pulp"
+    echo ""
+
+    local first_release="${RELEASE_NAMES%% *}"
+    echo "First release: ${first_release}"
+
+    local release_json
+    release_json=$(kubectl get release/"${first_release}" -n "${RELEASE_NAMESPACE}" -ojson)
+    local released_status
+    released_status=$(jq -r '.status.conditions[]? | select(.type=="Released") | .status // ""' <<< "${release_json}")
+
+    if [ "${released_status}" != "True" ]; then
+      echo "🔴 First release did not succeed - cannot test signing idempotency"
+      echo "Release status:"
+      jq '.status.conditions' <<< "${release_json}"
+      exit 1
+    fi
+
+    echo "✅ First release succeeded - signed RPMs are now in Pulp"
+    echo ""
+
+    # Create a signing idempotency test Release using a fake origin
+    # This tricks filter-already-released-advisory-rpms into not finding the advisory
+    local retry_suffix retry_name fake_origin fake_rpa_name
+    retry_suffix="${uuid:-$(date +%s)}"
+    retry_suffix="${retry_suffix:0:8}"
+    retry_name="sign-idem-${retry_suffix}"
+    fake_origin="fake-origin-${retry_suffix}"
+    fake_rpa_name="sign-test-rpa-${retry_suffix}"
+
+    echo "Creating test RPA with fake origin '${fake_origin}'..."
+
+    # Create a copy of the RPA with different origin
+    kubectl get releaseplanadmission "${release_plan_admission_name}" -n "${managed_namespace}" -o json \
+        | jq --arg name "${fake_rpa_name}" --arg origin "${fake_origin}" \
+            '.metadata.name = $name | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation) | .spec.origin = $origin' \
+        | kubectl apply -f -
+
+    echo "Created RPA: ${fake_rpa_name}"
+
+    # Create a copy of the ReleasePlan that uses the new RPA
+    local fake_rp_name="sign-test-rp-${retry_suffix}"
+    kubectl get releaseplan "${release_plan_name}" -n "${tenant_namespace}" -o json \
+        | jq --arg name "${fake_rp_name}" \
+            '.metadata.name = $name | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation)' \
+        | kubectl apply -f -
+
+    echo "Created ReleasePlan: ${fake_rp_name}"
+
+    # Get snapshot from original release
+    local prev_author prev_snapshot
+    prev_author=$(jq -r '.metadata.labels["release.appstudio.openshift.io/author"] // .status.attribution.author // ""' <<< "${release_json}")
+    prev_snapshot=$(jq -r '.spec.snapshot // ""' <<< "${release_json}")
+
+    # Delete if exists from previous run
+    kubectl delete release "${retry_name}" -n "${RELEASE_NAMESPACE}" --ignore-not-found >/dev/null 2>&1 || true
+
+    echo "Creating signing idempotency test Release: ${retry_name}..."
+    cat <<EOF | kubectl create -f -
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Release
+metadata:
+  name: ${retry_name}
+  namespace: ${RELEASE_NAMESPACE}
+  labels:
+    release.appstudio.openshift.io/automated: "false"
+    release.appstudio.openshift.io/author: "${prev_author}"
+spec:
+  releasePlan: ${fake_rp_name}
+  snapshot: ${prev_snapshot}
+EOF
+
+    echo "Waiting for signing idempotency test Release ${retry_name} to complete..."
+    local retry_rc=0
+    set +e
+    RELEASE_NAME="${retry_name}" RELEASE_NAMESPACE="${RELEASE_NAMESPACE}" \
+      "${SUITE_DIR}/../scripts/wait-for-release.sh"
+    retry_rc=$?
+    set -e
+
+    if [ ${retry_rc} -ne 0 ]; then
+      echo "🔴 Signing idempotency test release failed!"
+      kubectl get release "${retry_name}" -n "${RELEASE_NAMESPACE}" -o yaml
+      # Cleanup test resources
+      kubectl delete releaseplanadmission "${fake_rpa_name}" -n "${managed_namespace}" --ignore-not-found || true
+      kubectl delete releaseplan "${fake_rp_name}" -n "${tenant_namespace}" --ignore-not-found || true
+      exit 1
+    fi
+
+    echo "✅ Signing idempotency test release succeeded"
+
+    # Get the managed PipelineRun name and verify signing was skipped
+    local retry_json retry_managed_plr_full retry_managed_plr_name
+    retry_json=$(kubectl get release/"${retry_name}" -n "${RELEASE_NAMESPACE}" -ojson)
+    retry_managed_plr_full=$(jq -r '.status.managedProcessing.pipelineRun // ""' <<< "${retry_json}")
+
+    if [ -z "${retry_managed_plr_full}" ]; then
+      echo "🔴 Could not find managed PipelineRun for test release"
+      kubectl delete releaseplanadmission "${fake_rpa_name}" -n "${managed_namespace}" --ignore-not-found || true
+      kubectl delete releaseplan "${fake_rp_name}" -n "${tenant_namespace}" --ignore-not-found || true
+      exit 1
+    fi
+
+    retry_managed_plr_name=$(basename "${retry_managed_plr_full}")
+    echo "Test managed PipelineRun: ${retry_managed_plr_name}"
+
+    # Verify signing was skipped
+    if ! verify_signing_skipped "${retry_managed_plr_name}" "${managed_namespace}"; then
+      echo "🔴 Signing idempotency test FAILED"
+      echo "The rh-sign-rpm task should have detected signed RPMs in Pulp and skipped signing."
+      kubectl delete releaseplanadmission "${fake_rpa_name}" -n "${managed_namespace}" --ignore-not-found || true
+      kubectl delete releaseplan "${fake_rp_name}" -n "${tenant_namespace}" --ignore-not-found || true
+      exit 1
+    fi
+
+    echo ""
+    echo "=== SIGNING IDEMPOTENCY TEST PASSED ==="
+    echo "✅ rh-sign-rpm correctly detected signed RPMs exist and skipped re-signing"
+    echo ""
+
+    # Cleanup test resources
+    echo "Cleaning up test resources..."
+    kubectl delete releaseplanadmission "${fake_rpa_name}" -n "${managed_namespace}" --ignore-not-found || true
+    kubectl delete releaseplan "${fake_rp_name}" -n "${tenant_namespace}" --ignore-not-found || true
+
+    # Continue with normal verification using the original release
+    echo "Continuing with normal release verification..."
+    echo ""
+  fi
+
   for RELEASE_NAME in ${RELEASE_NAMES};
   do
     echo "Verifying Release contents for ${RELEASE_NAME} in namespace ${RELEASE_NAMESPACE}..."
@@ -536,6 +675,54 @@ EOF
   else
     echo "✅️ Success!"
   fi
+}
+
+# Function to verify signing was skipped (idempotency check)
+verify_signing_skipped() {
+    local plr_name="$1"
+    local namespace="$2"
+
+    echo "Verifying that rh-sign-rpm task skipped signing..."
+
+    # Get the TaskRun for rh-sign-rpm
+    local sign_tr_name
+    sign_tr_name=$(kubectl get taskrun -n "${namespace}" \
+        -l "tekton.dev/pipelineRun=${plr_name}" -o json \
+        | jq -r '.items[] | select(.metadata.labels."tekton.dev/pipelineTask"=="rh-sign-rpm") | .metadata.name')
+
+    if [ -z "${sign_tr_name}" ]; then
+        echo "🔴 Could not find rh-sign-rpm TaskRun for ${plr_name}"
+        return 1
+    fi
+
+    echo "Found rh-sign-rpm TaskRun: ${sign_tr_name}"
+
+    # Get the pod for this TaskRun
+    local pod_name
+    pod_name=$(kubectl get pod -n "${namespace}" \
+        -l "tekton.dev/taskRun=${sign_tr_name}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+
+    if [ -z "${pod_name}" ]; then
+        echo "🔴 Could not find pod for TaskRun ${sign_tr_name}"
+        return 1
+    fi
+
+    # Check logs for idempotency message
+    local logs
+    logs=$(kubectl logs "${pod_name}" -n "${namespace}" -c step-rh-sign-rpm 2>/dev/null || echo "")
+
+    if echo "${logs}" | grep -q "Skipping signing operation (idempotent behavior)"; then
+        echo "✅ rh-sign-rpm correctly skipped signing (idempotent behavior detected)"
+        return 0
+    elif echo "${logs}" | grep -q "All RPMs already exist and are signed"; then
+        echo "✅ rh-sign-rpm correctly detected all RPMs are already signed"
+        return 0
+    else
+        echo "🔴 rh-sign-rpm did NOT skip signing - idempotency check failed"
+        echo "Logs from rh-sign-rpm:"
+        echo "${logs}" | tail -50
+        return 1
+    fi
 }
 
 patch_component_source_before_merge() {

@@ -751,6 +751,8 @@ spec:
           value: ""
         - name: signedRpmsUploadSubpath
           value: ""
+        - name: PULP_SECRET_NAME
+          value: "$(tasks.collect-task-params.results.extractedValues[1])"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact

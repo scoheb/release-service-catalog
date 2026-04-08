@@ -94,13 +94,13 @@ suite=""
 args=()
 for arg in "$@"; do
   case "$arg" in
-    -sc|--skip-cleanup|-nocve|--no-cve|-i|--interactive)
+    -sc|--skip-cleanup|-nocve|--no-cve|-i|--interactive|-ffa|--fail-first-advisory)
       args+=("$arg")
       ;;
     -*)
       echo "🔴 error: unknown option: $arg"
       echo "Usage: ./run-test.sh <suite_name> [options]"
-      echo "Options: -i/--interactive, -sc/--skip-cleanup, -nocve/--no-cve"
+      echo "Options: -i/--interactive, -sc/--skip-cleanup, -nocve/--no-cve, -ffa/--fail-first-advisory"
       exit 1
       ;;
     *)
@@ -162,6 +162,11 @@ patch_component_source
 setup_namespaces # Ensures correct context before resource creation
 cleanup_old_resources "${originating_tool}"
 create_kubernetes_resources # tmpDir is set here
+
+# Call post_create_kubernetes_resources hook if defined (for test-specific setup)
+if type post_create_kubernetes_resources &>/dev/null; then
+    post_create_kubernetes_resources
+fi
 
 wait_for_component_initialization # component_pr and pr_number are set here
 patch_component_source_before_merge

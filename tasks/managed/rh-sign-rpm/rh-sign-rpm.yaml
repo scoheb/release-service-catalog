@@ -101,6 +101,19 @@ spec:
         Subpath for uploading signed RPMs within the signing pipeline.
         Set to empty string for no subpath.
       default: ""
+    - name: PULP_SECRET_NAME
+      type: string
+      description: >-
+        The name of the secret containing the Pulp cli.toml file for checking
+        if signed RPMs already exist (idempotency check)
+    - name: caTrustConfigMapName
+      type: string
+      description: The name of the ConfigMap to read CA bundle data from
+      default: trusted-ca
+    - name: caTrustConfigMapKey
+      type: string
+      description: The name of the key in the ConfigMap that contains the CA bundle data
+      default: ca-bundle.crt
   results:
     - name: sourceDataArtifact
       type: string
@@ -111,10 +124,27 @@ spec:
   volumes:
     - name: workdir
       emptyDir: {}
+    - name: pulp-secret-vol
+      secret:
+        secretName: $(params.PULP_SECRET_NAME)
+        defaultMode: 0444
+    - name: trusted-ca
+      configMap:
+        name: $(params.caTrustConfigMapName)
+        items:
+          - key: $(params.caTrustConfigMapKey)
+            path: ca-bundle.crt
+        optional: true
   stepTemplate:
     volumeMounts:
       - mountPath: /var/workdir
         name: workdir
+      - name: pulp-secret-vol
+        mountPath: /etc/pulp-secret
+        readOnly: true
+      - name: trusted-ca
+        mountPath: /mnt/trusted-ca
+        readOnly: true
     env:
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.ociArtifactExpiresAfter)
@@ -163,6 +193,10 @@ spec:
           value: $(params.dataDir)/$(params.dataPath)
         - name: ARTIFACTS_JSON_FILE
           value: $(params.dataDir)/$(params.artifactsJsonPath)
+        - name: SIGNED_RPMS_DOMAIN
+          value: $(params.signedRpmsDomain)
+        - name: HOME
+          value: /tmp
       script: |
         #!/usr/bin/env bash
         set -e
@@ -188,6 +222,224 @@ spec:
             exit 1
         fi
 
+        # === Pulp credential setup for idempotency check ===
+        CONFIG_FILE_CONTENT="$(cat /etc/pulp-secret/cli.toml 2>/dev/null || true)"
+        if [[ -z "${CONFIG_FILE_CONTENT}" ]]; then
+            echo "Warning: No Pulp credentials found, skipping idempotency check"
+            SKIP_IDEMPOTENCY_CHECK=true
+        else
+            echo "${CONFIG_FILE_CONTENT}" > "/tmp/cli.toml"
+            export PULP_CONFIG_FILE="/tmp/cli.toml"
+            SKIP_IDEMPOTENCY_CHECK=false
+        fi
+
+        # Helper to read cli.toml values
+        toml_get_optional() {
+            local key="$1"
+            local line current_table="" value=""
+            while IFS= read -r line || [[ -n "${line}" ]]; do
+                if [[ "${line}" =~ ^[[:space:]]*\\[([^]]+)\\][[:space:]]*$ ]]; then
+                    current_table="${BASH_REMATCH[1]}"
+                    continue
+                fi
+                if [[ "${line}" =~ ^[[:space:]]*# ]] || [[ "${line}" =~ ^[[:space:]]*$ ]]; then
+                    continue
+                fi
+                if [[ -n "${current_table}" && "${current_table}" != "cli" ]]; then
+                    continue
+                fi
+                if [[ "${line}" =~ ^[[:space:]]*${key}[[:space:]]*= ]]; then
+                    if [[ "${line}" =~ \"([^\"]*)\" ]]; then
+                        value="${BASH_REMATCH[1]}"
+                        break
+                    fi
+                    if [[ "${line}" =~ \'([^\']*)\' ]]; then
+                        value="${BASH_REMATCH[1]}"
+                        break
+                    fi
+                fi
+            done < "${PULP_CONFIG_FILE}"
+            echo "${value}"
+        }
+
+        toml_get_required() {
+            local key="$1"
+            local value
+            value="$(toml_get_optional "${key}")"
+            if [[ -z "${value}" ]]; then
+                echo "Error: Missing required '${key}' in cli.toml" >&2
+                return 1
+            fi
+            echo "${value}"
+        }
+
+        # Initialize Pulp credentials if available
+        if [[ "${SKIP_IDEMPOTENCY_CHECK}" != "true" ]]; then
+            PULP_BASE_URL="$(toml_get_required "base_url" | sed 's:/*$::')" || SKIP_IDEMPOTENCY_CHECK=true
+            PULP_USERNAME="$(toml_get_optional "username")"
+            PULP_PASSWORD="$(toml_get_optional "password")"
+            CLIENT_ID="$(toml_get_optional "client_id")"
+            CLIENT_SECRET="$(toml_get_optional "client_secret")"
+            TOKEN_URL="https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
+        fi
+
+        get_access_token() {
+            if [[ -z "${CLIENT_ID}" || -z "${CLIENT_SECRET}" ]]; then
+                return 1
+            fi
+            curl --retry 3 -s -X POST "$TOKEN_URL" \
+                -u "${CLIENT_ID}:${CLIENT_SECRET}" \
+                -d "grant_type=client_credentials" \
+                -d "scope=api.console" | jq -r '.access_token'
+        }
+
+        get_auth_header() {
+            if [[ -n "${PULP_USERNAME}" && -n "${PULP_PASSWORD}" ]]; then
+                local basic
+                basic="$(printf '%s' "${PULP_USERNAME}:${PULP_PASSWORD}" | base64 -w0)"
+                echo "Authorization: Basic ${basic}"
+                return 0
+            fi
+            if [[ -n "${CLIENT_ID}" && -n "${CLIENT_SECRET}" ]]; then
+                local access_token
+                access_token="$(get_access_token)" || return 1
+                echo "Authorization: Bearer ${access_token}"
+                return 0
+            fi
+            return 1
+        }
+
+        curl_auth() {
+            local auth_header
+            { set +x; } 2>/dev/null
+            auth_header="$(get_auth_header)" || { set -x; return 1; }
+            curl --retry 3 -H "${auth_header}" "$@"
+            local rc=$?
+            set -x
+            return $rc
+        }
+
+        get_repo_latest_version_href() {
+            local repo_name="$1"
+            local repo_href
+            repo_href=$(curl_auth -s \
+                "${PULP_BASE_URL}/api/pulp/${SIGNED_RPMS_DOMAIN}/api/v3/repositories/rpm/rpm/?name=${repo_name}" \
+                | jq -r '.results[0].pulp_href')
+            if [[ -z "$repo_href" || "$repo_href" == "null" ]]; then
+                return 1
+            fi
+            curl_auth -s "${PULP_BASE_URL}${repo_href}" | jq -r '.latest_version_href'
+        }
+
+        get_distribution_base_url() {
+            local repo_name="$1"
+            local dist_json
+            dist_json=$(curl_auth -s \
+                "${PULP_BASE_URL}/api/pulp/${SIGNED_RPMS_DOMAIN}/api/v3/distributions/rpm/rpm/?name=${repo_name}")
+            echo "${dist_json}" | jq -r '.results[0].base_url // empty'
+        }
+
+        # Check if a signed RPM exists in the signed Pulp domain and is properly signed
+        # Returns:
+        #   0 -> RPM exists AND is properly signed
+        #   1 -> error (API failure, download failure, unsigned RPM in signed domain)
+        #   2 -> RPM does not exist in signed domain
+        check_signed_rpm_exists() {
+            local rpmname="$1" epoch="$2" version="$3" release="$4" arch="$5" repo_name="$6"
+
+            local repo_version_href
+            repo_version_href="$(get_repo_latest_version_href "${repo_name}")" || return 1
+
+            # Query for RPM by NEVRA
+            local query_url="${PULP_BASE_URL}/api/pulp/${SIGNED_RPMS_DOMAIN}/api/v3/content/rpm/packages/"
+            query_url+="?repository_version=$(jq -rn --arg x "${repo_version_href}" '$x|@uri')"
+            query_url+="&name=$(jq -rn --arg x "${rpmname}" '$x|@uri')"
+            query_url+="&epoch=$(jq -rn --arg x "${epoch}" '$x|@uri')"
+            query_url+="&version=$(jq -rn --arg x "${version}" '$x|@uri')"
+            query_url+="&release=$(jq -rn --arg x "${release}" '$x|@uri')"
+            query_url+="&arch=$(jq -rn --arg x "${arch}" '$x|@uri')"
+
+            local response count
+            response="$(curl_auth -s "${query_url}")" || return 1
+            count="$(jq -r '.count // 0' <<< "${response}")"
+
+            if [[ "${count}" -eq 0 ]]; then
+                return 2  # Does not exist
+            fi
+
+            # Get distribution URL for downloading
+            local dist_base_url
+            dist_base_url="$(get_distribution_base_url "${repo_name}")"
+            if [[ -z "${dist_base_url}" ]]; then
+                echo "Error: No distribution found for repo ${repo_name}" >&2
+                return 1
+            fi
+
+            # Get location_href from the package
+            local location_href
+            location_href="$(jq -r '.results[0].location_href // empty' <<< "${response}")"
+            if [[ -z "${location_href}" ]]; then
+                echo "Error: No location_href for ${rpmname}" >&2
+                return 1
+            fi
+
+            # Build download URL: Packages/{first_letter}/{filename}
+            local first_letter rpm_url tmpfile
+            first_letter="$(echo "${rpmname}" | cut -c1 | tr '[:upper:]' '[:lower:]')"
+            dist_base_url="${dist_base_url%/}"
+            rpm_url="${dist_base_url}/Packages/${first_letter}/${location_href}"
+
+            # Download RPM to temp file
+            tmpfile="$(mktemp --suffix=.rpm)"
+            trap "rm -f ${tmpfile}" RETURN
+
+            local http_code
+            http_code=$(curl -s -L -w "%{http_code}" -o "${tmpfile}" \
+                -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" 2>/dev/null)
+
+            if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
+                # Try without auth
+                http_code=$(curl -s -L -w "%{http_code}" -o "${tmpfile}" "${rpm_url}" 2>/dev/null)
+            fi
+
+            if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
+                echo "Error: Failed to download RPM (HTTP ${http_code}): ${rpm_url}" >&2
+                return 1
+            fi
+
+            # Verify it's an RPM file
+            if ! file "${tmpfile}" 2>/dev/null | grep -qiE "(RPM|rpm)"; then
+                echo "Error: Downloaded file is not an RPM" >&2
+                return 1
+            fi
+
+            # Check signature with rpm -Kv
+            local sig_output
+            sig_output=$(rpm -Kv "${tmpfile}" 2>&1 || true)
+
+            # Look for signature indicators: RSA/DSA/ECDSA/EdDSA + key ID
+            if echo "${sig_output}" | grep -qiE "(RSA|DSA|ECDSA|EdDSA).*key ID"; then
+                local key_id
+                key_id=$(echo "${sig_output}" | grep -oiE "key ID [a-f0-9]+" | head -1 \
+                    | awk '{print $NF}' | tr '[:lower:]' '[:upper:]')
+                echo "RPM is signed with key ID: ${key_id}"
+                return 0  # Exists and is signed
+            elif echo "${sig_output}" | grep -qi "NOKEY"; then
+                # Signed but key not in keyring - still counts as signed
+                local key_id
+                key_id=$(echo "${sig_output}" | grep -oiE "key ID [a-f0-9]+" | head -1 \
+                    | awk '{print $NF}' | tr '[:lower:]' '[:upper:]')
+                echo "RPM is signed (NOKEY) with key ID: ${key_id}"
+                return 0  # Exists and is signed
+            else
+                # RPM exists but is not signed - this should not happen
+                echo "Error: RPM exists in signed domain but is NOT signed!" >&2
+                echo "RPM: ${rpmname}-${version}-${release}.${arch}" >&2
+                echo "This indicates a previous upload without proper signing." >&2
+                return 1
+            fi
+        }
+
         set -x
 
         PIPELINERUN_LABEL="internal-services.appstudio.openshift.io/pipelinerun-uid"
@@ -207,11 +459,6 @@ spec:
 
         SIGNING_PIPELINE_GIT_URL="https://gitlab.cee.redhat.com/signing/signing.git"
         SIGNING_PIPELINE_GIT_REVISION="hummingbird-rpm-signing"
-
-        # Send full artifacts.json without filtering in a single signing request
-        echo "Sending full artifacts.json to signing pipeline..."
-
-        ARTIFACT_JSON=$(cat "${ARTIFACTS_JSON_FILE}" | base64 -w0)
 
         # Use snapshotBuildId if provided, otherwise use a default repo name
         if [ -n "$(params.snapshotBuildId)" ]; then
@@ -237,6 +484,154 @@ spec:
         echo "Repo: ${REPO}"
         echo "Unsigned RPMs location: ${UNSIGNED_LOCATION}"
         echo "Signed RPMs destination: ${SIGNED_DESTINATION}"
+
+        # === Idempotency Check ===
+        # Check if signed RPMs already exist in the signed Pulp domain
+        # If all RPMs are already signed, skip the signing process
+        if [[ "${SKIP_IDEMPOTENCY_CHECK}" != "true" ]]; then
+            echo "=== Checking if signed RPMs already exist (idempotency check) ==="
+
+            ALL_SIGNED=true
+            SIGNED_RPMS_DIR="$(mktemp -d)"
+            trap "rm -rf ${SIGNED_RPMS_DIR}" EXIT
+
+            # Get list of RPMs from artifacts.json and check each one
+            while IFS= read -r rpm_file; do
+                [[ -z "${rpm_file}" ]] && continue
+
+                # Parse NEVRA from the RPM filename
+                # Format: name-version-release.arch.rpm
+                local_file="${rpm_file}"
+                base="${local_file%.rpm}"
+                arch="${base##*.}"
+                nvr="${base%.*}"
+                release="${nvr##*-}"
+                nv="${nvr%-*}"
+                version="${nv##*-}"
+                rpmname="${nv%-*}"
+
+                # Handle src.rpm specially
+                if [[ "${local_file}" == *.src.rpm ]]; then
+                    arch="src"
+                    base="${local_file%.src.rpm}"
+                    release="${base##*-}"
+                    nv="${base%-*}"
+                    version="${nv##*-}"
+                    rpmname="${nv%-*}"
+                fi
+
+                epoch="0"
+
+                # Determine the repo name based on arch
+                if [[ "${arch}" == "src" ]]; then
+                    repo_name="source"
+                elif [[ "${arch}" == "noarch" ]]; then
+                    repo_name="x86_64"
+                else
+                    repo_name="${arch}"
+                fi
+
+                echo "Checking ${rpmname}-${version}-${release}.${arch} in ${repo_name}..."
+
+                set +e
+                check_signed_rpm_exists "${rpmname}" "${epoch}" "${version}" "${release}" "${arch}" "${repo_name}"
+                status=$?
+                set -e
+
+                case $status in
+                    0)
+                        echo "  -> Already signed in ${SIGNED_RPMS_DOMAIN}/${repo_name}"
+                        ;;
+                    2)
+                        echo "  -> Not found in signed domain, signing required"
+                        ALL_SIGNED=false
+                        break
+                        ;;
+                    *)
+                        echo "  -> Error checking signature (status=${status})"
+                        exit 1
+                        ;;
+                esac
+            done < <(jq -r '.artifacts | keys[]' "${ARTIFACTS_JSON_FILE}")
+
+            if [[ "${ALL_SIGNED}" == "true" ]]; then
+                echo ""
+                echo "=== All RPMs already exist and are signed in ${SIGNED_RPMS_DOMAIN} ==="
+                echo "Skipping signing operation (idempotent behavior)."
+                echo ""
+
+                # Download signed RPMs and create OCI artifact
+                echo "Downloading existing signed RPMs to create OCI artifact..."
+
+                while IFS= read -r rpm_file; do
+                    [[ -z "${rpm_file}" ]] && continue
+
+                    # Parse NEVRA
+                    local_file="${rpm_file}"
+                    base="${local_file%.rpm}"
+                    arch="${base##*.}"
+                    nvr="${base%.*}"
+                    release="${nvr##*-}"
+                    nv="${nvr%-*}"
+                    version="${nv##*-}"
+                    rpmname="${nv%-*}"
+
+                    if [[ "${local_file}" == *.src.rpm ]]; then
+                        arch="src"
+                        base="${local_file%.src.rpm}"
+                        release="${base##*-}"
+                        nv="${base%-*}"
+                        version="${nv##*-}"
+                        rpmname="${nv%-*}"
+                        repo_name="source"
+                    elif [[ "${arch}" == "noarch" ]]; then
+                        repo_name="x86_64"
+                    else
+                        repo_name="${arch}"
+                    fi
+
+                    dist_base_url="$(get_distribution_base_url "${repo_name}")"
+                    first_letter="$(echo "${rpmname}" | cut -c1 | tr '[:upper:]' '[:lower:]')"
+                    dist_base_url="${dist_base_url%/}"
+                    rpm_url="${dist_base_url}/Packages/${first_letter}/${rpm_file}"
+
+                    echo "Downloading: ${rpm_file}"
+                    curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" \
+                        -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" || \
+                        curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" "${rpm_url}"
+                done < <(jq -r '.artifacts | keys[]' "${ARTIFACTS_JSON_FILE}")
+
+                # Create tarball of signed RPMs
+                SIGNED_RPMS_TAR="${SIGNED_RPMS_DIR}/signed-rpms"
+                tar -czf "${SIGNED_RPMS_TAR}" -C "${SIGNED_RPMS_DIR}" \
+                    $(ls "${SIGNED_RPMS_DIR}"/*.rpm 2>/dev/null | xargs -n1 basename)
+
+                # Push to OCI storage
+                OCI_ARTIFACT_TAG="signed-rpms-$(date +%s)"
+                OCI_ARTIFACT_REF="$(params.ociStorage):${OCI_ARTIFACT_TAG}"
+
+                echo "Pushing signed RPMs to OCI storage: ${OCI_ARTIFACT_REF}"
+                oras push "${OCI_ARTIFACT_REF}" "${SIGNED_RPMS_TAR}:application/gzip"
+
+                # Get the full digest reference
+                DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" --descriptor | jq -r '.digest')
+                FULL_REF="$(params.ociStorage)@${DIGEST}"
+
+                echo "Signed RPMs OCI artifact: oci:${FULL_REF}"
+                echo -n "oci:${FULL_REF}" > "$(results.signedRpmsOciArtifacts.path)"
+
+                echo "RPM signing skipped (already signed) - idempotent behavior"
+                exit 0
+            fi
+
+            echo ""
+            echo "=== Proceeding with signing ==="
+        fi
+
+        # Send full artifacts.json without filtering in a single signing request
+        echo "Sending full artifacts.json to signing pipeline..."
+
+        ARTIFACT_JSON=$(cat "${ARTIFACTS_JSON_FILE}" | base64 -w0)
 
         internal-request \
           --pipeline "direct-rpm-signing" \
