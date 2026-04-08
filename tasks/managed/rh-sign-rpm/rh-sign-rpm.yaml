@@ -394,6 +394,8 @@ spec:
             trap "rm -f ${tmpfile}" RETURN
 
             local http_code
+            # Suppress tracing to avoid leaking credentials in logs
+            { set +x; } 2>/dev/null
             http_code=$(curl -s -L -w "%{http_code}" -o "${tmpfile}" \
                 -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" 2>/dev/null)
 
@@ -401,6 +403,7 @@ spec:
                 # Try without auth
                 http_code=$(curl -s -L -w "%{http_code}" -o "${tmpfile}" "${rpm_url}" 2>/dev/null)
             fi
+            set -x
 
             if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
                 echo "Error: Failed to download RPM (HTTP ${http_code}): ${rpm_url}" >&2
@@ -571,9 +574,12 @@ spec:
                     rpm_url="${dist_base_url}/Packages/${first_letter}/${rpm_file}"
 
                     echo "Downloading: ${rpm_file}"
+                    # Suppress tracing to avoid leaking credentials in logs
+                    { set +x; } 2>/dev/null
                     curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" \
                         -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" || \
                         curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" "${rpm_url}"
+                    set -x
                 done
             fi
 
@@ -589,12 +595,12 @@ spec:
                 tar -czf "${SIGNED_RPMS_TAR}" -C "${SIGNED_RPMS_DIR}" \
                     $(ls "${SIGNED_RPMS_DIR}"/*.rpm 2>/dev/null | xargs -n1 basename)
 
-                # Push to OCI storage
+                # Push to OCI storage (use relative path to avoid oras path validation error)
                 OCI_ARTIFACT_TAG="signed-rpms-$(date +%s)"
                 OCI_ARTIFACT_REF="$(params.ociStorage):${OCI_ARTIFACT_TAG}"
 
                 echo "Pushing signed RPMs to OCI storage: ${OCI_ARTIFACT_REF}"
-                oras push "${OCI_ARTIFACT_REF}" "${SIGNED_RPMS_TAR}:application/gzip"
+                (cd "${SIGNED_RPMS_DIR}" && oras push "${OCI_ARTIFACT_REF}" "signed-rpms:application/gzip")
 
                 # Get the full digest reference
                 DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" --descriptor | jq -r '.digest')
@@ -709,12 +715,12 @@ spec:
             tar -czf "${COMBINED_TAR}" -C "${SIGNED_RPMS_DIR}" \
                 $(ls "${SIGNED_RPMS_DIR}"/*.rpm 2>/dev/null | xargs -n1 basename)
 
-            # Push combined artifact to OCI storage
+            # Push combined artifact to OCI storage (use relative path to avoid oras path validation error)
             OCI_ARTIFACT_TAG="signed-rpms-combined-$(date +%s)"
             OCI_ARTIFACT_REF="$(params.ociStorage):${OCI_ARTIFACT_TAG}"
 
             echo "Pushing combined signed RPMs to OCI storage: ${OCI_ARTIFACT_REF}"
-            oras push "${OCI_ARTIFACT_REF}" "${COMBINED_TAR}:application/gzip"
+            (cd "${SIGNED_RPMS_DIR}" && oras push "${OCI_ARTIFACT_REF}" "signed-rpms:application/gzip")
 
             # Get the full digest reference
             DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" --descriptor | jq -r '.digest')
