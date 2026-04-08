@@ -849,133 +849,160 @@ wait_for_task_to_complete() {
 
 # Override wait_for_releases for --fail-first-advisory mode
 # This cancels the pipeline after signing to test signing idempotency
-if [ "${FAIL_FIRST_ADVISORY:-false}" == "true" ]; then
-    wait_for_releases() {
+# NOTE: The check for FAIL_FIRST_ADVISORY must be INSIDE the function because
+# parse_options() is called AFTER test.sh is sourced
+wait_for_releases() {
+    # Check at runtime if we should use the special idempotency test flow
+    if [ "${FAIL_FIRST_ADVISORY:-false}" != "true" ]; then
+        # Use the standard wait_for_releases from lib/test-functions.sh
+        # We need to call it directly since we're overriding the function
         echo ""
-        echo "=== SIGNING IDEMPOTENCY TEST MODE ==="
-        echo "Will cancel first pipeline after signing completes to test re-run behavior"
-        echo ""
-
-        # Wait for the release to appear
-        local timeout=300
-        local start_time=$(date +%s)
-        local release_name=""
-
-        echo "Waiting for Release to be created..."
-        while [ -z "${release_name}" ]; do
-            local current_time=$(date +%s)
-            local elapsed=$((current_time - start_time))
-
-            if [ ${elapsed} -ge ${timeout} ]; then
-                echo "🔴 Timeout waiting for Release to appear"
+        echo "Waiting for Releases associated with PLR ${component_push_plr_name} in namespace ${tenant_namespace}: "
+        local releases=""
+        local counter=0
+        while [ -z "${releases}" ]; do
+            if [ ${counter} -gt 60 ]; then
+                echo "🔴 Timeout waiting for Releases to appear"
                 exit 1
             fi
-
-            release_name=$(kubectl get release -n "${tenant_namespace}" \
-                -l "release.appstudio.openshift.io/snapshot=${component_push_plr_name##*-}" \
-                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-
-            if [ -z "${release_name}" ]; then
-                # Try alternative: get releases created in the last few minutes
-                release_name=$(kubectl get release -n "${tenant_namespace}" \
-                    --sort-by=.metadata.creationTimestamp \
-                    -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
-            fi
-
-            sleep 2
+            printf "."
+            sleep 5
+            releases=$(kubectl get release -n "${tenant_namespace}" \
+                -l "release.appstudio.openshift.io/pipelineRun=${component_push_plr_name}" \
+                -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+            counter=$((counter + 1))
         done
-
-        echo "Found Release: ${release_name}"
-        export RELEASE_NAME="${release_name}"
-        export RELEASE_NAMESPACE="${tenant_namespace}"
-        export RELEASE_NAMES="${release_name}"
-
-        # Wait for managed PipelineRun to appear
-        echo "Waiting for managed PipelineRun to start..."
-        local managed_plr=""
-        start_time=$(date +%s)
-        while [ -z "${managed_plr}" ]; do
-            local current_time=$(date +%s)
-            local elapsed=$((current_time - start_time))
-
-            if [ ${elapsed} -ge ${timeout} ]; then
-                echo "🔴 Timeout waiting for managed PipelineRun"
-                exit 1
-            fi
-
-            local release_json
-            release_json=$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json 2>/dev/null || echo "{}")
-            managed_plr=$(jq -r '.status.managedProcessing.pipelineRun // ""' <<< "${release_json}")
-
-            sleep 2
-        done
-
-        local managed_plr_name=$(basename "${managed_plr}")
-        local managed_plr_namespace=$(dirname "${managed_plr}" | xargs basename)
-        echo "Managed PipelineRun: ${managed_plr_namespace}/${managed_plr_name}"
-
-        # Wait for push-signed-rpms-to-pulp to complete (signing is done at this point)
         echo ""
-        echo "Waiting for signing and push to complete before canceling..."
-        if ! wait_for_task_to_complete "${managed_plr_name}" "${managed_plr_namespace}" "push-signed-rpms-to-pulp" 900; then
-            echo "🔴 push-signed-rpms-to-pulp did not complete successfully"
-            echo "Cannot proceed with signing idempotency test"
+        echo "✅ Found: ${releases}"
+
+        export RELEASE_NAMES="${releases}"
+        for release in ${releases}; do
+            export RELEASE_NAME="${release}"
+            export RELEASE_NAMESPACE="${tenant_namespace}"
+            "${SUITE_DIR}/../scripts/wait-for-release.sh"
+        done
+        return
+    fi
+
+    # === SIGNING IDEMPOTENCY TEST MODE ===
+    echo ""
+    echo "=== SIGNING IDEMPOTENCY TEST MODE ==="
+    echo "Will cancel first pipeline after signing completes to test re-run behavior"
+    echo ""
+
+    # Wait for the release to appear
+    local timeout=300
+    local start_time=$(date +%s)
+    local release_name=""
+
+    echo "Waiting for Release to be created..."
+    while [ -z "${release_name}" ]; do
+        local current_time=$(date +%s)
+        local elapsed=$((current_time - start_time))
+
+        if [ ${elapsed} -ge ${timeout} ]; then
+            echo "🔴 Timeout waiting for Release to appear"
             exit 1
         fi
 
-        echo ""
-        echo "✅ Signed RPMs have been pushed to Pulp"
-        echo "Canceling the managed PipelineRun to prevent advisory creation..."
+        release_name=$(kubectl get release -n "${tenant_namespace}" \
+            -l "release.appstudio.openshift.io/pipelineRun=${component_push_plr_name}" \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
-        # Cancel the pipeline run
-        kubectl patch pipelinerun "${managed_plr_name}" -n "${managed_plr_namespace}" \
-            --type=merge -p '{"spec":{"status":"CancelledRunFinally"}}'
+        sleep 2
+    done
 
-        echo "Pipeline cancellation requested"
+    echo "Found Release: ${release_name}"
+    export RELEASE_NAME="${release_name}"
+    export RELEASE_NAMESPACE="${tenant_namespace}"
+    export RELEASE_NAMES="${release_name}"
 
-        # Wait for the release to be marked as failed
-        echo "Waiting for Release to fail..."
-        start_time=$(date +%s)
-        while true; do
-            local current_time=$(date +%s)
-            local elapsed=$((current_time - start_time))
+    # Wait for managed PipelineRun to appear
+    echo "Waiting for managed PipelineRun to start..."
+    local managed_plr=""
+    start_time=$(date +%s)
+    while [ -z "${managed_plr}" ]; do
+        local current_time=$(date +%s)
+        local elapsed=$((current_time - start_time))
 
-            if [ ${elapsed} -ge 120 ]; then
-                echo "🔴 Timeout waiting for Release to fail after cancellation"
-                exit 1
-            fi
+        if [ ${elapsed} -ge ${timeout} ]; then
+            echo "🔴 Timeout waiting for managed PipelineRun"
+            exit 1
+        fi
 
-            local release_json
-            release_json=$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json)
-            local released_status
-            released_status=$(jq -r '.status.conditions[]? | select(.type=="Released") | .status // ""' <<< "${release_json}")
+        local release_json
+        release_json=$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json 2>/dev/null || echo "{}")
+        managed_plr=$(jq -r '.status.managedProcessing.pipelineRun // ""' <<< "${release_json}")
 
-            if [ "${released_status}" == "False" ]; then
-                echo "✅ First Release failed as expected (pipeline was cancelled)"
-                break
-            fi
+        sleep 2
+    done
 
-            sleep 2
-        done
+    local managed_plr_name=$(basename "${managed_plr}")
+    local managed_plr_namespace=$(dirname "${managed_plr}" | xargs basename)
+    echo "Managed PipelineRun: ${managed_plr_namespace}/${managed_plr_name}"
 
-        # Now create a retry release
-        echo ""
-        echo "Creating retry Release to test signing idempotency..."
+    # Wait for push-signed-rpms-to-pulp to complete (signing is done at this point)
+    echo ""
+    echo "Waiting for signing and push to complete before canceling..."
+    if ! wait_for_task_to_complete "${managed_plr_name}" "${managed_plr_namespace}" "push-signed-rpms-to-pulp" 900; then
+        echo "🔴 push-signed-rpms-to-pulp did not complete successfully"
+        echo "Cannot proceed with signing idempotency test"
+        exit 1
+    fi
 
-        local release_json prev_author prev_releaseplan prev_snapshot retry_name retry_suffix
+    echo ""
+    echo "✅ Signed RPMs have been pushed to Pulp"
+    echo "Canceling the managed PipelineRun to prevent advisory creation..."
+
+    # Cancel the pipeline run
+    kubectl patch pipelinerun "${managed_plr_name}" -n "${managed_plr_namespace}" \
+        --type=merge -p '{"spec":{"status":"CancelledRunFinally"}}'
+
+    echo "Pipeline cancellation requested"
+
+    # Wait for the release to be marked as failed
+    echo "Waiting for Release to fail..."
+    start_time=$(date +%s)
+    while true; do
+        local current_time=$(date +%s)
+        local elapsed=$((current_time - start_time))
+
+        if [ ${elapsed} -ge 120 ]; then
+            echo "🔴 Timeout waiting for Release to fail after cancellation"
+            exit 1
+        fi
+
+        local release_json
         release_json=$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json)
-        prev_author=$(jq -r '.metadata.labels["release.appstudio.openshift.io/author"] // .status.attribution.author // ""' <<< "${release_json}")
-        prev_releaseplan=$(jq -r '.spec.releasePlan // ""' <<< "${release_json}")
-        prev_snapshot=$(jq -r '.spec.snapshot // ""' <<< "${release_json}")
+        local released_status
+        released_status=$(jq -r '.status.conditions[]? | select(.type=="Released") | .status // ""' <<< "${release_json}")
 
-        retry_suffix="${uuid:-$(date +%s)}"
-        retry_suffix="${retry_suffix:0:8}"
-        retry_name="sign-idem-retry-${retry_suffix}"
+        if [ "${released_status}" == "False" ]; then
+            echo "✅ First Release failed as expected (pipeline was cancelled)"
+            break
+        fi
 
-        # Delete if exists from previous run
-        kubectl delete release "${retry_name}" -n "${tenant_namespace}" --ignore-not-found >/dev/null 2>&1 || true
+        sleep 2
+    done
 
-        cat <<EOF | kubectl create -f -
+    # Now create a retry release
+    echo ""
+    echo "Creating retry Release to test signing idempotency..."
+
+    local release_json prev_author prev_releaseplan prev_snapshot retry_name retry_suffix
+    release_json=$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json)
+    prev_author=$(jq -r '.metadata.labels["release.appstudio.openshift.io/author"] // .status.attribution.author // ""' <<< "${release_json}")
+    prev_releaseplan=$(jq -r '.spec.releasePlan // ""' <<< "${release_json}")
+    prev_snapshot=$(jq -r '.spec.snapshot // ""' <<< "${release_json}")
+
+    retry_suffix="${uuid:-$(date +%s)}"
+    retry_suffix="${retry_suffix:0:8}"
+    retry_name="sign-idem-retry-${retry_suffix}"
+
+    # Delete if exists from previous run
+    kubectl delete release "${retry_name}" -n "${tenant_namespace}" --ignore-not-found >/dev/null 2>&1 || true
+
+    cat <<EOF | kubectl create -f -
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: Release
 metadata:
@@ -989,59 +1016,58 @@ spec:
   snapshot: ${prev_snapshot}
 EOF
 
-        echo "Created retry Release: ${retry_name}"
+    echo "Created retry Release: ${retry_name}"
+    echo ""
+    echo "Waiting for retry Release to complete..."
+
+    # Use the standard wait script
+    local retry_rc=0
+    set +e
+    RELEASE_NAME="${retry_name}" RELEASE_NAMESPACE="${tenant_namespace}" \
+        "${SUITE_DIR}/../scripts/wait-for-release.sh"
+    retry_rc=$?
+    set -e
+
+    if [ ${retry_rc} -ne 0 ]; then
+        echo "🔴 Retry release failed!"
+        kubectl get release "${retry_name}" -n "${tenant_namespace}" -o yaml
+        exit 1
+    fi
+
+    echo "✅ Retry release succeeded"
+
+    # Get the managed PipelineRun and verify signing was skipped
+    local retry_json retry_managed_plr_full retry_managed_plr_name
+    retry_json=$(kubectl get release "${retry_name}" -n "${tenant_namespace}" -o json)
+    retry_managed_plr_full=$(jq -r '.status.managedProcessing.pipelineRun // ""' <<< "${retry_json}")
+
+    if [ -z "${retry_managed_plr_full}" ]; then
+        echo "🔴 Could not find managed PipelineRun for retry release"
+        exit 1
+    fi
+
+    retry_managed_plr_name=$(basename "${retry_managed_plr_full}")
+    echo "Retry managed PipelineRun: ${retry_managed_plr_name}"
+
+    # Verify signing was skipped
+    if ! verify_signing_skipped "${retry_managed_plr_name}" "${managed_namespace}"; then
         echo ""
-        echo "Waiting for retry Release to complete..."
+        echo "🔴 SIGNING IDEMPOTENCY TEST FAILED"
+        echo "The rh-sign-rpm task should have detected signed RPMs in Pulp and skipped signing."
+        exit 1
+    fi
 
-        # Use the standard wait script
-        local retry_rc=0
-        set +e
-        RELEASE_NAME="${retry_name}" RELEASE_NAMESPACE="${tenant_namespace}" \
-            "${SUITE_DIR}/../scripts/wait-for-release.sh"
-        retry_rc=$?
-        set -e
+    echo ""
+    echo "=========================================="
+    echo "=== SIGNING IDEMPOTENCY TEST PASSED ==="
+    echo "=========================================="
+    echo "✅ rh-sign-rpm correctly detected signed RPMs exist and skipped re-signing"
+    echo ""
 
-        if [ ${retry_rc} -ne 0 ]; then
-            echo "🔴 Retry release failed!"
-            kubectl get release "${retry_name}" -n "${tenant_namespace}" -o yaml
-            exit 1
-        fi
-
-        echo "✅ Retry release succeeded"
-
-        # Get the managed PipelineRun and verify signing was skipped
-        local retry_json retry_managed_plr_full retry_managed_plr_name
-        retry_json=$(kubectl get release "${retry_name}" -n "${tenant_namespace}" -o json)
-        retry_managed_plr_full=$(jq -r '.status.managedProcessing.pipelineRun // ""' <<< "${retry_json}")
-
-        if [ -z "${retry_managed_plr_full}" ]; then
-            echo "🔴 Could not find managed PipelineRun for retry release"
-            exit 1
-        fi
-
-        retry_managed_plr_name=$(basename "${retry_managed_plr_full}")
-        echo "Retry managed PipelineRun: ${retry_managed_plr_name}"
-
-        # Verify signing was skipped
-        if ! verify_signing_skipped "${retry_managed_plr_name}" "${managed_namespace}"; then
-            echo ""
-            echo "🔴 SIGNING IDEMPOTENCY TEST FAILED"
-            echo "The rh-sign-rpm task should have detected signed RPMs in Pulp and skipped signing."
-            exit 1
-        fi
-
-        echo ""
-        echo "=========================================="
-        echo "=== SIGNING IDEMPOTENCY TEST PASSED ==="
-        echo "=========================================="
-        echo "✅ rh-sign-rpm correctly detected signed RPMs exist and skipped re-signing"
-        echo ""
-
-        # Update exports for verify_release_contents
-        export RELEASE_NAME="${retry_name}"
-        export RELEASE_NAMES="${retry_name}"
-    }
-fi
+    # Update exports for verify_release_contents
+    export RELEASE_NAME="${retry_name}"
+    export RELEASE_NAMES="${retry_name}"
+}
 
 patch_component_source_before_merge() {
   set +x
