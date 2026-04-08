@@ -474,21 +474,23 @@ spec:
         echo "Signed RPMs destination: ${SIGNED_DESTINATION}"
 
         # === Idempotency Check ===
-        # Check if signed RPMs already exist in the signed Pulp domain
-        # If all RPMs are already signed, skip the signing process
-        if [[ "${SKIP_IDEMPOTENCY_CHECK}" != "true" ]]; then
-            echo "=== Checking if signed RPMs already exist (idempotency check) ==="
+        # Check which RPMs already exist in the signed Pulp domain
+        # Download existing signed RPMs and only sign those that are missing
+        SIGNED_RPMS_DIR="$(mktemp -d)"
+        trap "rm -rf ${SIGNED_RPMS_DIR}" EXIT
 
-            ALL_SIGNED=true
-            SIGNED_RPMS_DIR="$(mktemp -d)"
-            trap "rm -rf ${SIGNED_RPMS_DIR}" EXIT
+        # Arrays to track RPMs
+        declare -a EXISTING_RPMS=()
+        declare -a MISSING_RPMS=()
+
+        if [[ "${SKIP_IDEMPOTENCY_CHECK}" != "true" ]]; then
+            echo "=== Checking which signed RPMs already exist (idempotency check) ==="
 
             # Get list of RPMs from artifacts.json and check each one
             while IFS= read -r rpm_file; do
                 [[ -z "${rpm_file}" ]] && continue
 
                 # Parse NEVRA from the RPM filename
-                # Format: name-version-release.arch.rpm
                 local_file="${rpm_file}"
                 base="${local_file%.rpm}"
                 arch="${base##*.}"
@@ -529,11 +531,11 @@ spec:
                 case $status in
                     0)
                         echo "  -> Already signed in ${SIGNED_RPMS_DOMAIN}/${repo_name}"
+                        EXISTING_RPMS+=("${rpm_file}|${repo_name}|${rpmname}")
                         ;;
                     2)
-                        echo "  -> Not found in signed domain, signing required"
-                        ALL_SIGNED=false
-                        break
+                        echo "  -> Not found in signed domain, needs signing"
+                        MISSING_RPMS+=("${rpm_file}")
                         ;;
                     *)
                         echo "  -> Error checking signature (status=${status})"
@@ -542,42 +544,15 @@ spec:
                 esac
             done < <(jq -r '.artifacts | keys[]' "${ARTIFACTS_JSON_FILE}")
 
-            if [[ "${ALL_SIGNED}" == "true" ]]; then
+            echo ""
+            echo "Summary: ${#EXISTING_RPMS[@]} RPMs already signed, ${#MISSING_RPMS[@]} need signing"
+
+            # Download existing signed RPMs
+            if [[ ${#EXISTING_RPMS[@]} -gt 0 ]]; then
                 echo ""
-                echo "=== All RPMs already exist and are signed in ${SIGNED_RPMS_DOMAIN} ==="
-                echo "Skipping signing operation (idempotent behavior)."
-                echo ""
-
-                # Download signed RPMs and create OCI artifact
-                echo "Downloading existing signed RPMs to create OCI artifact..."
-
-                while IFS= read -r rpm_file; do
-                    [[ -z "${rpm_file}" ]] && continue
-
-                    # Parse NEVRA
-                    local_file="${rpm_file}"
-                    base="${local_file%.rpm}"
-                    arch="${base##*.}"
-                    nvr="${base%.*}"
-                    release="${nvr##*-}"
-                    nv="${nvr%-*}"
-                    version="${nv##*-}"
-                    rpmname="${nv%-*}"
-
-                    if [[ "${local_file}" == *.src.rpm ]]; then
-                        arch="src"
-                        base="${local_file%.src.rpm}"
-                        release="${base##*-}"
-                        nv="${base%-*}"
-                        version="${nv##*-}"
-                        rpmname="${nv%-*}"
-                        repo_name="source"
-                    elif [[ "${arch}" == "noarch" ]]; then
-                        repo_name="x86_64"
-                    else
-                        repo_name="${arch}"
-                    fi
-
+                echo "=== Downloading existing signed RPMs ==="
+                for entry in "${EXISTING_RPMS[@]}"; do
+                    IFS='|' read -r rpm_file repo_name rpmname <<< "${entry}"
                     dist_base_url="$(get_distribution_base_url "${repo_name}")"
                     first_letter="$(echo "${rpmname}" | cut -c1 | tr '[:upper:]' '[:lower:]')"
                     dist_base_url="${dist_base_url%/}"
@@ -587,7 +562,15 @@ spec:
                     curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" \
                         -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" || \
                         curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" "${rpm_url}"
-                done < <(jq -r '.artifacts | keys[]' "${ARTIFACTS_JSON_FILE}")
+                done
+            fi
+
+            # If all RPMs already exist, create OCI artifact and exit
+            if [[ ${#MISSING_RPMS[@]} -eq 0 ]]; then
+                echo ""
+                echo "=== All RPMs already exist and are signed in ${SIGNED_RPMS_DOMAIN} ==="
+                echo "Skipping signing operation (idempotent behavior)."
+                echo ""
 
                 # Create tarball of signed RPMs
                 SIGNED_RPMS_TAR="${SIGNED_RPMS_DIR}/signed-rpms"
@@ -612,14 +595,30 @@ spec:
                 exit 0
             fi
 
+            # Create filtered artifacts.json with only missing RPMs
             echo ""
-            echo "=== Proceeding with signing ==="
+            echo "=== Creating filtered artifacts.json for ${#MISSING_RPMS[@]} RPMs that need signing ==="
+            FILTERED_ARTIFACTS_FILE="${SIGNED_RPMS_DIR}/filtered-artifacts.json"
+
+            # Start with the original artifacts and filter to only missing ones
+            jq --argjson missing "$(printf '%s\n' "${MISSING_RPMS[@]}" | jq -R . | jq -s .)" \
+                '.artifacts |= with_entries(select(.key as $k | $missing | index($k)))' \
+                "${ARTIFACTS_JSON_FILE}" > "${FILTERED_ARTIFACTS_FILE}"
+
+            echo "Filtered artifacts.json created with $(jq '.artifacts | length' "${FILTERED_ARTIFACTS_FILE}") RPMs"
+
+            echo ""
+            echo "=== Proceeding with signing for missing RPMs ==="
+        else
+            # Skip idempotency check - sign all
+            FILTERED_ARTIFACTS_FILE="${ARTIFACTS_JSON_FILE}"
+            echo "=== Proceeding with signing (idempotency check skipped) ==="
         fi
 
-        # Send full artifacts.json without filtering in a single signing request
-        echo "Sending full artifacts.json to signing pipeline..."
+        # Send filtered artifacts.json to signing pipeline
+        echo "Sending artifacts.json to signing pipeline..."
 
-        ARTIFACT_JSON=$(cat "${ARTIFACTS_JSON_FILE}" | base64 -w0)
+        ARTIFACT_JSON=$(cat "${FILTERED_ARTIFACTS_FILE}" | base64 -w0)
 
         internal-request \
           --pipeline "direct-rpm-signing" \
@@ -658,12 +657,58 @@ spec:
 
         # Extract signed_rpms_oci_artifact
         signedRpmsOciArtifact="$(jq -r '.signed_rpms_oci_artifact // ""' <<< "${results}")"
-        if [ -n "${signedRpmsOciArtifact}" ]; then
-            echo "Signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
-        else
+        if [ -z "${signedRpmsOciArtifact}" ]; then
             echo "Error: No signed_rpms_oci_artifact returned"
             echo "Results: ${results}"
             exit 1
+        fi
+        echo "Newly signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
+
+        # Check if we need to merge with previously downloaded signed RPMs
+        if [[ ${#EXISTING_RPMS[@]} -gt 0 ]]; then
+            echo ""
+            echo "=== Merging newly signed RPMs with existing signed RPMs ==="
+
+            # Extract newly signed RPMs from OCI artifact
+            NEW_RPMS_DIR="${SIGNED_RPMS_DIR}/new-signed"
+            mkdir -p "${NEW_RPMS_DIR}"
+
+            oci_ref="${signedRpmsOciArtifact#oci:}"
+            echo "Pulling newly signed RPMs from: ${oci_ref}"
+            oras pull "${oci_ref}" -o "${NEW_RPMS_DIR}"
+
+            # Extract the tarball
+            if [ -f "${NEW_RPMS_DIR}/signed-rpms" ]; then
+                tar -xzf "${NEW_RPMS_DIR}/signed-rpms" -C "${NEW_RPMS_DIR}"
+                rm -f "${NEW_RPMS_DIR}/signed-rpms"
+            fi
+
+            # Move newly signed RPMs to main signed RPMs directory
+            for rpm in "${NEW_RPMS_DIR}"/*.rpm; do
+                [ -f "${rpm}" ] || continue
+                mv "${rpm}" "${SIGNED_RPMS_DIR}/"
+            done
+
+            echo "Combined RPMs in ${SIGNED_RPMS_DIR}:"
+            ls -la "${SIGNED_RPMS_DIR}"/*.rpm 2>/dev/null || echo "No RPMs found"
+
+            # Create combined tarball
+            COMBINED_TAR="${SIGNED_RPMS_DIR}/signed-rpms"
+            tar -czf "${COMBINED_TAR}" -C "${SIGNED_RPMS_DIR}" \
+                $(ls "${SIGNED_RPMS_DIR}"/*.rpm 2>/dev/null | xargs -n1 basename)
+
+            # Push combined artifact to OCI storage
+            OCI_ARTIFACT_TAG="signed-rpms-combined-$(date +%s)"
+            OCI_ARTIFACT_REF="$(params.ociStorage):${OCI_ARTIFACT_TAG}"
+
+            echo "Pushing combined signed RPMs to OCI storage: ${OCI_ARTIFACT_REF}"
+            oras push "${OCI_ARTIFACT_REF}" "${COMBINED_TAR}:application/gzip"
+
+            # Get the full digest reference
+            DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" --descriptor | jq -r '.digest')
+            signedRpmsOciArtifact="oci:$(params.ociStorage)@${DIGEST}"
+
+            echo "Combined signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
         fi
 
         echo "RPM signing request completed"
