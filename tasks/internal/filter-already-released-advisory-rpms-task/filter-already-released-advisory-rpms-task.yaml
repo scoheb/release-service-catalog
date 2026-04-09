@@ -164,11 +164,15 @@ spec:
           OCI_REF="${OCI_STORAGE}:${OCI_TAG}"
 
           echo "Pushing filter results to OCI storage: ${OCI_REF}"
-          select-oci-auth "${OCI_REF}"
-          (cd "$RESULTS_DIR" && oras push "${OCI_REF}" "filter-results.tar.gz:application/gzip")
+          ORAS_OPTS="--annotation=quay.expires-after=1d"
+          (cd "$RESULTS_DIR" && oras push ${ORAS_OPTS} \
+            --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+            "${OCI_REF}" "filter-results.tar.gz:application/gzip")
 
           # Get digest for the artifact reference
-          DIGEST=$(oras manifest fetch "${OCI_REF}" --descriptor | jq -r '.digest')
+          DIGEST=$(oras manifest fetch "${OCI_REF}" \
+            --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+            --descriptor | jq -r '.digest')
           ARTIFACT_REF="oci:${OCI_STORAGE}@${DIGEST}"
 
           echo "Filter results artifact: ${ARTIFACT_REF}"
@@ -262,11 +266,15 @@ spec:
         OCI_REF="${OCI_STORAGE}:${OCI_TAG}"
 
         echo "Pushing filter results to OCI storage: ${OCI_REF}"
-        select-oci-auth "${OCI_REF}"
-        (cd "$RESULTS_DIR" && oras push "${OCI_REF}" "filter-results.tar.gz:application/gzip")
+        ORAS_OPTS="--annotation=quay.expires-after=1d"
+        (cd "$RESULTS_DIR" && oras push ${ORAS_OPTS} \
+          --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+          "${OCI_REF}" "filter-results.tar.gz:application/gzip")
 
         # Get digest for the artifact reference
-        DIGEST=$(oras manifest fetch "${OCI_REF}" --descriptor | jq -r '.digest')
+        DIGEST=$(oras manifest fetch "${OCI_REF}" \
+          --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+          --descriptor | jq -r '.digest')
         ARTIFACT_REF="oci:${OCI_STORAGE}@${DIGEST}"
 
         echo "Filter results artifact: ${ARTIFACT_REF}"
