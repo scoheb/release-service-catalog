@@ -94,13 +94,13 @@ suite=""
 args=()
 for arg in "$@"; do
   case "$arg" in
-    -sc|--skip-cleanup|-nocve|--no-cve|-i|--interactive|-ffa|--fail-first-advisory)
+    -sc|--skip-cleanup|-nocve|--no-cve|-i|--interactive)
       args+=("$arg")
       ;;
     -*)
       echo "🔴 error: unknown option: $arg"
       echo "Usage: ./run-test.sh <suite_name> [options]"
-      echo "Options: -i/--interactive, -sc/--skip-cleanup, -nocve/--no-cve, -ffa/--fail-first-advisory"
+      echo "Options: -i/--interactive, -sc/--skip-cleanup, -nocve/--no-cve"
       exit 1
       ;;
     *)
