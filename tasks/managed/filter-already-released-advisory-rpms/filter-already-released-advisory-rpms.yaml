@@ -703,8 +703,12 @@ spec:
           rm -f "$comp_file"
         done < <(jq -r '.[]' <<< "$UNRELEASED_COMPONENTS")
 
-        jq --argjson comps "$FILTERED_COMPONENTS" \
-          '.components = $comps' "${SNAPSHOT_FILE}" > "${SNAPSHOT_FILE}.tmp"
+        # Use file instead of --argjson to avoid "Argument list too long" error
+        COMPS_FILE="$(mktemp)"
+        echo "$FILTERED_COMPONENTS" > "$COMPS_FILE"
+        jq --slurpfile comps "$COMPS_FILE" \
+          '.components = $comps[0]' "${SNAPSHOT_FILE}" > "${SNAPSHOT_FILE}.tmp"
+        rm -f "$COMPS_FILE"
         mv "${SNAPSHOT_FILE}.tmp" "${SNAPSHOT_FILE}"
 
         echo "Filtered snapshot components: $(jq '.components | length' "${SNAPSHOT_FILE}")"
