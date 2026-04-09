@@ -98,6 +98,14 @@ spec:
         #!/usr/bin/env bash
         set -eo pipefail
 
+        # Setup OCI registry credentials for trusted artifacts
+        # AppSRE clusters do not enable credentials-init in Tekton
+        TA_DOCKERCONFIG_JSON_PATH="/mnt/trusted_artifacts_dockerconfig/.dockerconfigjson"
+        if [ -f "${TA_DOCKERCONFIG_JSON_PATH}" ] && [ -s "${TA_DOCKERCONFIG_JSON_PATH}" ]; then
+          mkdir -p ~/.docker/
+          cat "${TA_DOCKERCONFIG_JSON_PATH}" > ~/.docker/config.json
+        fi
+
         GITLAB_HOST="$(cat /mnt/advisory_secret/gitlab_host)"
         ACCESS_TOKEN="$(cat /mnt/advisory_secret/gitlab_access_token)"
         GIT_AUTHOR_NAME="$(cat /mnt/advisory_secret/git_author_name)"
