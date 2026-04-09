@@ -145,6 +145,10 @@ spec:
         set -euo pipefail
         set +x
 
+        # Set the maximum attachment size for cosign to 200MB
+        COSIGN_MAX_ATTACHMENT_SIZE=200000000
+        export COSIGN_MAX_ATTACHMENT_SIZE
+
         SNAPSHOT_PATH="$(params.dataDir)/$(params.snapshotPath)"
         if [[ ! -f "${SNAPSHOT_PATH}" ]]; then
           echo "Error: No valid snapshot file was provided at ${SNAPSHOT_PATH}" >&2
