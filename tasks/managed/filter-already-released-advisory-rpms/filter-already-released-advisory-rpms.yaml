@@ -591,7 +591,11 @@ spec:
         echo "Pulling filter results from: ${FILTER_RESULTS_ARTIFACT}"
         FILTER_RESULTS_DIR=$(mktemp -d)
         oci_ref="${FILTER_RESULTS_ARTIFACT#oci:}"
-        oras pull "${oci_ref}" -o "$FILTER_RESULTS_DIR"
+        oci_storage="${oci_ref%%@*}"
+        AUTHFILE=$(mktemp)
+        select-oci-auth "${oci_storage}" > "${AUTHFILE}"
+        oras pull --registry-config "${AUTHFILE}" "${oci_ref}" -o "$FILTER_RESULTS_DIR"
+        rm -f "${AUTHFILE}"
 
         # Extract the tarball
         tar -xzf "$FILTER_RESULTS_DIR/filter-results.tar.gz" -C "$FILTER_RESULTS_DIR"
