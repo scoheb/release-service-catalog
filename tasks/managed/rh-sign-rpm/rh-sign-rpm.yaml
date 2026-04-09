@@ -189,6 +189,8 @@ spec:
           value: $(params.dataDir)/$(params.artifactsJsonPath)
         - name: SIGNED_RPMS_DOMAIN
           value: $(params.signedRpmsDomain)
+        - name: UNSIGNED_RPMS_DOMAIN
+          value: $(params.unsignedRpmsDomain)
         - name: HOME
           value: /tmp
       script: |
@@ -328,13 +330,28 @@ spec:
             echo "${dist_json}" | jq -r '.results[0].base_url // empty'
         }
 
+        get_unsigned_distribution_base_url() {
+            local repo_name="$1"
+            local dist_json
+            dist_json=$(curl_auth -s \
+                "${PULP_BASE_URL}/api/pulp/${UNSIGNED_RPMS_DOMAIN}/api/v3/distributions/rpm/rpm/?name=${repo_name}")
+            echo "${dist_json}" | jq -r '.results[0].base_url // empty'
+        }
+
+        # Get PAYLOADDIGEST from an RPM file (content digest excluding signature)
+        get_rpm_payloaddigest() {
+            local rpm_path="$1"
+            rpm -q --qf '%{PAYLOADDIGEST}' -p "${rpm_path}" 2>/dev/null
+        }
+
         # Check if a signed RPM exists in the signed Pulp domain and is properly signed
+        # Also verifies PAYLOADDIGEST matches the unsigned RPM (content integrity check)
         # Returns:
-        #   0 -> RPM exists AND is properly signed
-        #   1 -> error (API failure, download failure, unsigned RPM in signed domain)
+        #   0 -> RPM exists, is properly signed, and PAYLOADDIGEST matches
+        #   1 -> error (API failure, download failure, unsigned RPM, or content mismatch)
         #   2 -> RPM does not exist in signed domain
         check_signed_rpm_exists() {
-            local rpmname="$1" epoch="$2" version="$3" release="$4" arch="$5" repo_name="$6"
+            local rpmname="$1" epoch="$2" version="$3" release="$4" arch="$5" repo_name="$6" rpm_file="$7"
 
             local repo_version_href
             repo_version_href="$(get_repo_latest_version_href "${repo_name}")" || return 1
@@ -356,7 +373,7 @@ spec:
                 return 2  # Does not exist
             fi
 
-            # Get distribution URL for downloading
+            # Get distribution URL for downloading signed RPM
             local dist_base_url
             dist_base_url="$(get_distribution_base_url "${repo_name}")"
             if [[ -z "${dist_base_url}" ]]; then
@@ -373,63 +390,117 @@ spec:
             fi
 
             # Build download URL: Packages/{first_letter}/{filename}
-            local first_letter rpm_url tmpfile
+            local first_letter rpm_url signed_tmpfile unsigned_tmpfile
             first_letter="$(echo "${rpmname}" | cut -c1 | tr '[:upper:]' '[:lower:]')"
             dist_base_url="${dist_base_url%/}"
             rpm_url="${dist_base_url}/Packages/${first_letter}/${location_href}"
 
-            # Download RPM to temp file
-            tmpfile="$(mktemp --suffix=.rpm)"
-            trap "rm -f ${tmpfile}" RETURN
+            # Download signed RPM to temp file
+            signed_tmpfile="$(mktemp --suffix=.rpm)"
+            unsigned_tmpfile="$(mktemp --suffix=.rpm)"
+            trap "rm -f ${signed_tmpfile} ${unsigned_tmpfile}" RETURN
 
             local http_code
             # Suppress tracing to avoid leaking credentials in logs
             { set +x; } 2>/dev/null
-            http_code=$(curl -s -L -w "%{http_code}" -o "${tmpfile}" \
+            http_code=$(curl -s -L -w "%{http_code}" -o "${signed_tmpfile}" \
                 -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" 2>/dev/null)
 
             if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
                 # Try without auth
-                http_code=$(curl -s -L -w "%{http_code}" -o "${tmpfile}" "${rpm_url}" 2>/dev/null)
+                http_code=$(curl -s -L -w "%{http_code}" -o "${signed_tmpfile}" "${rpm_url}" 2>/dev/null)
             fi
             set -x
 
             if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
-                echo "Error: Failed to download RPM (HTTP ${http_code}): ${rpm_url}" >&2
+                echo "Error: Failed to download signed RPM (HTTP ${http_code}): ${rpm_url}" >&2
                 return 1
             fi
 
             # Verify it's an RPM file
-            if ! file "${tmpfile}" 2>/dev/null | grep -qiE "(RPM|rpm)"; then
+            if ! file "${signed_tmpfile}" 2>/dev/null | grep -qiE "(RPM|rpm)"; then
                 echo "Error: Downloaded file is not an RPM" >&2
                 return 1
             fi
 
             # Check signature with rpm -Kv
             local sig_output
-            sig_output=$(rpm -Kv "${tmpfile}" 2>&1 || true)
+            sig_output=$(rpm -Kv "${signed_tmpfile}" 2>&1 || true)
 
+            local is_signed=false key_id=""
             # Look for signature indicators: RSA/DSA/ECDSA/EdDSA + key ID
             if echo "${sig_output}" | grep -qiE "(RSA|DSA|ECDSA|EdDSA).*key ID"; then
-                local key_id
+                is_signed=true
                 key_id=$(echo "${sig_output}" | grep -oiE "key ID [a-f0-9]+" | head -1 \
                     | awk '{print $NF}' | tr '[:lower:]' '[:upper:]')
                 echo "RPM is signed with key ID: ${key_id}"
-                return 0  # Exists and is signed
             elif echo "${sig_output}" | grep -qi "NOKEY"; then
                 # Signed but key not in keyring - still counts as signed
-                local key_id
+                is_signed=true
                 key_id=$(echo "${sig_output}" | grep -oiE "key ID [a-f0-9]+" | head -1 \
                     | awk '{print $NF}' | tr '[:lower:]' '[:upper:]')
                 echo "RPM is signed (NOKEY) with key ID: ${key_id}"
-                return 0  # Exists and is signed
-            else
+            fi
+
+            if [[ "${is_signed}" != "true" ]]; then
                 # RPM exists but is not signed - this should not happen
                 echo "Error: RPM exists in signed domain but is NOT signed!" >&2
                 echo "RPM: ${rpmname}-${version}-${release}.${arch}" >&2
                 echo "This indicates a previous upload without proper signing." >&2
                 return 1
             fi
+
+            # === PAYLOADDIGEST verification ===
+            # Download unsigned RPM and compare PAYLOADDIGEST to ensure content matches
+            local unsigned_dist_base_url unsigned_rpm_url
+            unsigned_dist_base_url="$(get_unsigned_distribution_base_url "${repo_name}")"
+
+            if [[ -z "${unsigned_dist_base_url}" ]]; then
+                echo "Warning: No unsigned distribution found for repo ${repo_name}, skipping PAYLOADDIGEST check" >&2
+                return 0  # Can't verify, but signed RPM exists
+            fi
+
+            unsigned_dist_base_url="${unsigned_dist_base_url%/}"
+            unsigned_rpm_url="${unsigned_dist_base_url}/Packages/${first_letter}/${rpm_file}"
+
+            # Download unsigned RPM
+            { set +x; } 2>/dev/null
+            http_code=$(curl -s -L -w "%{http_code}" -o "${unsigned_tmpfile}" \
+                -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${unsigned_rpm_url}" 2>/dev/null)
+
+            if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
+                # Try without auth
+                http_code=$(curl -s -L -w "%{http_code}" -o "${unsigned_tmpfile}" \
+                    "${unsigned_rpm_url}" 2>/dev/null)
+            fi
+            set -x
+
+            if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
+                echo "Warning: Could not download unsigned RPM (HTTP ${http_code}), skipping PAYLOADDIGEST check" >&2
+                return 0  # Can't verify, but signed RPM exists
+            fi
+
+            # Compare PAYLOADDIGEST
+            local signed_digest unsigned_digest
+            signed_digest="$(get_rpm_payloaddigest "${signed_tmpfile}")"
+            unsigned_digest="$(get_rpm_payloaddigest "${unsigned_tmpfile}")"
+
+            if [[ -z "${signed_digest}" ]] || [[ -z "${unsigned_digest}" ]]; then
+                echo "Warning: Could not extract PAYLOADDIGEST, skipping content verification" >&2
+                return 0  # Can't verify, but signed RPM exists
+            fi
+
+            if [[ "${signed_digest}" != "${unsigned_digest}" ]]; then
+                echo "Error: PAYLOADDIGEST mismatch!" >&2
+                echo "  Unsigned RPM digest: ${unsigned_digest}" >&2
+                echo "  Signed RPM digest:   ${signed_digest}" >&2
+                echo "  RPM: ${rpmname}-${version}-${release}.${arch}" >&2
+                echo "  The signed RPM in Pulp has different content than the unsigned source!" >&2
+                return 1
+            fi
+
+            echo "PAYLOADDIGEST verified: ${signed_digest:0:16}..."
+            return 0  # Exists, signed, and content matches
         }
 
         set -x
@@ -527,13 +598,14 @@ spec:
                 echo "Checking ${rpmname}-${version}-${release}.${arch} in ${repo_name}..."
 
                 set +e
-                check_signed_rpm_exists "${rpmname}" "${epoch}" "${version}" "${release}" "${arch}" "${repo_name}"
+                check_signed_rpm_exists "${rpmname}" "${epoch}" "${version}" "${release}" \
+                    "${arch}" "${repo_name}" "${rpm_file}"
                 status=$?
                 set -e
 
                 case $status in
                     0)
-                        echo "  -> Already signed in ${SIGNED_RPMS_DOMAIN}/${repo_name}"
+                        echo "  -> Already signed in ${SIGNED_RPMS_DOMAIN}/${repo_name} (PAYLOADDIGEST verified)"
                         EXISTING_RPMS+=("${rpm_file}|${repo_name}|${rpmname}")
                         ;;
                     2)
