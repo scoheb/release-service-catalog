@@ -362,16 +362,15 @@ spec:
         #   1 -> error (API failure, download failure, unsigned RPM, or content mismatch)
         #   2 -> RPM does not exist in signed domain
         check_signed_rpm_exists() {
-            local rpmname="$1" epoch="$2" version="$3" release="$4" arch="$5" repo_name="$6" rpm_file="$7"
+            local rpmname="$1" version="$2" release="$3" arch="$4" repo_name="$5" rpm_file="$6"
 
             local repo_version_href
             repo_version_href="$(get_repo_latest_version_href "${repo_name}")" || return 1
 
-            # Query for RPM by NEVRA
+            # Query for RPM by NVRA (without epoch - epoch is not in filename)
             local query_url="${PULP_BASE_URL}/api/pulp/${SIGNED_RPMS_DOMAIN}/api/v3/content/rpm/packages/"
             query_url+="?repository_version=$(jq -rn --arg x "${repo_version_href}" '$x|@uri')"
             query_url+="&name=$(jq -rn --arg x "${rpmname}" '$x|@uri')"
-            query_url+="&epoch=$(jq -rn --arg x "${epoch}" '$x|@uri')"
             query_url+="&version=$(jq -rn --arg x "${version}" '$x|@uri')"
             query_url+="&release=$(jq -rn --arg x "${release}" '$x|@uri')"
             query_url+="&arch=$(jq -rn --arg x "${arch}" '$x|@uri')"
@@ -382,6 +381,10 @@ spec:
 
             if [[ "${count}" -eq 0 ]]; then
                 return 2  # Does not exist
+            fi
+
+            if [[ "${count}" -gt 1 ]]; then
+                echo "Warning: Multiple RPMs found with same NVRA, using first result" >&2
             fi
 
             # Get distribution URL for downloading signed RPM
@@ -487,8 +490,26 @@ spec:
             set -x
 
             if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
-                echo "Warning: Could not download unsigned RPM (HTTP ${http_code}), skipping PAYLOADDIGEST check" >&2
+                echo "Warning: Could not download unsigned RPM (HTTP ${http_code}), skipping verification" >&2
                 return 0  # Can't verify, but signed RPM exists
+            fi
+
+            # Compare epochs first (clearer error message than PAYLOADDIGEST mismatch)
+            local signed_epoch unsigned_epoch
+            signed_epoch="$(rpm -q --qf '%{EPOCH}' -p "${signed_tmpfile}" 2>/dev/null)"
+            unsigned_epoch="$(rpm -q --qf '%{EPOCH}' -p "${unsigned_tmpfile}" 2>/dev/null)"
+
+            # Normalize "(none)" to "0" for comparison
+            [[ "${signed_epoch}" == "(none)" ]] && signed_epoch="0"
+            [[ "${unsigned_epoch}" == "(none)" ]] && unsigned_epoch="0"
+
+            if [[ "${signed_epoch}" != "${unsigned_epoch}" ]]; then
+                echo "Error: Epoch mismatch!" >&2
+                echo "  Unsigned RPM epoch: ${unsigned_epoch}" >&2
+                echo "  Signed RPM epoch:   ${signed_epoch}" >&2
+                echo "  RPM: ${rpmname}-${version}-${release}.${arch}" >&2
+                echo "  The signed RPM in Pulp has a different epoch than the unsigned source!" >&2
+                return 1
             fi
 
             # Compare PAYLOADDIGEST
@@ -510,8 +531,8 @@ spec:
                 return 1
             fi
 
-            echo "PAYLOADDIGEST verified: ${signed_digest:0:16}..."
-            return 0  # Exists, signed, and content matches
+            echo "Verified: epoch=${signed_epoch}, PAYLOADDIGEST=${signed_digest:0:16}..."
+            return 0  # Exists, signed, epoch matches, and content matches
         }
 
         set -x
@@ -596,8 +617,6 @@ spec:
                     rpmname="${nv%-*}"
                 fi
 
-                epoch="0"
-
                 # Determine the repo name based on arch
                 if [[ "${arch}" == "src" ]]; then
                     repo_name="source"
@@ -610,7 +629,7 @@ spec:
                 echo "Checking ${rpmname}-${version}-${release}.${arch} in ${repo_name}..."
 
                 set +e
-                check_signed_rpm_exists "${rpmname}" "${epoch}" "${version}" "${release}" \
+                check_signed_rpm_exists "${rpmname}" "${version}" "${release}" \
                     "${arch}" "${repo_name}" "${rpm_file}"
                 status=$?
                 set -e
