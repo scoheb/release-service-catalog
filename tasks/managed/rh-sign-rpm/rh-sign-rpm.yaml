@@ -457,11 +457,12 @@ spec:
             fi
 
             if [[ "${is_signed}" != "true" ]]; then
-                # RPM exists but is not signed - this should not happen
-                echo "Error: RPM exists in signed domain but is NOT signed!" >&2
+                # RPM exists but is not signed - treat as needing signing
+                echo "Warning: RPM exists in signed domain but is NOT signed!" >&2
                 echo "RPM: ${rpmname}-${version}-${release}.${arch}" >&2
                 echo "This indicates a previous upload without proper signing." >&2
-                return 1
+                echo "Will re-sign this RPM." >&2
+                return 2  # Not found/needs signing
             fi
 
             # === PAYLOADDIGEST verification ===
