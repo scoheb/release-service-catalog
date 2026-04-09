@@ -554,6 +554,7 @@ spec:
                          -p origin="$origin" \
                          -p advisory_secret_name="$advisorySecretName" \
                          -p internalRequestPipelineRunName="$(params.pipelineRunUid)" \
+                         -p ociStorage="$(params.ociStorage)" \
                          -p taskGitUrl="$(params.taskGitUrl)" \
                          -p taskGitRevision="$(params.taskGitRevision)" \
                          -s "$(params.synchronously)" \
@@ -580,11 +581,26 @@ spec:
         latestAdvisoryUrl="$(jq -jr '.advisory_url // ""' <<< "${results}")"
         latestAdvisoryInternalUrl="$(jq -jr '.advisory_internal_url // ""' <<< "${results}")"
 
-        # === Phase 3: Validate Pulp digests for in-advisory RPMs ===
-        IN_ADVISORY_RAW=$(jq -r '.in_advisory_rpms // ""' <<< "$results")
-        if [[ -n "$IN_ADVISORY_RAW" ]]; then
-          IN_ADVISORY_FILE=$(mktemp)
-          echo "$IN_ADVISORY_RAW" | base64 -d | gunzip > "$IN_ADVISORY_FILE"
+        # === Phase 3: Pull filter results from OCI artifact ===
+        FILTER_RESULTS_ARTIFACT=$(jq -r '.filter_results_artifact // ""' <<< "$results")
+        if [[ -z "$FILTER_RESULTS_ARTIFACT" ]]; then
+          echo "No filter_results_artifact found in results"
+          exit 1
+        fi
+
+        echo "Pulling filter results from: ${FILTER_RESULTS_ARTIFACT}"
+        FILTER_RESULTS_DIR=$(mktemp -d)
+        oci_ref="${FILTER_RESULTS_ARTIFACT#oci:}"
+        oras pull "${oci_ref}" -o "$FILTER_RESULTS_DIR"
+
+        # Extract the tarball
+        tar -xzf "$FILTER_RESULTS_DIR/filter-results.tar.gz" -C "$FILTER_RESULTS_DIR"
+
+        IN_ADVISORY_FILE="$FILTER_RESULTS_DIR/in_advisory_rpms.json"
+        UNRELEASED_FILE="$FILTER_RESULTS_DIR/unreleased_rpms.json"
+
+        # === Phase 4: Validate Pulp digests for in-advisory RPMs ===
+        if [[ -f "$IN_ADVISORY_FILE" ]]; then
           IN_ADVISORY_COUNT=$(jq 'length' "$IN_ADVISORY_FILE")
           echo "Validating Pulp digests for $IN_ADVISORY_COUNT in-advisory RPMs..."
 
@@ -620,31 +636,28 @@ spec:
                 echo "RPM: ${rpmname}-${version}-${release}.${arch}"
                 echo "Snapshot sha256: ${sha256}"
                 echo "Action required: Bump version or release number"
-                rm -f "$entry_file" "$IN_ADVISORY_FILE"
+                rm -f "$entry_file"
+                rm -rf "$FILTER_RESULTS_DIR"
                 exit 1
                 ;;
               *)
                 echo "Error: Failed to check Pulp digest (status=$pulp_status)"
-                rm -f "$entry_file" "$IN_ADVISORY_FILE"
+                rm -f "$entry_file"
+                rm -rf "$FILTER_RESULTS_DIR"
                 exit 1
                 ;;
             esac
 
             rm -f "$entry_file"
           done < <(jq -c '.[]' "$IN_ADVISORY_FILE")
-
-          rm -f "$IN_ADVISORY_FILE"
         fi
 
-        # === Phase 4: Process unreleased RPMs and filter snapshot ===
-        UNRELEASED_RAW=$(jq -r '.unreleased_rpms // ""' <<< "$results")
-        if [[ -z "$UNRELEASED_RAW" ]]; then
-          echo "No unreleased_rpms found in results"
+        # === Phase 5: Process unreleased RPMs and filter snapshot ===
+        if [[ ! -f "$UNRELEASED_FILE" ]]; then
+          echo "No unreleased_rpms.json found in filter results"
           exit 1
         fi
 
-        UNRELEASED_FILE=$(mktemp)
-        echo "$UNRELEASED_RAW" | base64 -d | gunzip > "$UNRELEASED_FILE"
         UNRELEASED_COUNT=$(jq 'length' "$UNRELEASED_FILE")
         echo "Unreleased RPMs: $UNRELEASED_COUNT"
 
@@ -658,7 +671,7 @@ spec:
           echo -n "$latestAdvisoryInternalUrl" > "$(results.latest_advisory_internal_url.path)"
           jq '.components = []' "${SNAPSHOT_FILE}" > "${SNAPSHOT_FILE}.tmp"
           mv "${SNAPSHOT_FILE}.tmp" "${SNAPSHOT_FILE}"
-          rm -f "$UNRELEASED_FILE"
+          rm -rf "$FILTER_RESULTS_DIR"
           exit 0
         fi
 
@@ -695,7 +708,7 @@ spec:
         echo -n "" > "$(results.latest_advisory_url.path)"
         echo -n "" > "$(results.latest_advisory_internal_url.path)"
 
-        rm -f "$UNRELEASED_FILE" "$COMPONENT_RPMS_MAP_FILE" "$TRANSFORMED_ENTRIES_FILE"
+        rm -rf "$UNRELEASED_FILE" "$COMPONENT_RPMS_MAP_FILE" "$TRANSFORMED_ENTRIES_FILE" "$FILTER_RESULTS_DIR"
     - name: create-trusted-artifact
       computeResources:
         limits:

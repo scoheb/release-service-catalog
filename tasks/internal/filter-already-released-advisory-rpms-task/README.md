@@ -12,5 +12,6 @@ RPMs found in advisories (for digest validation by the calling task).
 | origin                         | The origin workspace for the release CR                               | No       | -             |
 | advisory_secret_name           | Name of the secret containing advisory GitLab metadata                | No       | -             |
 | internalRequestPipelineRunName | Name of the PipelineRun that requested this task                      | No       | -             |
+| ociStorage                     | The OCI repository to store results artifact                          | No       | -             |
 | caTrustConfigMapName           | The name of the ConfigMap to read CA bundle data from                 | Yes      | trusted-ca    |
 | caTrustConfigMapKey            | The name of the key in the ConfigMap that contains the CA bundle data | Yes      | ca-bundle.crt |

@@ -24,6 +24,9 @@ spec:
     - name: internalRequestPipelineRunName
       description: Name of the PipelineRun that requested this task
       type: string
+    - name: ociStorage
+      description: The OCI repository to store results artifact
+      type: string
     - name: caTrustConfigMapName
       type: string
       description: The name of the ConfigMap to read CA bundle data from
@@ -39,10 +42,8 @@ spec:
       description: The name of the InternalRequest PipelineRun
     - name: internalRequestTaskRunName
       description: The name of the InternalRequest TaskRun
-    - name: unreleased_rpms
-      description: RPMs not found in any advisory (gzipped base64 JSON array)
-    - name: in_advisory_rpms
-      description: RPMs found in advisories, need digest validation (gzipped base64 JSON array)
+    - name: filter_results_artifact
+      description: OCI artifact reference containing filter results (unreleased_rpms, in_advisory_rpms JSON files)
     - name: advisory_url
       description: URL of the latest matching advisory when all components are already released
     - name: advisory_internal_url
@@ -144,11 +145,34 @@ spec:
 
         if [[ -z "$EXISTING_ADVISORIES" ]]; then
           echo "No existing advisories found. All RPMs are unreleased."
+
+          # Create output directory for OCI artifact
+          RESULTS_DIR=/tmp/filter-results
+          mkdir -p "$RESULTS_DIR"
+
           # All RPMs are unreleased
-          UNRELEASED=$(echo "$TRANSFORMED_SNAPSHOT_JSON" | gzip -c | base64 -w 0)
-          IN_ADVISORY=$(echo "[]" | gzip -c | base64 -w 0)
-          echo -n "$UNRELEASED" > "$(results.unreleased_rpms.path)"
-          echo -n "$IN_ADVISORY" > "$(results.in_advisory_rpms.path)"
+          echo "$TRANSFORMED_SNAPSHOT_JSON" | jq -c '.' > "$RESULTS_DIR/unreleased_rpms.json"
+          echo "[]" > "$RESULTS_DIR/in_advisory_rpms.json"
+
+          # Create tarball
+          RESULTS_TAR="$RESULTS_DIR/filter-results.tar.gz"
+          tar -czf "$RESULTS_TAR" -C "$RESULTS_DIR" unreleased_rpms.json in_advisory_rpms.json
+
+          # Push to OCI storage
+          OCI_STORAGE="$(params.ociStorage)"
+          OCI_TAG="filter-results-$(date +%s)"
+          OCI_REF="${OCI_STORAGE}:${OCI_TAG}"
+
+          echo "Pushing filter results to OCI storage: ${OCI_REF}"
+          select-oci-auth "${OCI_REF}"
+          (cd "$RESULTS_DIR" && oras push "${OCI_REF}" "filter-results.tar.gz:application/gzip")
+
+          # Get digest for the artifact reference
+          DIGEST=$(oras manifest fetch "${OCI_REF}" --descriptor | jq -r '.digest')
+          ARTIFACT_REF="oci:${OCI_STORAGE}@${DIGEST}"
+
+          echo "Filter results artifact: ${ARTIFACT_REF}"
+          echo -n "${ARTIFACT_REF}" > "$(results.filter_results_artifact.path)"
           echo -n "" > "$(results.advisory_url.path)"
           echo -n "" > "$(results.advisory_internal_url.path)"
           echo -n "Success" > "$(results.result.path)"
@@ -220,12 +244,33 @@ spec:
         echo "Unreleased RPMs: $UNRELEASED_COUNT"
         echo "In-advisory RPMs (need digest validation): $IN_ADVISORY_COUNT"
 
-        # Encode results
-        UNRELEASED_ENCODED=$(jq -c '.' "$UNRELEASED_FILE" | gzip -c | base64 -w 0)
-        IN_ADVISORY_ENCODED=$(jq -c '.' "$IN_ADVISORY_FILE" | gzip -c | base64 -w 0)
+        # Create output directory for OCI artifact
+        RESULTS_DIR=/tmp/filter-results
+        mkdir -p "$RESULTS_DIR"
 
-        echo -n "$UNRELEASED_ENCODED" > "$(results.unreleased_rpms.path)"
-        echo -n "$IN_ADVISORY_ENCODED" > "$(results.in_advisory_rpms.path)"
+        # Write JSON files (compact format to save space)
+        jq -c '.' "$UNRELEASED_FILE" > "$RESULTS_DIR/unreleased_rpms.json"
+        jq -c '.' "$IN_ADVISORY_FILE" > "$RESULTS_DIR/in_advisory_rpms.json"
+
+        # Create tarball
+        RESULTS_TAR="$RESULTS_DIR/filter-results.tar.gz"
+        tar -czf "$RESULTS_TAR" -C "$RESULTS_DIR" unreleased_rpms.json in_advisory_rpms.json
+
+        # Push to OCI storage
+        OCI_STORAGE="$(params.ociStorage)"
+        OCI_TAG="filter-results-$(date +%s)"
+        OCI_REF="${OCI_STORAGE}:${OCI_TAG}"
+
+        echo "Pushing filter results to OCI storage: ${OCI_REF}"
+        select-oci-auth "${OCI_REF}"
+        (cd "$RESULTS_DIR" && oras push "${OCI_REF}" "filter-results.tar.gz:application/gzip")
+
+        # Get digest for the artifact reference
+        DIGEST=$(oras manifest fetch "${OCI_REF}" --descriptor | jq -r '.digest')
+        ARTIFACT_REF="oci:${OCI_STORAGE}@${DIGEST}"
+
+        echo "Filter results artifact: ${ARTIFACT_REF}"
+        echo -n "${ARTIFACT_REF}" > "$(results.filter_results_artifact.path)"
 
         # Set advisory URL if all RPMs were in advisories
         if [[ "$UNRELEASED_COUNT" -eq 0 ]] && [[ -n "$LATEST_ADVISORY_FILE" ]]; then
