@@ -93,13 +93,13 @@ check_env_vars() {
 }
 
 # Function to parse script options
-# Modifies global variables: CLEANUP, NO_CVE, INTERACTIVE_MODE, FAIL_FIRST_ADVISORY
+# Modifies global variables: CLEANUP, NO_CVE, INTERACTIVE_MODE
 parse_options() {
     echo "Parsing script options..."
     local opts # Use local for getopt result storage
     # Note: Using long option names with -a flag to allow single-dash prefix
-    # Short option aliases: sc=skip-cleanup, nocve=no-cve, i=interactive, ffa=fail-first-advisory
-    opts=$(getopt -l "skip-cleanup,no-cve,interactive,fail-first-advisory,sc,nocve,i,ffa" -o "" -a -- "$@")
+    # Short option aliases: sc=skip-cleanup, nocve=no-cve, i=interactive
+    opts=$(getopt -l "skip-cleanup,no-cve,interactive,sc,nocve,i" -o "" -a -- "$@")
     if [ $? -ne 0 ]; then
         log_error "Failed to parse options."
     fi
@@ -119,10 +119,6 @@ parse_options() {
                 INTERACTIVE_MODE="true"
                 shift
                 ;;
-            --ffa|--fail-first-advisory)
-                FAIL_FIRST_ADVISORY="true"
-                shift
-                ;;
             --)
                 shift
                 break
@@ -132,7 +128,7 @@ parse_options() {
                 ;;
         esac
     done
-    echo "Options parsed: CLEANUP=${CLEANUP}, NO_CVE=${NO_CVE}, INTERACTIVE_MODE=${INTERACTIVE_MODE:-false}, FAIL_FIRST_ADVISORY=${FAIL_FIRST_ADVISORY:-false}"
+    echo "Options parsed: CLEANUP=${CLEANUP}, NO_CVE=${NO_CVE}, INTERACTIVE_MODE=${INTERACTIVE_MODE:-false}"
 }
 
 # Function to get Build PipelineRun URL
