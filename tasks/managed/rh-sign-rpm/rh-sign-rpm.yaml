@@ -733,7 +733,9 @@ spec:
 
         # Send filtered artifacts.json to signing pipeline
         echo "Sending artifacts.json to signing pipeline..."
-        ARTIFACT_JSON=$(cat "${FILTERED_ARTIFACTS_FILE}" | base64 -w0)
+        # Use gzip compression to avoid ARG_MAX limit for large artifact lists
+        ARTIFACT_JSON=$(gzip -c "${FILTERED_ARTIFACTS_FILE}" | base64 -w0)
+        echo "Artifact JSON size (compressed): $(echo -n "${ARTIFACT_JSON}" | wc -c) bytes"
 
         internal-request \
           --pipeline direct-rpm-signing \
