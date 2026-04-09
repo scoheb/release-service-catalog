@@ -617,37 +617,45 @@ spec:
                     rpmname="${nv%-*}"
                 fi
 
-                # Determine the repo name based on arch
+                # Determine the repo name(s) based on arch
+                # noarch packages are pushed to multiple repos, so check all of them
                 if [[ "${arch}" == "src" ]]; then
-                    repo_name="source"
+                    repo_names=("source")
                 elif [[ "${arch}" == "noarch" ]]; then
-                    repo_name="x86_64"
+                    # noarch packages are pushed to all arch repos - check common ones
+                    repo_names=("x86_64" "aarch64")
                 else
-                    repo_name="${arch}"
+                    repo_names=("${arch}")
                 fi
 
-                echo "Checking ${rpmname}-${version}-${release}.${arch} in ${repo_name}..."
+                echo "Checking ${rpmname}-${version}-${release}.${arch}..."
 
-                set +e
-                check_signed_rpm_exists "${rpmname}" "${version}" "${release}" \
-                    "${arch}" "${repo_name}" "${rpm_file}"
-                status=$?
-                set -e
+                found_in_repo=""
+                for repo_name in "${repo_names[@]}"; do
+                    set +e
+                    check_signed_rpm_exists "${rpmname}" "${version}" "${release}" \
+                        "${arch}" "${repo_name}" "${rpm_file}"
+                    status=$?
+                    set -e
 
-                case $status in
-                    0)
-                        echo "  -> Already signed in ${SIGNED_RPMS_DOMAIN}/${repo_name} (PAYLOADDIGEST verified)"
-                        EXISTING_RPMS+=("${rpm_file}|${repo_name}|${rpmname}")
-                        ;;
-                    2)
-                        echo "  -> Not found in signed domain, needs signing"
-                        MISSING_RPMS+=("${rpm_file}")
-                        ;;
-                    *)
-                        echo "  -> Error checking signature (status=${status})"
+                    if [[ ${status} -eq 0 ]]; then
+                        found_in_repo="${repo_name}"
+                        break
+                    elif [[ ${status} -eq 1 ]]; then
+                        # Error occurred, fail immediately
+                        echo "  -> Error checking signature in ${repo_name} (status=${status})"
                         exit 1
-                        ;;
-                esac
+                    fi
+                    # status=2 means not found in this repo, try next
+                done
+
+                if [[ -n "${found_in_repo}" ]]; then
+                    echo "  -> Already signed in ${SIGNED_RPMS_DOMAIN}/${found_in_repo} (verified)"
+                    EXISTING_RPMS+=("${rpm_file}|${found_in_repo}|${rpmname}")
+                else
+                    echo "  -> Not found in signed domain, needs signing"
+                    MISSING_RPMS+=("${rpm_file}")
+                fi
             done < <(jq -r '.artifacts | keys[]' "${ARTIFACTS_JSON_FILE}")
 
             echo ""
@@ -664,17 +672,27 @@ spec:
                     dist_base_url="${dist_base_url%/}"
                     rpm_url="${dist_base_url}/Packages/${first_letter}/${rpm_file}"
 
-                    echo "Downloading: ${rpm_file}"
+                    echo "Downloading ${rpm_file} from ${repo_name}..."
                     # Suppress tracing to avoid leaking credentials in logs
                     { set +x; } 2>/dev/null
-                    curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" \
-                        -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" || \
-                        curl -s -L -o "${SIGNED_RPMS_DIR}/${rpm_file}" "${rpm_url}"
+                    http_code=$(curl -s -L -w "%{http_code}" -o "${SIGNED_RPMS_DIR}/${rpm_file}" \
+                        -u "${PULP_USERNAME}:${PULP_PASSWORD}" "${rpm_url}" 2>/dev/null)
+
+                    if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
+                        http_code=$(curl -s -L -w "%{http_code}" \
+                            -o "${SIGNED_RPMS_DIR}/${rpm_file}" "${rpm_url}" 2>/dev/null)
+                    fi
                     set -x
+
+                    if [[ "${http_code}" -lt 200 ]] || [[ "${http_code}" -ge 300 ]]; then
+                        echo "Error: Failed to download ${rpm_file} (HTTP ${http_code})"
+                        exit 1
+                    fi
+                    echo "  -> Downloaded successfully"
                 done
             fi
 
-            # If all RPMs already exist, create OCI artifact and exit
+            # If all RPMs already exist and are signed, skip signing entirely
             if [[ ${#MISSING_RPMS[@]} -eq 0 ]]; then
                 echo ""
                 echo "=== All RPMs already exist and are signed in ${SIGNED_RPMS_DOMAIN} ==="
@@ -706,7 +724,7 @@ spec:
 
             # Create filtered artifacts.json with only missing RPMs
             echo ""
-            echo "=== Creating filtered artifacts.json for ${#MISSING_RPMS[@]} RPMs that need signing ==="
+            echo "Creating filtered artifacts.json with ${#MISSING_RPMS[@]} RPMs to sign..."
             FILTERED_ARTIFACTS_FILE="${SIGNED_RPMS_DIR}/filtered-artifacts.json"
 
             # Start with the original artifacts and filter to only missing ones
@@ -714,7 +732,8 @@ spec:
                 '.artifacts |= with_entries(select(.key as $k | $missing | index($k)))' \
                 "${ARTIFACTS_JSON_FILE}" > "${FILTERED_ARTIFACTS_FILE}"
 
-            echo "Filtered artifacts.json created with $(jq '.artifacts | length' "${FILTERED_ARTIFACTS_FILE}") RPMs"
+            echo "Filtered artifacts.json created with $(jq '.artifacts | length' \
+                "${FILTERED_ARTIFACTS_FILE}") RPMs"
 
             echo ""
             echo "=== Proceeding with signing for missing RPMs ==="
@@ -726,11 +745,10 @@ spec:
 
         # Send filtered artifacts.json to signing pipeline
         echo "Sending artifacts.json to signing pipeline..."
-
         ARTIFACT_JSON=$(cat "${FILTERED_ARTIFACTS_FILE}" | base64 -w0)
 
         internal-request \
-          --pipeline "direct-rpm-signing" \
+          --pipeline direct-rpm-signing \
           -p image="${PIPELINE_IMAGE}" \
           -p artifact_json="${ARTIFACT_JSON}" \
           -p ociStorage="$(params.ociStorage)" \
@@ -749,36 +767,31 @@ spec:
           -p signed_rpms_upload_subpath="$(params.signedRpmsUploadSubpath)" \
           -p taskGitUrl="${SIGNING_PIPELINE_GIT_URL}" \
           -p taskGitRevision="${SIGNING_PIPELINE_GIT_REVISION}" \
-          -l ${PIPELINERUN_LABEL}="$(params.pipelineRunUid)" \
-          -t "$(params.requestTimeout)" \
+          -l "${PIPELINERUN_LABEL}=$(context.pipelineRun.uid)" \
+          -t 1800 \
           --service-account "${SERVICE_ACCOUNT}" \
-          --pipeline-timeout "0h30m0s" \
-          --task-timeout "0h25m0s" \
-          -s true \
-          | tee "${IR_FILE}"
+          --pipeline-timeout 0h30m0s \
+          --task-timeout 0h25m0s \
+          -s true | tee "${IR_FILE}"
 
-        # Extract internal request name and query results
-        internalRequest=$(awk -F"'" '/created/ { print $2 }' "${IR_FILE}")
+        # Get the InternalRequest name and extract signed RPMs artifact
+        internalRequest=$(awk -F\' '/created/ { print $2 }' "${IR_FILE}")
         echo "Internal request created: ${internalRequest}"
 
         results=$(kubectl get internalrequest "${internalRequest}" -o=jsonpath='{.status.results}')
         echo "Internal request results: ${results}"
 
-        # Extract signed_rpms_oci_artifact
-        signedRpmsOciArtifact="$(jq -r '.signed_rpms_oci_artifact // ""' <<< "${results}")"
+        signedRpmsOciArtifact=$(jq -r '.signed_rpms_oci_artifact // ""' <<< "${results}")
         if [ -z "${signedRpmsOciArtifact}" ]; then
-            echo "Error: No signed_rpms_oci_artifact returned"
-            echo "Results: ${results}"
+            echo "Error: signed_rpms_oci_artifact not found in InternalRequest results"
             exit 1
         fi
         echo "Newly signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
 
-        # Check if we need to merge with previously downloaded signed RPMs
+        # If we had existing signed RPMs, merge them with newly signed ones
         if [[ ${#EXISTING_RPMS[@]} -gt 0 ]]; then
             echo ""
             echo "=== Merging newly signed RPMs with existing signed RPMs ==="
-
-            # Extract newly signed RPMs from OCI artifact
             NEW_RPMS_DIR="${SIGNED_RPMS_DIR}/new-signed"
             mkdir -p "${NEW_RPMS_DIR}"
 
@@ -806,7 +819,7 @@ spec:
             tar -czf "${COMBINED_TAR}" -C "${SIGNED_RPMS_DIR}" \
                 $(ls "${SIGNED_RPMS_DIR}"/*.rpm 2>/dev/null | xargs -n1 basename)
 
-            # Push combined artifact to OCI storage (use relative path to avoid oras path validation error)
+            # Push combined artifact to OCI storage (use relative path)
             OCI_ARTIFACT_TAG="signed-rpms-combined-$(date +%s)"
             OCI_ARTIFACT_REF="$(params.ociStorage):${OCI_ARTIFACT_TAG}"
 
