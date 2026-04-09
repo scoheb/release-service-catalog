@@ -709,10 +709,15 @@ spec:
                 OCI_ARTIFACT_REF="$(params.ociStorage):${OCI_ARTIFACT_TAG}"
 
                 echo "Pushing signed RPMs to OCI storage: ${OCI_ARTIFACT_REF}"
-                (cd "${SIGNED_RPMS_DIR}" && oras push "${OCI_ARTIFACT_REF}" "signed-rpms:application/gzip")
+                OCI_STORAGE="$(params.ociStorage)"
+                (cd "${SIGNED_RPMS_DIR}" && oras push \
+                    --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+                    "${OCI_ARTIFACT_REF}" "signed-rpms:application/gzip")
 
                 # Get the full digest reference
-                DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" --descriptor | jq -r '.digest')
+                DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" \
+                    --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+                    --descriptor | jq -r '.digest')
                 FULL_REF="$(params.ociStorage)@${DIGEST}"
 
                 echo "Signed RPMs OCI artifact: oci:${FULL_REF}"
@@ -798,8 +803,10 @@ spec:
             mkdir -p "${NEW_RPMS_DIR}"
 
             oci_ref="${signedRpmsOciArtifact#oci:}"
+            oci_storage="${oci_ref%%@*}"
             echo "Pulling newly signed RPMs from: ${oci_ref}"
-            oras pull "${oci_ref}" -o "${NEW_RPMS_DIR}"
+            oras pull --registry-config <(select-oci-auth "${oci_storage}") \
+                "${oci_ref}" -o "${NEW_RPMS_DIR}"
 
             # Extract the tarball
             if [ -f "${NEW_RPMS_DIR}/signed-rpms" ]; then
@@ -826,10 +833,15 @@ spec:
             OCI_ARTIFACT_REF="$(params.ociStorage):${OCI_ARTIFACT_TAG}"
 
             echo "Pushing combined signed RPMs to OCI storage: ${OCI_ARTIFACT_REF}"
-            (cd "${SIGNED_RPMS_DIR}" && oras push "${OCI_ARTIFACT_REF}" "signed-rpms:application/gzip")
+            OCI_STORAGE="$(params.ociStorage)"
+            (cd "${SIGNED_RPMS_DIR}" && oras push \
+                --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+                "${OCI_ARTIFACT_REF}" "signed-rpms:application/gzip")
 
             # Get the full digest reference
-            DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" --descriptor | jq -r '.digest')
+            DIGEST=$(oras manifest fetch "${OCI_ARTIFACT_REF}" \
+                --registry-config <(select-oci-auth "${OCI_STORAGE}") \
+                --descriptor | jq -r '.digest')
             signedRpmsOciArtifact="oci:$(params.ociStorage)@${DIGEST}"
 
             echo "Combined signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
