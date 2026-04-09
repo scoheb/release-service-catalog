@@ -457,7 +457,10 @@ spec:
           mapfile -t ARCHES < <(extract_arches_from_files files)
           [[ ${#ARCHES[@]} -eq 0 ]] && ARCHES=("${DEFAULT_ARCH_LIST[@]}")
 
-          COMPONENT_RPMS="[]"
+          # Use file for COMPONENT_RPMS to avoid ARG_MAX limit
+          COMPONENT_RPMS_FILE="$(mktemp)"
+          echo "[]" > "$COMPONENT_RPMS_FILE"
+
           for f in "${files[@]}"; do
             file_abs="${workdir}/files/${f}"
             local_sha="$(sha256sum "${file_abs}" | awk '{print $1}')"
@@ -509,23 +512,26 @@ spec:
               mv "${TRANSFORMED_ENTRIES_FILE}.tmp" "$TRANSFORMED_ENTRIES_FILE"
               rm -f "$entry_tmp"
 
-              COMPONENT_RPMS=$(jq --arg rpm "$f" --arg sha "$local_sha" \
+              # Append to COMPONENT_RPMS_FILE using file operations
+              rpm_entry_tmp="$(mktemp)"
+              jq -n --arg rpm "$f" --arg sha "$local_sha" \
                 --arg rpmname "$rpmname" --arg epoch "$epoch" \
                 --arg version "$version" --arg release "$release" \
                 --arg arch "$arch" --argjson targetRepo "$repo_obj" \
-                '. + [{rpm: $rpm, sha256: $sha, rpmname: $rpmname, epoch: $epoch,
-                       version: $version, release: $release, arch: $arch,
-                       targetRepos: [$targetRepo]}]' <<< "$COMPONENT_RPMS")
+                '{rpm: $rpm, sha256: $sha, rpmname: $rpmname, epoch: $epoch,
+                 version: $version, release: $release, arch: $arch,
+                 targetRepos: [$targetRepo]}' > "$rpm_entry_tmp"
+              jq --slurpfile e "$rpm_entry_tmp" '. + $e' "$COMPONENT_RPMS_FILE" > "${COMPONENT_RPMS_FILE}.tmp"
+              mv "${COMPONENT_RPMS_FILE}.tmp" "$COMPONENT_RPMS_FILE"
+              rm -f "$rpm_entry_tmp"
             done < <(jq -c '.[]' <<< "${target_repos_json}")
           done
 
-          # Write COMPONENT_RPMS to file to avoid ARG_MAX limit
-          COMPONENT_RPMS_TMP="$(mktemp)"
-          echo "$COMPONENT_RPMS" > "$COMPONENT_RPMS_TMP"
-          jq --arg name "$name" --slurpfile rpms "$COMPONENT_RPMS_TMP" \
+          # Add component RPMs to map
+          jq --arg name "$name" --slurpfile rpms "$COMPONENT_RPMS_FILE" \
             '. + {($name): $rpms[0]}' "$COMPONENT_RPMS_MAP_FILE" > "${COMPONENT_RPMS_MAP_FILE}.tmp"
           mv "${COMPONENT_RPMS_MAP_FILE}.tmp" "$COMPONENT_RPMS_MAP_FILE"
-          rm -f "$COMPONENT_RPMS_TMP"
+          rm -f "$COMPONENT_RPMS_FILE"
           rm -rf "${workdir}" "$comp_file"
         done < <(jq -c '.components[]' <<< "${snapshot_json}")
 
