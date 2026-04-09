@@ -446,12 +446,17 @@ spec:
             fi
 
             if [[ "${is_signed}" != "true" ]]; then
-                # RPM exists but is not signed - treat as needing signing
-                echo "Warning: RPM exists in signed domain but is NOT signed!" >&2
+                echo "ERROR: RPM exists in signed domain but is NOT signed!" >&2
                 echo "RPM: ${rpmname}-${version}-${release}.${arch}" >&2
-                echo "This indicates a previous upload without proper signing." >&2
-                echo "Will re-sign this RPM." >&2
-                return 2  # Not found/needs signing
+                echo "Repository: ${repo_name}" >&2
+                echo "" >&2
+                echo "This is an invalid state that requires manual intervention." >&2
+                echo "The unsigned RPM must be removed from the signed Pulp domain" >&2
+                echo "before the pipeline can proceed." >&2
+                echo "" >&2
+                echo "Please contact the Pulp administrator to remove this RPM" >&2
+                echo "from the '${SIGNED_RPMS_DOMAIN}' domain, then re-run the release." >&2
+                return 1  # Error - manual intervention required
             fi
 
             # === PAYLOADDIGEST verification ===
