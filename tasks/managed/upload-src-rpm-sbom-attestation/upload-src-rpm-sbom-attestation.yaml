@@ -133,10 +133,9 @@ spec:
       computeResources:
         limits:
           memory: 512Mi
-          cpu: 350m
         requests:
           memory: 512Mi
-          cpu: 350m
+          cpu: 1
       volumeMounts:
         - name: pulp-secret-name-vol
           mountPath: "/etc/secrets"
