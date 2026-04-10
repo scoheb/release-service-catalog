@@ -722,6 +722,7 @@ spec:
       runAfter:
         - populate-release-notes
     - name: rh-sign-rpm
+      retries: 5
       when:
         - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
           operator: in
