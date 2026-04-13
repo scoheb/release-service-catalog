@@ -20,8 +20,6 @@ check_env_vars() {
     declare -A required_vars=(
         ["GITHUB_TOKEN"]="Missing GITHUB_TOKEN"
         ["VAULT_PASSWORD_FILE"]="Missing VAULT_PASSWORD_FILE"
-        ["RELEASE_CATALOG_GIT_URL"]="Missing RELEASE_CATALOG_GIT_URL"
-        ["RELEASE_CATALOG_GIT_REVISION"]="Missing RELEASE_CATALOG_GIT_REVISION"
     )
 
     # Check core required variables
@@ -31,6 +29,23 @@ check_env_vars() {
             missing_vars=$((missing_vars + 1))
         fi
     done
+
+    # Validate pipeline reference mode: bundle XOR git, never both
+    if [ -n "${RELEASE_CATALOG_BUNDLE_REF}" ]; then
+        if [ -n "${RELEASE_CATALOG_GIT_URL}" ] || [ -n "${RELEASE_CATALOG_GIT_REVISION}" ]; then
+            echo "❌ error: RELEASE_CATALOG_BUNDLE_REF cannot be used together with" \
+                 "RELEASE_CATALOG_GIT_URL/RELEASE_CATALOG_GIT_REVISION"
+            missing_vars=$((missing_vars + 1))
+        else
+            echo "✅ Using bundle resolver: ${RELEASE_CATALOG_BUNDLE_REF}"
+        fi
+    elif [ -z "${RELEASE_CATALOG_GIT_URL}" ] || [ -z "${RELEASE_CATALOG_GIT_REVISION}" ]; then
+        echo "❌ error: Either RELEASE_CATALOG_BUNDLE_REF or both RELEASE_CATALOG_GIT_URL" \
+             "and RELEASE_CATALOG_GIT_REVISION must be set"
+        missing_vars=$((missing_vars + 1))
+    else
+        echo "✅ Using git resolver: ${RELEASE_CATALOG_GIT_URL}@${RELEASE_CATALOG_GIT_REVISION}"
+    fi
 
     # Check variables from test.env files (static list of all variables found in test.env files)
     echo "Checking test environment variables..."
@@ -89,6 +104,29 @@ check_env_vars() {
     else
       log_warning "KUBECONFIG is not set. Assuming kubectl is configured correctly."
     fi
+
+    # Build the pipelineRef YAML block for envsubst into RPA templates.
+    # Exported so envsubst can substitute ${RELEASE_CATALOG_PIPELINE_REF} in rpa.yaml.
+    if [ -n "${RELEASE_CATALOG_BUNDLE_REF}" ]; then
+        export RELEASE_CATALOG_PIPELINE_REF="params:
+        - name: bundle
+          value: \"${RELEASE_CATALOG_BUNDLE_REF}\"
+        - name: name
+          value: \"${RELEASE_CATALOG_PIPELINE_NAME:-}\"
+        - name: kind
+          value: Pipeline
+      resolver: bundles"
+    else
+        export RELEASE_CATALOG_PIPELINE_REF="params:
+        - name: url
+          value: \"${RELEASE_CATALOG_GIT_URL}\"
+        - name: revision
+          value: \"${RELEASE_CATALOG_GIT_REVISION}\"
+        - name: pathInRepo
+          value: \"${RELEASE_CATALOG_PIPELINE_PATH:-}\"
+      resolver: git"
+    fi
+
     echo "Environment variable check complete."
 }
 
@@ -302,14 +340,24 @@ create_kubernetes_resources() {
     resolve_symlinks_for_kustomize "${SUITE_DIR}/resources/tenant" "$tmpDir/tenant"
     resolve_symlinks_for_kustomize "${SUITE_DIR}/resources/managed" "$tmpDir/managed"
 
+    # First pass: run envsubst on resource YAML files (not kustomization.yaml)
+    # before kustomize, so multiline variables like RELEASE_CATALOG_PIPELINE_REF
+    # are expanded into valid YAML before kustomize parses the files.
+    echo "Substituting environment variables in resource files..."
+    while IFS= read -r -d '' yaml_file; do
+        envsubst < "$yaml_file" > "${yaml_file}.tmp" && mv "${yaml_file}.tmp" "$yaml_file"
+    done < <(find "$tmpDir" -name "*.yaml" ! -name "kustomization.yaml" -print0)
+
     # Apply infrastructure secrets first (if they exist) - these persist across test runs
     local managed_infra_secrets_file="$tmpDir/managed/secrets/managed-infra-secrets.yaml"
     if [ -f "${managed_infra_secrets_file}" ]; then
         echo "Applying infrastructure secrets (these persist across test runs)..."
-        envsubst < "${managed_infra_secrets_file}" > "$tmpDir/managed-infra-resources.yaml"
-        kubectl apply -f "$tmpDir/managed-infra-resources.yaml" -n "${managed_namespace}"
+        kubectl apply -f "${managed_infra_secrets_file}" -n "${managed_namespace}"
     fi
 
+    # Second pass: pipe kustomize output through envsubst to catch variables
+    # from kustomization.yaml (e.g. namespace references) that weren't in the
+    # first pass.
     echo "Building and applying tenant resources..."
     kustomize build "$tmpDir/tenant" | envsubst > "$tmpDir/tenant-resources.yaml"
     kubectl create -f "$tmpDir/tenant-resources.yaml"

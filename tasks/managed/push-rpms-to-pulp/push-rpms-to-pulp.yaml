@@ -184,6 +184,22 @@ spec:
           value: $(params.dataDir)
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
+    - name: setup-pulp-helpers
+      computeResources:
+        limits:
+          memory: 64Mi
+        requests:
+          memory: 64Mi
+          cpu: 30m
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/setup-pulp-helpers/setup-pulp-helpers.yaml
     - name: push-rpms-to-pulp
       image: quay.io/konflux-ci/release-service-utils@sha256:5546fa78d3c88d7b6a2e8cff8902f7757f00541d0bbaf113b9f293133894afa3
       computeResources:
@@ -199,161 +215,14 @@ spec:
         #!/bin/bash
         set -euo pipefail
 
-        CONFIG_FILE_CONTENT="$(cat /etc/secrets/cli.toml)"
+        # Source Pulp helper functions
+        # shellcheck source=/dev/null
+        source /var/workdir/pulp-helpers.sh
 
         set +x
-        echo "${CONFIG_FILE_CONTENT:?}" > "/tmp/cli.toml"
-        export PULP_CONFIG_FILE="/tmp/cli.toml"
 
-        # Helpers to read cli.toml values (return empty string when not found)
-        toml_get_optional() {
-          local key="$1"
-          if [[ ! "${key}" =~ ^[A-Za-z0-9_]+$ ]]; then
-            echo "Error: Invalid cli.toml key '${key}'" >&2
-            return 1
-          fi
-
-          # Simple quoted-string extractor.
-          # Accepts:
-          # - top-level: key = "value"  (before any [table] header)
-          # - [cli] table: [cli] ... key = "value"
-          # Handles leading whitespace and ignores blank/comment lines.
-          local line current_table=""
-          while IFS= read -r line || [[ -n "${line}" ]]; do
-            # Table header: [cli]
-            if [[ "${line}" =~ ^[[:space:]]*\\[([^]]+)\\][[:space:]]*$ ]]; then
-              current_table="${BASH_REMATCH[1]}"
-              continue
-            fi
-
-            # Skip comments/blank lines
-            if [[ "${line}" =~ ^[[:space:]]*# ]] || [[ "${line}" =~ ^[[:space:]]*$ ]]; then
-              continue
-            fi
-
-            # Only parse top-level or [cli]
-            if [[ -n "${current_table}" && "${current_table}" != "cli" ]]; then
-              continue
-            fi
-
-            if [[ "${line}" =~ ^[[:space:]]*${key}[[:space:]]*= ]]; then
-              # Extract the first quoted string value. (Bash regex does not interpret \r/\n escapes here.)
-              if [[ "${line}" =~ \"([^\"]*)\" ]]; then
-                echo "${BASH_REMATCH[1]}"
-                return 0
-              fi
-              if [[ "${line}" =~ \'([^\']*)\' ]]; then
-                echo "${BASH_REMATCH[1]}"
-                return 0
-              fi
-              echo ""
-              return 0
-            fi
-          done < "${PULP_CONFIG_FILE}"
-
-          echo ""
-          return 0
-        }
-
-        toml_get_required() {
-          local key="$1"
-          local value
-          value="$(toml_get_optional "${key}")"
-          if [[ -z "${value}" ]]; then
-            echo "Error: Missing required '${key}' in cli.toml" >&2
-            return 1
-          fi
-          echo "${value}"
-        }
-
-        # Extract credentials from cli.toml
-        PULP_BASE_URL="$(toml_get_required "base_url" | sed 's:/*$::')" || exit 1
-        CLIENT_ID="$(toml_get_optional "client_id")"
-        CLIENT_SECRET="$(toml_get_optional "client_secret")"
-        PULP_USERNAME="$(toml_get_optional "username")"
-        PULP_PASSWORD="$(toml_get_optional "password")"
-        TOKEN_URL="https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
-
-        # Detect auth method (do not log secrets)
-        AUTH_METHOD="unknown"
-        if [[ -n "${PULP_USERNAME}" && -n "${PULP_PASSWORD}" ]]; then
-          AUTH_METHOD="basic"
-        elif [[ -n "${CLIENT_ID}" && -n "${CLIENT_SECRET}" ]]; then
-          AUTH_METHOD="oauth2-bearer"
-        fi
-        echo "Auth method detected for Pulp API calls: ${AUTH_METHOD}"
-
-        # Function to get OAuth2 access token
-
-        get_access_token() {
-          if [[ -z "${CLIENT_ID}" || -z "${CLIENT_SECRET}" ]]; then
-            echo "Error: client_id/client_secret not present in cli.toml; cannot use OAuth2 Bearer token flow" >&2
-            return 1
-          fi
-          local token
-          token=$(curl --retry 3 -s -X POST "$TOKEN_URL" \
-            -u "${CLIENT_ID}:${CLIENT_SECRET}" \
-            -d "grant_type=client_credentials" \
-            -d "scope=api.console" | jq -r '.access_token')
-
-          if [[ -z "$token" || "$token" == "null" ]]; then
-            echo "Error: Failed to get OAuth2 access token" >&2
-            return 1
-          fi
-          echo "$token"
-        }
-
-        # Get Authorization header for curl based on available credentials.
-        # Uses AUTH_METHOD computed above (basic preferred when username/password present).
-        get_auth_header() {
-          case "${AUTH_METHOD}" in
-            basic)
-              local basic
-              basic="$(printf '%s' "${PULP_USERNAME}:${PULP_PASSWORD}" | base64 -w0)"
-              echo "Authorization: Basic ${basic}"
-              return 0
-              ;;
-            oauth2-bearer)
-              local access_token
-              access_token="$(get_access_token)" || return 1
-              echo "Authorization: Bearer ${access_token}"
-              return 0
-              ;;
-            *)
-              echo "Error: No supported credentials found in cli.toml." >&2
-              echo "Provide either username/password or client_id/client_secret." >&2
-              return 1
-              ;;
-          esac
-        }
-
-        # Poll Pulp task until completed/failed. $1 = task URL. Returns 0 if completed, 1 on failure/timeout.
-        wait_for_pulp_task() {
-          local task_url="$1"
-          local auth_header="$2"
-          local max_wait_secs="${3:-300}"
-          local poll_interval_secs="${4:-5}"
-          local elapsed=0
-          local state response
-          while [[ ${elapsed} -lt ${max_wait_secs} ]]; do
-            response="$(curl --retry 3 -s -H "${auth_header}" "${task_url}")"
-            state="$(jq -r '.state // empty' <<< "${response}")"
-            if [[ "${state}" == "completed" ]]; then
-              echo "Pulp task completed: ${task_url}"
-              return 0
-            fi
-            if [[ "${state}" == "failed" ]]; then
-              echo "Error: Pulp task failed: ${task_url}" >&2
-              jq -r '.error // .description // "No details"' <<< "${response}" >&2
-              return 1
-            fi
-            echo "Waiting for Pulp task (state=${state}, ${elapsed}s elapsed)..."
-            sleep "${poll_interval_secs}"
-            (( elapsed += poll_interval_secs )) || true
-          done
-          echo "Error: Timeout waiting for Pulp task: ${task_url}" >&2
-          return 1
-        }
+        # Initialize Pulp configuration and authentication
+        pulp_init_config /etc/secrets
 
         # Function to add content to a repository via API; waits for modify task to complete.
         add_content_to_repo() {
@@ -364,7 +233,7 @@ spec:
           # Disable command echoing for sensitive operations
           set +x
           local auth_header
-          auth_header="$(get_auth_header)" || return 1
+          auth_header="$(pulp_get_auth_header)" || return 1
 
           # Get repository href
           local repo_href
@@ -405,7 +274,8 @@ spec:
             echo "${body}" >&2
             return 1
           fi
-          local task_href task_url
+          local task_href task_url pkg_count
+          pkg_count="$(jq 'length' <<< "${hrefs_json}")"
           task_href="$(jq -r '.task // empty' <<< "${body}")"
           if [[ -n "${task_href}" && "${task_href}" != "null" ]]; then
             if [[ "${task_href}" == http://* || "${task_href}" == https://* ]]; then
@@ -414,7 +284,8 @@ spec:
               task_url="${PULP_BASE_URL}${task_href}"
             fi
             set +x
-            wait_for_pulp_task "${task_url}" "${auth_header}" "${PULP_TASK_TIMEOUT}" 5
+            pulp_wait_for_task "${task_url}" "${auth_header}" "${PULP_TASK_TIMEOUT}" 5 \
+              "Add ${pkg_count} package(s) to ${repo_name}"
             local wait_rc=$?
             set -x
             if [[ ${wait_rc} -ne 0 ]]; then
@@ -539,7 +410,7 @@ spec:
           local repo_name="$1"
           local auth_header repo_href
           set +x
-          auth_header="$(get_auth_header)" || return 1
+          auth_header="$(pulp_get_auth_header)" || return 1
           set -x
           repo_href=$(
             set +x
@@ -620,7 +491,7 @@ spec:
           local auth_header response count
           {
             set +x
-            auth_header="$(get_auth_header)" || return 1
+            auth_header="$(pulp_get_auth_header)" || return 1
             response="$(curl --retry 3 -s -H "${auth_header}" \
               "${query_url}")"
             set -x

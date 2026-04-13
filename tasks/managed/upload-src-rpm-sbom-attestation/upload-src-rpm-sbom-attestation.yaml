@@ -28,6 +28,11 @@ spec:
       type: string
       description: >-
         The name of the secret containing the Pulp cli.toml file. It must have the cli.toml key
+    - name: pulpTaskTimeout
+      type: string
+      description: >-
+        Maximum time in seconds to wait for Pulp async tasks to complete (default 7200 = 2 hours)
+      default: "7200"
     - name: ociStorage
       description: The OCI repository where the Trusted Artifacts are stored
       type: string
@@ -103,6 +108,8 @@ spec:
         value: "$(params.trustedArtifactsDebug)"
       - name: PULP_DOMAIN
         value: "$(params.PULP_DOMAIN)"
+      - name: PULP_TASK_TIMEOUT
+        value: "$(params.pulpTaskTimeout)"
     securityContext:
       runAsUser: 1001
   steps:
@@ -128,6 +135,23 @@ spec:
           value: $(params.dataDir)
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
+    - name: setup-pulp-helpers
+      computeResources:
+        limits:
+          memory: 64Mi
+          cpu: 30m
+        requests:
+          memory: 64Mi
+          cpu: 30m
+      ref:
+        resolver: "git"
+        params:
+          - name: url
+            value: $(params.taskGitUrl)
+          - name: revision
+            value: $(params.taskGitRevision)
+          - name: pathInRepo
+            value: stepactions/setup-pulp-helpers/setup-pulp-helpers.yaml
     - name: upload
       image: quay.io/konflux-ci/release-service-utils@sha256:2f9e6863e82bbc9ddce5a290f3fd0e87657c475e3de8a832b2ef7f8d0671e7d3
       computeResources:
@@ -144,6 +168,10 @@ spec:
         set -euo pipefail
         set +x
 
+        # Source Pulp helper functions
+        # shellcheck source=/dev/null
+        source /var/workdir/pulp-helpers.sh
+
         # Set the maximum attachment size for cosign to 200MB
         COSIGN_MAX_ATTACHMENT_SIZE=200000000
         export COSIGN_MAX_ATTACHMENT_SIZE
@@ -154,13 +182,8 @@ spec:
           exit 1
         fi
 
-        CONFIG_FILE_CONTENT="$(cat /etc/secrets/cli.toml || true)"
-        if [[ -z "${CONFIG_FILE_CONTENT}" ]]; then
-          echo "Error: Missing cli.toml in secret $(params.PULP_SECRET_NAME)" >&2
-          exit 1
-        fi
-        echo "${CONFIG_FILE_CONTENT:?}" > "/tmp/cli.toml"
-        export PULP_CONFIG_FILE="/tmp/cli.toml"
+        # Initialize Pulp configuration and authentication
+        pulp_init_config /etc/secrets
 
         METADATA_REPO_NAME="metadata"
         metadata_repo_exists=$(pulp --config "$PULP_CONFIG_FILE" --domain "${PULP_DOMAIN}" \
@@ -300,12 +323,9 @@ spec:
               ;;
             2)
               echo "Uploading SBOM to Pulp: ${sbom_relative_path}"
-              upload_response=$(pulp --config "$PULP_CONFIG_FILE" --domain "${PULP_DOMAIN}" \
-                file content upload \
-                --repository "${METADATA_REPO_NAME}" \
-                --file "${sbom_local_file}" \
-                --relative-path "${sbom_relative_path}" 2>&1) || {
-                echo "Error: Failed to upload SBOM for ${component_name}: ${upload_response}" >&2
+              pulp_file_upload "${PULP_DOMAIN}" "${METADATA_REPO_NAME}" \
+                "${sbom_local_file}" "${sbom_relative_path}" "${PULP_TASK_TIMEOUT}" || {
+                echo "Error: Failed to upload SBOM for ${component_name}" >&2
                 exit 1
               }
               echo "SBOM uploaded successfully for ${component_name}"
@@ -329,12 +349,9 @@ spec:
               ;;
             2)
               echo "Uploading attestation to Pulp: ${att_relative_path}"
-              att_upload_response=$(pulp --config "$PULP_CONFIG_FILE" --domain "${PULP_DOMAIN}" \
-                file content upload \
-                --repository "${METADATA_REPO_NAME}" \
-                --file "${att_local_file}" \
-                --relative-path "${att_relative_path}" 2>&1) || {
-                echo "Error: Failed to upload attestation for ${component_name}: ${att_upload_response}" >&2
+              pulp_file_upload "${PULP_DOMAIN}" "${METADATA_REPO_NAME}" \
+                "${att_local_file}" "${att_relative_path}" "${PULP_TASK_TIMEOUT}" || {
+                echo "Error: Failed to upload attestation for ${component_name}" >&2
                 exit 1
               }
               echo "Attestation uploaded successfully for ${component_name}"

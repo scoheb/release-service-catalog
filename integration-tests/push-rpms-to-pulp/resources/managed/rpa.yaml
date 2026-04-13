@@ -77,14 +77,7 @@ spec:
   origin: ${tenant_namespace}
   pipeline:
     pipelineRef:
-      params:
-        - name: url
-          value: "${RELEASE_CATALOG_GIT_URL}"
-        - name: revision
-          value: "${RELEASE_CATALOG_GIT_REVISION}"
-        - name: pathInRepo
-          value: pipelines/managed/push-rpms-to-pulp/push-rpms-to-pulp.yaml
-      resolver: git
+      ${RELEASE_CATALOG_PIPELINE_REF}
     taskRunSpecs:
       - pipelineTaskName: verify-access-to-resources
         stepSpecs:

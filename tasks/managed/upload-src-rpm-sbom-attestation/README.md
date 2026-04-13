@@ -17,6 +17,7 @@ The task:
 | snapshotPath            | Path to the JSON Snapshot spec in the data workspace                                                                       | No       | -                    |
 | PULP_DOMAIN             | The domain to use for Pulp operations                                                                                      | No       | -                    |
 | PULP_SECRET_NAME        | The name of the secret containing the Pulp cli.toml file. It must have the cli.toml key                                    | No       | -                    |
+| pulpTaskTimeout         | Maximum time in seconds to wait for Pulp async tasks to complete (default 7200 = 2 hours)                                  | Yes      | 7200                 |
 | ociStorage              | The OCI repository where the Trusted Artifacts are stored                                                                  | Yes      | empty                |
 | ociArtifactExpiresAfter | Expiration date for the trusted artifacts created in the OCI repository. An empty string means the artifacts do not expire | Yes      | 1d                   |
 | trustedArtifactsDebug   | Flag to enable debug logging in trusted artifacts. Set to a non-empty string to enable                                     | Yes      | ""                   |
