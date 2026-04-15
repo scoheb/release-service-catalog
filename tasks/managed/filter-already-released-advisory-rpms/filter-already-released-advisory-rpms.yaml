@@ -650,13 +650,11 @@ spec:
         UNRELEASED_FILE="$FILTER_RESULTS_DIR/unreleased_rpms.json"
 
         # === Phase 4: Validate Pulp digests for in-advisory RPMs ===
-        # RPMs in advisories but not published should be moved to unreleased list
+        # Advisory is authoritative - if RPM is in advisory, it was released (regardless of Pulp state)
+        # This check validates that any published RPMs match expected digests (prevents rebuilds)
         if [[ -f "$IN_ADVISORY_FILE" ]]; then
           IN_ADVISORY_COUNT=$(jq 'length' "$IN_ADVISORY_FILE")
           echo "Validating Pulp digests for $IN_ADVISORY_COUNT in-advisory RPMs..."
-
-          ACTUALLY_RELEASED_FILE=$(mktemp)
-          echo "[]" > "$ACTUALLY_RELEASED_FILE"
 
           while IFS= read -r rpm_entry; do
             entry_file=$(mktemp)
@@ -680,29 +678,23 @@ spec:
 
             case $pulp_status in
               0)
-                # RPM is in advisory AND published in Pulp with matching digest
-                echo "  -> Published in Pulp, digest matches. Already released."
-                UPDATED=$(jq --slurpfile e "$entry_file" '. + $e' "$ACTUALLY_RELEASED_FILE")
-                echo "$UPDATED" > "$ACTUALLY_RELEASED_FILE"
+                echo "  -> Published in Pulp with matching digest"
                 ;;
               2)
-                # RPM is in advisory but NOT published in Pulp - treat as unreleased
-                echo "  -> Not published in Pulp. Advisory is stale, RPM needs upload."
-                UPDATED=$(jq --slurpfile e "$entry_file" '. + $e' "$UNRELEASED_FILE")
-                echo "$UPDATED" > "$UNRELEASED_FILE"
+                echo "  -> Not published in Pulp yet (advisory is authoritative)"
                 ;;
               3)
                 echo "Error: Cannot rebuild RPM with same NEVR but different digest"
                 echo "RPM: ${rpmname}-${version}-${release}.${arch}"
                 echo "Snapshot sha256: ${sha256}"
                 echo "Action required: Bump version or release number"
-                rm -f "$entry_file" "$ACTUALLY_RELEASED_FILE"
+                rm -f "$entry_file"
                 rm -rf "$FILTER_RESULTS_DIR"
                 exit 1
                 ;;
               *)
                 echo "Error: Failed to check Pulp digest (status=$pulp_status)"
-                rm -f "$entry_file" "$ACTUALLY_RELEASED_FILE"
+                rm -f "$entry_file"
                 rm -rf "$FILTER_RESULTS_DIR"
                 exit 1
                 ;;
@@ -710,10 +702,6 @@ spec:
 
             rm -f "$entry_file"
           done < <(jq -c '.[]' "$IN_ADVISORY_FILE")
-
-          ACTUALLY_RELEASED_COUNT=$(jq 'length' "$ACTUALLY_RELEASED_FILE")
-          echo "RPMs actually released (in advisory + published in Pulp): $ACTUALLY_RELEASED_COUNT"
-          rm -f "$ACTUALLY_RELEASED_FILE"
         fi
 
         # === Phase 5: Process unreleased RPMs and filter snapshot ===
@@ -729,7 +717,7 @@ spec:
         UNRELEASED_COMPONENTS=$(jq -c '[.[].name] | unique' "$UNRELEASED_FILE")
 
         if [[ "$UNRELEASED_COUNT" -eq 0 ]]; then
-          echo "All RPMs in the snapshot are already published and accessible to users."
+          echo "All RPMs in the snapshot have already been released in advisories."
           echo -n "true" > "$(results.skip_release.path)"
           echo -n "$latestAdvisoryUrl" > "$(results.latest_advisory_url.path)"
           echo -n "$latestAdvisoryInternalUrl" > "$(results.latest_advisory_internal_url.path)"
