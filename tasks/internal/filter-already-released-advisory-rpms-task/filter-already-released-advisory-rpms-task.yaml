@@ -214,13 +214,13 @@ spec:
               '.spec.content.artifacts // [] | [.[].purl] | map(select(. != null))' \
               "$ADVISORY_FILE")
 
-            # Add each purl from this advisory to the map
-            while IFS= read -r purl; do
-              [[ -z "$purl" || "$purl" == "null" ]] && continue
-              UPDATED=$(jq --arg purl "$purl" --arg advisory "$ADVISORY_FILE" \
-                '.[$purl] = $advisory' "$PURL_TO_ADVISORY_MAP_FILE")
-              echo "$UPDATED" > "$PURL_TO_ADVISORY_MAP_FILE"
-            done < <(jq -r '.[]' <<< "$ADVISORY_PURLS")
+            # Build map for all purls from this advisory at once (much faster than one-by-one)
+            ADVISORY_MAP=$(jq -n --arg advisory "$ADVISORY_FILE" --argjson purls "$ADVISORY_PURLS" \
+              '$purls | reduce .[] as $purl ({}; .[$purl] = $advisory)')
+
+            # Merge this advisory's map into the main map
+            UPDATED=$(jq -s '.[0] * .[1]' "$PURL_TO_ADVISORY_MAP_FILE" - <<< "$ADVISORY_MAP")
+            echo "$UPDATED" > "$PURL_TO_ADVISORY_MAP_FILE"
           fi
         done
 
