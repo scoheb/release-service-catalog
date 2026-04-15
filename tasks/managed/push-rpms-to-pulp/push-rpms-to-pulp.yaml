@@ -560,11 +560,49 @@ spec:
           }
         }
 
+        # Get the published repository version for a repo (what users can actually access)
+        # Returns empty string if nothing is published
+        get_repo_published_version_href() {
+          local repo_name="$1"
+          local auth_header dist_response publication_href publication_json repo_version_href
+
+          set +x
+          auth_header="$(get_auth_header)" || return 1
+
+          # Get distribution for this repo
+          dist_response=$(curl --retry 3 -s -H "${auth_header}" \
+            "${PULP_BASE_URL}/api/pulp/${PULP_DOMAIN}/api/v3/distributions/rpm/rpm/?name=${repo_name}")
+
+          # Check if distribution has a repository_version (direct link)
+          repo_version_href=$(jq -r '.results[0].repository_version // empty' <<< "${dist_response}")
+          if [[ -n "${repo_version_href}" && "${repo_version_href}" != "null" ]]; then
+            set -x
+            echo "${repo_version_href}"
+            return 0
+          fi
+
+          # Otherwise check if it has a publication
+          publication_href=$(jq -r '.results[0].publication // empty' <<< "${dist_response}")
+          if [[ -z "${publication_href}" || "${publication_href}" == "null" ]]; then
+            # No publication → nothing is published
+            set -x
+            echo ""
+            return 0
+          fi
+
+          # Get the repository version from the publication
+          publication_json=$(curl --retry 3 -s -H "${auth_header}" "${PULP_BASE_URL}${publication_href}")
+          repo_version_href=$(jq -r '.repository_version // empty' <<< "${publication_json}")
+          set -x
+          echo "${repo_version_href}"
+        }
+
         # Check if rpm exists in repo and compare digest with local file
+        # Only checks PUBLISHED content - unpublished RPMs can be overwritten
         # Returns:
-        #   0 -> exists and digest matches
-        #   2 -> does not exist
-        #   3 -> exists but digest differs
+        #   0 -> exists in published content and digest matches
+        #   2 -> does not exist in published content (may exist unpublished)
+        #   3 -> exists in published content but digest differs
         check_rpm_exists_with_digest() {
           local repo_name="$1"
           local file_path="$2"
@@ -592,9 +630,15 @@ spec:
           local local_sha
           local_sha="$(sha256sum "${file_path}" | awk '{print $1}')"
 
-          # Resolve latest repository version href
+          # Check PUBLISHED version, not latest version
           local repo_version_href
-          repo_version_href="$(get_repo_latest_version_href "${repo_name}")" || return 1
+          repo_version_href="$(get_repo_published_version_href "${repo_name}")" || return 1
+
+          # If no published version, treat as "not found" (allows overwrite of unpublished content)
+          if [[ -z "${repo_version_href}" || "${repo_version_href}" == "null" ]]; then
+            echo "No published version for ${repo_name}. RPM not accessible to users - allowing upload." >&2
+            return 2
+          fi
 
           # Build query URL using NEVRA
           local enc_repo_version enc_name enc_epoch enc_version enc_release enc_arch query_url
