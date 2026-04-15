@@ -202,33 +202,31 @@ spec:
           exit 0
         fi
 
-        # === Phase 4: Extract all purls from all advisories (batch) ===
-        echo "Extracting purls from advisories..."
-        ALL_ADVISORY_PURLS_FILE=/tmp/all_advisory_purls.json
-        echo "[]" > "$ALL_ADVISORY_PURLS_FILE"
+        # === Phase 4: Extract all purls from all advisories and track which advisory each came from ===
+        echo "Extracting purls from advisories and building purl-to-advisory mapping..."
+        PURL_TO_ADVISORY_MAP_FILE=/tmp/purl_to_advisory_map.json
+        echo "{}" > "$PURL_TO_ADVISORY_MAP_FILE"
 
-        LATEST_ADVISORY_FILE=""
         for ADVISORY_SUBDIR in $EXISTING_ADVISORIES; do
           ADVISORY_FILE="${ADVISORY_BASE_DIR}/${ADVISORY_SUBDIR}/advisory.yaml"
           if [[ -f "$ADVISORY_FILE" ]]; then
             ADVISORY_PURLS=$(yq -o=json \
               '.spec.content.artifacts // [] | [.[].purl] | map(select(. != null))' \
               "$ADVISORY_FILE")
-            MERGED=$(jq --argjson new "$ADVISORY_PURLS" \
-              '. + $new | unique' "$ALL_ADVISORY_PURLS_FILE")
-            echo "$MERGED" > "$ALL_ADVISORY_PURLS_FILE"
 
-            if [[ -z "$LATEST_ADVISORY_FILE" ]]; then
-              if [[ "$(jq 'length' <<< "$ADVISORY_PURLS")" -gt 0 ]]; then
-                LATEST_ADVISORY_FILE="$ADVISORY_FILE"
-              fi
-            fi
+            # Add each purl from this advisory to the map
+            while IFS= read -r purl; do
+              [[ -z "$purl" || "$purl" == "null" ]] && continue
+              UPDATED=$(jq --arg purl "$purl" --arg advisory "$ADVISORY_FILE" \
+                '.[$purl] = $advisory' "$PURL_TO_ADVISORY_MAP_FILE")
+              echo "$UPDATED" > "$PURL_TO_ADVISORY_MAP_FILE"
+            done < <(jq -r '.[]' <<< "$ADVISORY_PURLS")
           fi
         done
 
-        echo "Total unique purls from advisories: $(jq 'length' "$ALL_ADVISORY_PURLS_FILE")"
+        echo "Total unique purls from advisories: $(jq 'keys | length' "$PURL_TO_ADVISORY_MAP_FILE")"
 
-        # === Phase 5: Categorize RPMs ===
+        # === Phase 5: Categorize RPMs and track source advisories ===
         echo "Categorizing RPMs by advisory presence..."
 
         SNAPSHOT_FILE=/tmp/snapshot.json
@@ -239,19 +237,31 @@ spec:
         echo "[]" > "$UNRELEASED_FILE"
         echo "[]" > "$IN_ADVISORY_FILE"
 
+        # Track which advisories contain the in-advisory RPMs (for validation)
+        ADVISORY_SET_FILE=/tmp/advisory_set.json
+        echo "[]" > "$ADVISORY_SET_FILE"
+
         while IFS= read -r entry; do
           entry_file=/tmp/current_entry.json
           echo "$entry" > "$entry_file"
 
           purl=$(jq -r '.purl' "$entry_file")
 
-          IN_ADVISORY=$(jq --arg purl "$purl" \
-            'map(select(. == $purl)) | length > 0' "$ALL_ADVISORY_PURLS_FILE")
+          # Check if purl exists in the map
+          advisory_path=$(jq -r --arg purl "$purl" '.[$purl] // ""' "$PURL_TO_ADVISORY_MAP_FILE")
 
-          if [[ "$IN_ADVISORY" == "true" ]]; then
+          if [[ -n "$advisory_path" ]]; then
             # RPM found in advisory - add to in_advisory list for digest validation
             UPDATED=$(jq --slurpfile e "$entry_file" '. + $e' "$IN_ADVISORY_FILE")
             echo "$UPDATED" > "$IN_ADVISORY_FILE"
+
+            # Track which advisory this came from
+            advisory_already_tracked=$(jq --arg adv "$advisory_path" \
+              'map(select(. == $adv)) | length > 0' "$ADVISORY_SET_FILE")
+            if [[ "$advisory_already_tracked" == "false" ]]; then
+              UPDATED=$(jq --arg adv "$advisory_path" '. + [$adv]' "$ADVISORY_SET_FILE")
+              echo "$UPDATED" > "$ADVISORY_SET_FILE"
+            fi
           else
             # RPM not in any advisory - unreleased
             UPDATED=$(jq --slurpfile e "$entry_file" '. + $e' "$UNRELEASED_FILE")
@@ -264,8 +274,11 @@ spec:
         # === Phase 6: Output results ===
         UNRELEASED_COUNT=$(jq 'length' "$UNRELEASED_FILE")
         IN_ADVISORY_COUNT=$(jq 'length' "$IN_ADVISORY_FILE")
+        ADVISORY_SET_COUNT=$(jq 'length' "$ADVISORY_SET_FILE")
+
         echo "Unreleased RPMs: $UNRELEASED_COUNT"
         echo "In-advisory RPMs (need digest validation): $IN_ADVISORY_COUNT"
+        echo "Unique advisories containing in-advisory RPMs: $ADVISORY_SET_COUNT"
 
         # Create output directory for OCI artifact
         RESULTS_DIR=/tmp/filter-results
@@ -299,11 +312,13 @@ spec:
         echo "Filter results artifact: ${ARTIFACT_REF}"
         echo -n "${ARTIFACT_REF}" > "$(results.filter_results_artifact.path)"
 
-        # Set advisory URL if all RPMs were in advisories
-        if [[ "$UNRELEASED_COUNT" -eq 0 ]] && [[ -n "$LATEST_ADVISORY_FILE" ]]; then
-          echo "All RPMs found in advisories."
-          ADVISORY_TYPE=$(yq -r '.spec.type' "$LATEST_ADVISORY_FILE")
-          ADVISORY_NAME=$(yq -r '.metadata.name' "$LATEST_ADVISORY_FILE")
+        # Set advisory URL only if ALL RPMs are in advisories AND they all came from the SAME SINGLE advisory
+        if [[ "$UNRELEASED_COUNT" -eq 0 ]] && [[ "$ADVISORY_SET_COUNT" -eq 1 ]]; then
+          SINGLE_ADVISORY_FILE=$(jq -r '.[0]' "$ADVISORY_SET_FILE")
+          echo "All RPMs found in the same single advisory: ${SINGLE_ADVISORY_FILE}"
+
+          ADVISORY_TYPE=$(yq -r '.spec.type' "$SINGLE_ADVISORY_FILE")
+          ADVISORY_NAME=$(yq -r '.metadata.name' "$SINGLE_ADVISORY_FILE")
 
           if [[ "${GIT_REPO}" == *"/rhtap-release/"* ]]; then
             ADVISORY_URL_PREFIX="https://access.stage.redhat.com/errata"
@@ -312,11 +327,16 @@ spec:
           fi
 
           LATEST_ADVISORY_URL="${ADVISORY_URL_PREFIX}/${ADVISORY_TYPE}-${ADVISORY_NAME}"
-          LATEST_ADVISORY_INTERNAL_URL="${GIT_REPO//\.git/}/-/raw/main/${LATEST_ADVISORY_FILE}"
+          LATEST_ADVISORY_INTERNAL_URL="${GIT_REPO//\.git/}/-/raw/main/${SINGLE_ADVISORY_FILE}"
 
           echo -n "$LATEST_ADVISORY_URL" > "$(results.advisory_url.path)"
           echo -n "$LATEST_ADVISORY_INTERNAL_URL" > "$(results.advisory_internal_url.path)"
         else
+          if [[ "$ADVISORY_SET_COUNT" -gt 1 ]]; then
+            echo "RPMs found in multiple advisories ($ADVISORY_SET_COUNT). Not setting advisory_url."
+            echo "Advisories:"
+            jq -r '.[]' "$ADVISORY_SET_FILE"
+          fi
           echo -n "" > "$(results.advisory_url.path)"
           echo -n "" > "$(results.advisory_internal_url.path)"
         fi

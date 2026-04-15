@@ -307,14 +307,54 @@ spec:
           curl_auth -s "${PULP_BASE_URL}${repo_href}" | jq -r '.latest_version_href'
         }
 
-        # Check Pulp for RPM digest. Returns: 0=matches, 1=error, 2=not found, 3=mismatch
+        # Get the published repository version for a repo (what users can actually access)
+        # Returns empty string if nothing is published
+        get_repo_published_version_href() {
+          local repo_name="$1"
+          local dist_response publication_href publication_json repo_version_href
+
+          # Get distribution for this repo
+          dist_response=$(curl_auth -s \
+            "${PULP_BASE_URL}/api/pulp/${PULP_DOMAIN}/api/v3/distributions/rpm/rpm/?name=${repo_name}")
+
+          # Check if distribution has a repository_version (direct link)
+          repo_version_href=$(jq -r '.results[0].repository_version // empty' <<< "${dist_response}")
+          if [[ -n "${repo_version_href}" && "${repo_version_href}" != "null" ]]; then
+            echo "${repo_version_href}"
+            return 0
+          fi
+
+          # Otherwise check if it has a publication
+          publication_href=$(jq -r '.results[0].publication // empty' <<< "${dist_response}")
+          if [[ -z "${publication_href}" || "${publication_href}" == "null" ]]; then
+            # No publication → nothing is published
+            echo ""
+            return 0
+          fi
+
+          # Get the repository version from the publication
+          publication_json=$(curl_auth -s "${PULP_BASE_URL}${publication_href}")
+          repo_version_href=$(jq -r '.repository_version // empty' <<< "${publication_json}")
+          echo "${repo_version_href}"
+        }
+
+        # Check Pulp for RPM digest in PUBLISHED content only.
+        # Returns: 0=matches, 1=error, 2=not found/unpublished, 3=mismatch
         check_pulp_digest() {
           local repo_name="$1" rpmname="$2" epoch="$3" version="$4"
           local release="$5" arch="$6" expected_sha="$7"
 
           local endpoint="packages"
           local repo_version_href
-          repo_version_href="$(get_repo_latest_version_href "${repo_name}")" || return 1
+
+          # Check PUBLISHED version, not latest version
+          repo_version_href="$(get_repo_published_version_href "${repo_name}")" || return 1
+
+          # If no published version, treat as "not found" (allows overwrite)
+          if [[ -z "${repo_version_href}" || "${repo_version_href}" == "null" ]]; then
+            echo "  -> No published version for ${repo_name}. RPM not accessible to users." >&2
+            return 2
+          fi
 
           local query_url
           query_url="${PULP_BASE_URL}/api/pulp/${PULP_DOMAIN}/api/v3/content/rpm/${endpoint}/"
