@@ -311,31 +311,47 @@ spec:
         # Returns empty string if nothing is published
         get_repo_published_version_href() {
           local repo_name="$1"
-          local dist_response publication_href publication_json repo_version_href
+          local dist_response publication_href publication_json
+          local repo_version_href repo_href repo_json
 
           # Get distribution for this repo
           dist_response=$(curl_auth -s \
             "${PULP_BASE_URL}/api/pulp/${PULP_DOMAIN}/api/v3/distributions/rpm/rpm/?name=${repo_name}")
 
           # Check if distribution has a repository_version (direct link)
-          repo_version_href=$(jq -r '.results[0].repository_version // empty' <<< "${dist_response}")
+          repo_version_href=$(jq -r \
+            '.results[0].repository_version // empty' <<< "${dist_response}")
           if [[ -n "${repo_version_href}" && "${repo_version_href}" != "null" ]]; then
             echo "${repo_version_href}"
             return 0
           fi
 
           # Otherwise check if it has a publication
-          publication_href=$(jq -r '.results[0].publication // empty' <<< "${dist_response}")
-          if [[ -z "${publication_href}" || "${publication_href}" == "null" ]]; then
-            # No publication → nothing is published
-            echo ""
+          publication_href=$(jq -r \
+            '.results[0].publication // empty' <<< "${dist_response}")
+          if [[ -n "${publication_href}" && "${publication_href}" != "null" ]]; then
+            publication_json=$(curl_auth -s "${PULP_BASE_URL}${publication_href}")
+            repo_version_href=$(jq -r \
+              '.repository_version // empty' <<< "${publication_json}")
+            echo "${repo_version_href}"
             return 0
           fi
 
-          # Get the repository version from the publication
-          publication_json=$(curl_auth -s "${PULP_BASE_URL}${publication_href}")
-          repo_version_href=$(jq -r '.repository_version // empty' <<< "${publication_json}")
-          echo "${repo_version_href}"
+          # Fallback: check repository's latest version directly
+          repo_href=$(jq -r \
+            '.results[0].repository // empty' <<< "${dist_response}")
+          if [[ -n "${repo_href}" && "${repo_href}" != "null" ]]; then
+            repo_json=$(curl_auth -s \
+              "${PULP_BASE_URL}${repo_href}")
+            repo_version_href=$(jq -r \
+              '.latest_version_href // empty' <<< "${repo_json}")
+            if [[ -n "${repo_version_href}" && "${repo_version_href}" != "null" ]]; then
+              echo "${repo_version_href}"
+              return 0
+            fi
+          fi
+
+          echo ""
         }
 
         # Check Pulp for RPM digest in PUBLISHED content only.
@@ -394,11 +410,15 @@ spec:
 
         RPM_REPOS_JSON="$(jq -c '.mapping["rpm-repositories"] // []' "${DATA_FILE}")"
 
+        declare -A ARCH_REPO_INFO_CACHE
+        while IFS= read -r _repo_line; do
+          _arch="$(jq -r '.arch' <<< "$_repo_line")"
+          [[ -z "${ARCH_REPO_INFO_CACHE[$_arch]+x}" ]] && \
+            ARCH_REPO_INFO_CACHE["$_arch"]="$(jq -c '{repository_id, repository_name, distro}' <<< "$_repo_line")"
+        done < <(jq -c '.[]' <<< "$RPM_REPOS_JSON")
+
         get_repo_info_for_arch() {
-          local arch="$1"
-          jq -c --arg arch "${arch}" \
-            '.[] | select(.arch == $arch) | {repository_id, repository_name, distro}' \
-            <<< "${RPM_REPOS_JSON}" | head -1
+          echo "${ARCH_REPO_INFO_CACHE[$1]:-}"
         }
 
         should_exclude_file() {
@@ -447,9 +467,8 @@ spec:
         echo "Extracting RPMs and building purl data..."
         snapshot_json="$(jq '.' "${SNAPSHOT_FILE}")"
         TRANSFORMED_ENTRIES_FILE="$(mktemp)"
-        echo "[]" > "$TRANSFORMED_ENTRIES_FILE"
-        COMPONENT_RPMS_MAP_FILE="$(mktemp)"
-        echo "{}" > "$COMPONENT_RPMS_MAP_FILE"
+        : > "$TRANSFORMED_ENTRIES_FILE"
+        COMPONENT_RPMS_MAP_DIR="$(mktemp -d)"
 
         DEFAULT_ARCH_LIST=()
         IFS=',' read -ra _raw_default <<< "$(params.DEFAULT_ARCHITECTURES)"
@@ -458,18 +477,21 @@ spec:
           [[ -n "$x" ]] && DEFAULT_ARCH_LIST+=("$x")
         done
 
-        NOARCH_TARGET_REPOS_JSON="[]"
+        NOARCH_TARGET_REPOS=()
         for default_arch in "${DEFAULT_ARCH_LIST[@]}"; do
           repo_info="$(get_repo_info_for_arch "${default_arch}")"
-          [[ -n "${repo_info}" ]] && NOARCH_TARGET_REPOS_JSON="$(jq --argjson info "${repo_info}" \
-            '. + [$info]' <<< "${NOARCH_TARGET_REPOS_JSON}")"
+          [[ -n "${repo_info}" ]] && NOARCH_TARGET_REPOS+=("${repo_info}")
         done
 
+        json_escape() {
+          local s="$1"
+          s="${s//\\/\\\\}"
+          s="${s//\"/\\\"}"
+          echo -n "$s"
+        }
+
         while IFS= read -r component; do
-          comp_file="$(mktemp)"
-          echo "$component" > "$comp_file"
-          image="$(jq -r '.containerImage' "$comp_file")"
-          name="$(jq -r '.name' "$comp_file")"
+          IFS='|' read -r image name <<< "$(jq -r '[.containerImage, .name] | join("|")' <<< "$component")"
           echo "Processing component '${name}' (${image})" >&2
 
           workdir="$(mktemp -d)"
@@ -490,16 +512,15 @@ spec:
           )
 
           if [[ ${#files[@]} -eq 0 ]]; then
-            rm -rf "${workdir}" "$comp_file"
+            rm -rf "${workdir}"
             continue
           fi
 
           mapfile -t ARCHES < <(extract_arches_from_files files)
           [[ ${#ARCHES[@]} -eq 0 ]] && ARCHES=("${DEFAULT_ARCH_LIST[@]}")
 
-          # Use file for COMPONENT_RPMS to avoid ARG_MAX limit
           COMPONENT_RPMS_FILE="$(mktemp)"
-          echo "[]" > "$COMPONENT_RPMS_FILE"
+          : > "$COMPONENT_RPMS_FILE"
 
           for f in "${files[@]}"; do
             file_abs="${workdir}/files/${f}"
@@ -509,75 +530,74 @@ spec:
             IFS='|' read -r rpmname epoch version release arch <<< "${q}"
             [[ -z "${epoch}" || "${epoch}" == "(none)" ]] && epoch="0"
 
+            target_repos=()
             if [[ "${f}" == *.src.rpm ]]; then
               arch="src"
-              # Source RPMs use arch="src" in the mapping
               repo_info="$(get_repo_info_for_arch "src")"
               if [[ -n "${repo_info}" ]]; then
-                target_repos_json="[${repo_info}]"
+                target_repos=("${repo_info}")
               else
                 echo "Warning: No repository mapping for source arch, skipping ${f}" >&2
                 continue
               fi
             elif [[ "${f}" == *.noarch.rpm ]]; then
-              [[ "$(jq 'length' <<< "${NOARCH_TARGET_REPOS_JSON}")" -eq 0 ]] && continue
-              target_repos_json="${NOARCH_TARGET_REPOS_JSON}"
+              [[ ${#NOARCH_TARGET_REPOS[@]} -eq 0 ]] && continue
+              target_repos=("${NOARCH_TARGET_REPOS[@]}")
             else
               repo_info="$(get_repo_info_for_arch "${arch}")"
               [[ -z "${repo_info}" ]] && continue
-              target_repos_json="[${repo_info}]"
+              target_repos=("${repo_info}")
             fi
 
-            while IFS= read -r repo_obj; do
-              repo_name="$(jq -r '.repository_name' <<< "${repo_obj}")"
-              repo_id="$(jq -r '.repository_id' <<< "${repo_obj}")"
-              distro="$(jq -r '.distro' <<< "${repo_obj}")"
+            for repo_obj in "${target_repos[@]}"; do
+              IFS='|' read -r repo_name repo_id distro <<< \
+                "$(jq -r '[.repository_name, .repository_id, .distro] | join("|")' <<< "${repo_obj}")"
               purl="pkg:rpm/redhat/${rpmname}@${version}-${release}?arch=${arch}"
               [[ -n "${distro}" && "${distro}" != "null" ]] && purl="${purl}&distro=${distro}"
               [[ -n "${repo_id}" && "${repo_id}" != "null" ]] && purl="${purl}&repository_id=${repo_id}"
 
-              entry=$(jq -n \
-                --arg name "$name" --arg purl "$purl" --arg sha256 "$local_sha" \
-                --arg rpmname "$rpmname" --arg epoch "$epoch" --arg version "$version" \
-                --arg release "$release" --arg arch "$arch" \
-                --arg repository_name "$repo_name" --arg rpm "$f" \
-                --argjson targetRepo "$repo_obj" \
-                '{name: $name, purl: $purl, sha256: $sha256, rpmname: $rpmname,
-                  epoch: $epoch, version: $version, release: $release, arch: $arch,
-                  repository_name: $repository_name, rpm: $rpm, targetRepo: $targetRepo}')
-              # Append entry to file to avoid ARG_MAX limit
-              entry_tmp="$(mktemp)"
-              echo "$entry" > "$entry_tmp"
-              jq --slurpfile e "$entry_tmp" '. + $e' "$TRANSFORMED_ENTRIES_FILE" > "${TRANSFORMED_ENTRIES_FILE}.tmp"
-              mv "${TRANSFORMED_ENTRIES_FILE}.tmp" "$TRANSFORMED_ENTRIES_FILE"
-              rm -f "$entry_tmp"
+              _fmt='{"name":"%s","purl":"%s","sha256":"%s",'
+              _fmt+='"rpmname":"%s","epoch":"%s","version":"%s",'
+              _fmt+='"release":"%s","arch":"%s",'
+              _fmt+='"repository_name":"%s","rpm":"%s",'
+              _fmt+='"targetRepo":%s}\n'
+              # shellcheck disable=SC2059
+              printf "$_fmt" \
+                "$(json_escape "$name")" \
+                "$(json_escape "$purl")" "$local_sha" \
+                "$(json_escape "$rpmname")" "$epoch" \
+                "$(json_escape "$version")" \
+                "$(json_escape "$release")" "$arch" \
+                "$(json_escape "$repo_name")" \
+                "$(json_escape "$f")" "$repo_obj" \
+                >> "$TRANSFORMED_ENTRIES_FILE"
 
-              # Append to COMPONENT_RPMS_FILE using file operations
-              rpm_entry_tmp="$(mktemp)"
-              jq -n --arg rpm "$f" --arg sha "$local_sha" \
-                --arg rpmname "$rpmname" --arg epoch "$epoch" \
-                --arg version "$version" --arg release "$release" \
-                --arg arch "$arch" --argjson targetRepo "$repo_obj" \
-                '{rpm: $rpm, sha256: $sha, rpmname: $rpmname, epoch: $epoch,
-                 version: $version, release: $release, arch: $arch,
-                 targetRepos: [$targetRepo]}' > "$rpm_entry_tmp"
-              jq --slurpfile e "$rpm_entry_tmp" '. + $e' "$COMPONENT_RPMS_FILE" > "${COMPONENT_RPMS_FILE}.tmp"
-              mv "${COMPONENT_RPMS_FILE}.tmp" "$COMPONENT_RPMS_FILE"
-              rm -f "$rpm_entry_tmp"
-            done < <(jq -c '.[]' <<< "${target_repos_json}")
+              _rfmt='{"rpm":"%s","sha256":"%s",'
+              _rfmt+='"rpmname":"%s","epoch":"%s",'
+              _rfmt+='"version":"%s","release":"%s",'
+              _rfmt+='"arch":"%s","targetRepos":[%s]}\n'
+              # shellcheck disable=SC2059
+              printf "$_rfmt" \
+                "$(json_escape "$f")" "$local_sha" \
+                "$(json_escape "$rpmname")" "$epoch" \
+                "$(json_escape "$version")" \
+                "$(json_escape "$release")" \
+                "$arch" "$repo_obj" \
+                >> "$COMPONENT_RPMS_FILE"
+            done
           done
 
-          # Add component RPMs to map
-          jq --arg name "$name" --slurpfile rpms "$COMPONENT_RPMS_FILE" \
-            '. + {($name): $rpms[0]}' "$COMPONENT_RPMS_MAP_FILE" > "${COMPONENT_RPMS_MAP_FILE}.tmp"
-          mv "${COMPONENT_RPMS_MAP_FILE}.tmp" "$COMPONENT_RPMS_MAP_FILE"
+          if [[ -s "$COMPONENT_RPMS_FILE" ]]; then
+            jq -s '.' "$COMPONENT_RPMS_FILE" > "${COMPONENT_RPMS_MAP_DIR}/${name}.json"
+          fi
           rm -f "$COMPONENT_RPMS_FILE"
-          rm -rf "${workdir}" "$comp_file"
+          rm -rf "${workdir}"
         done < <(jq -c '.components[]' <<< "${snapshot_json}")
 
-        echo "Total transformed entries: $(jq 'length' "$TRANSFORMED_ENTRIES_FILE")"
+        TOTAL_ENTRIES=$(wc -l < "$TRANSFORMED_ENTRIES_FILE")
+        echo "Total transformed entries: $TOTAL_ENTRIES"
 
-        if [[ "$(jq 'length' "$TRANSFORMED_ENTRIES_FILE")" -eq 0 ]]; then
+        if [[ "$TOTAL_ENTRIES" -eq 0 ]]; then
           echo "No RPMs found in any component, skipping release"
           echo -n "true" > "$(results.skip_release.path)"
           echo -n "" > "$(results.latest_advisory_url.path)"
@@ -587,7 +607,7 @@ spec:
           exit 0
         fi
 
-        transformedSnapshot=$(gzip -c < "$TRANSFORMED_ENTRIES_FILE" | base64 -w 0)
+        transformedSnapshot=$(jq -s '.' "$TRANSFORMED_ENTRIES_FILE" | gzip -c | base64 -w 0)
 
         # === Phase 2: Create InternalRequest (no Pulp params) ===
         pipelinerun_label="internal-services.appstudio.openshift.io/pipelinerun-uid"
@@ -656,18 +676,7 @@ spec:
           IN_ADVISORY_COUNT=$(jq 'length' "$IN_ADVISORY_FILE")
           echo "Validating Pulp digests for $IN_ADVISORY_COUNT in-advisory RPMs..."
 
-          while IFS= read -r rpm_entry; do
-            entry_file=$(mktemp)
-            echo "$rpm_entry" > "$entry_file"
-
-            rpmname=$(jq -r '.rpmname' "$entry_file")
-            epoch=$(jq -r '.epoch' "$entry_file")
-            version=$(jq -r '.version' "$entry_file")
-            release=$(jq -r '.release' "$entry_file")
-            arch=$(jq -r '.arch' "$entry_file")
-            sha256=$(jq -r '.sha256' "$entry_file")
-            repo_name=$(jq -r '.repository_name' "$entry_file")
-
+          while IFS='|' read -r rpmname epoch version release arch sha256 repo_name; do
             echo "Checking Pulp digest for ${rpmname}-${version}-${release}.${arch}..."
 
             set +e
@@ -688,20 +697,19 @@ spec:
                 echo "RPM: ${rpmname}-${version}-${release}.${arch}"
                 echo "Snapshot sha256: ${sha256}"
                 echo "Action required: Bump version or release number"
-                rm -f "$entry_file"
                 rm -rf "$FILTER_RESULTS_DIR"
                 exit 1
                 ;;
               *)
                 echo "Error: Failed to check Pulp digest (status=$pulp_status)"
-                rm -f "$entry_file"
                 rm -rf "$FILTER_RESULTS_DIR"
                 exit 1
                 ;;
             esac
-
-            rm -f "$entry_file"
-          done < <(jq -c '.[]' "$IN_ADVISORY_FILE")
+          done < <(jq -r \
+            '.[] | [.rpmname, .epoch, .version, .release,
+                    .arch, .sha256, .repository_name]
+                   | join("|")' "$IN_ADVISORY_FILE")
         fi
 
         # === Phase 5: Process unreleased RPMs and filter snapshot ===
@@ -728,7 +736,8 @@ spec:
         fi
 
         # Build filtered snapshot with rpmsToPublish for unreleased components
-        FILTERED_COMPONENTS="[]"
+        FILTERED_COMPS_FILE="$(mktemp)"
+        : > "$FILTERED_COMPS_FILE"
         while IFS= read -r comp_name; do
           [[ -z "$comp_name" ]] && continue
 
@@ -736,27 +745,16 @@ spec:
             '.components[] | select(.name == $name)' <<< "$snapshot_json")
           [[ -z "$original_component" ]] && continue
 
-          comp_rpms=$(jq --arg name "$comp_name" '.[$name] // []' "$COMPONENT_RPMS_MAP_FILE")
-          [[ "$(jq 'length' <<< "$comp_rpms")" -eq 0 ]] && continue
+          comp_rpms_file="${COMPONENT_RPMS_MAP_DIR}/${comp_name}.json"
+          [[ ! -s "$comp_rpms_file" ]] && continue
 
-          rpms_file="$(mktemp)"
-          echo "$comp_rpms" > "$rpms_file"
-          updated_component=$(echo "$original_component" | \
-            jq --slurpfile rpms "$rpms_file" '. + {rpmsToPublish: $rpms[0]}')
-          rm -f "$rpms_file"
-
-          comp_file="$(mktemp)"
-          echo "$updated_component" > "$comp_file"
-          FILTERED_COMPONENTS=$(jq --slurpfile comp "$comp_file" '. + $comp' <<< "$FILTERED_COMPONENTS")
-          rm -f "$comp_file"
+          echo "$original_component" | \
+            jq --slurpfile rpms "$comp_rpms_file" '. + {rpmsToPublish: $rpms[0]}' \
+            >> "$FILTERED_COMPS_FILE"
         done < <(jq -r '.[]' <<< "$UNRELEASED_COMPONENTS")
 
-        # Use file instead of --argjson to avoid "Argument list too long" error
-        COMPS_FILE="$(mktemp)"
-        echo "$FILTERED_COMPONENTS" > "$COMPS_FILE"
-        jq --slurpfile comps "$COMPS_FILE" \
-          '.components = $comps[0]' "${SNAPSHOT_FILE}" > "${SNAPSHOT_FILE}.tmp"
-        rm -f "$COMPS_FILE"
+        jq --slurpfile comps "$FILTERED_COMPS_FILE" \
+          '.components = $comps' "${SNAPSHOT_FILE}" > "${SNAPSHOT_FILE}.tmp"
         mv "${SNAPSHOT_FILE}.tmp" "${SNAPSHOT_FILE}"
 
         echo "Filtered snapshot components: $(jq '.components | length' "${SNAPSHOT_FILE}")"
@@ -764,7 +762,7 @@ spec:
         echo -n "" > "$(results.latest_advisory_url.path)"
         echo -n "" > "$(results.latest_advisory_internal_url.path)"
 
-        rm -rf "$UNRELEASED_FILE" "$COMPONENT_RPMS_MAP_FILE" "$TRANSFORMED_ENTRIES_FILE" "$FILTER_RESULTS_DIR"
+        rm -rf "$FILTERED_COMPS_FILE" "$COMPONENT_RPMS_MAP_DIR" "$TRANSFORMED_ENTRIES_FILE" "$FILTER_RESULTS_DIR"
     - name: create-trusted-artifact
       computeResources:
         limits:

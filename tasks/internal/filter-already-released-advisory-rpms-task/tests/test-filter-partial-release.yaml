@@ -7,6 +7,21 @@ spec:
   description: |
     Test the filter-already-released-advisory-rpms-task with partial release.
     One RPM is in an advisory (released-rpm), one is not (new-rpm).
+  params:
+    - name: ociStorage
+      description: The OCI repository where artifacts are stored.
+      type: string
+    - name: ociArtifactExpiresAfter
+      type: string
+      default: "1d"
+    - name: orasOptions
+      type: string
+      default: "--insecure"
+    - name: trustedArtifactsDebug
+      type: string
+      default: ""
+    - name: dataDir
+      type: string
   tasks:
     - name: run-filter-task
       taskRef:
@@ -22,23 +37,21 @@ spec:
           value: "filter-advisory-rpms-secret"
         - name: internalRequestPipelineRunName
           value: "$(context.pipelineRun.name)"
+        - name: ociStorage
+          value: $(params.ociStorage)
     - name: validate-result
       runAfter:
         - run-filter-task
       params:
         - name: result
           value: "$(tasks.run-filter-task.results.result)"
-        - name: unreleased_rpms
-          value: "$(tasks.run-filter-task.results.unreleased_rpms)"
-        - name: in_advisory_rpms
-          value: "$(tasks.run-filter-task.results.in_advisory_rpms)"
+        - name: filter_results_artifact
+          value: "$(tasks.run-filter-task.results.filter_results_artifact)"
       taskSpec:
         params:
           - name: result
             type: string
-          - name: unreleased_rpms
-            type: string
-          - name: in_advisory_rpms
+          - name: filter_results_artifact
             type: string
         steps:
           - name: validate
@@ -54,8 +67,21 @@ spec:
                 exit 1
               fi
 
-              UNRELEASED=$(base64 -d <<< "$(params.unreleased_rpms)" | gunzip)
-              IN_ADVISORY=$(base64 -d <<< "$(params.in_advisory_rpms)" | gunzip)
+              ARTIFACT="$(params.filter_results_artifact)"
+              if [[ -z "$ARTIFACT" ]]; then
+                echo "Expected filter_results_artifact to be set"
+                exit 1
+              fi
+              echo "Filter results artifact: $ARTIFACT"
+
+              # Pull and extract the OCI artifact
+              oci_ref="${ARTIFACT#oci:}"
+              RESULTS_DIR=$(mktemp -d)
+              oras pull --insecure "${oci_ref}" -o "$RESULTS_DIR"
+              tar -xzf "$RESULTS_DIR/filter-results.tar.gz" -C "$RESULTS_DIR"
+
+              UNRELEASED=$(cat "$RESULTS_DIR/unreleased_rpms.json")
+              IN_ADVISORY=$(cat "$RESULTS_DIR/in_advisory_rpms.json")
 
               echo "Unreleased RPMs: $UNRELEASED"
               echo "In-advisory RPMs: $IN_ADVISORY"
@@ -87,4 +113,5 @@ spec:
                 exit 1
               fi
 
+              rm -rf "$RESULTS_DIR"
               echo "Validation successful!"

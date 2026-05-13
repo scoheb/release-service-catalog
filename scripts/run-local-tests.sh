@@ -277,8 +277,8 @@ classify_tasks() {
             continue
         fi
         
-        # Check if task supports Trusted Artifacts (uses TA step actions)
-        if grep -q "name: use-trusted-artifact\|name: create-trusted-artifact" "$task_file"; then
+        # Check if task needs OCI registry (uses TA step actions or oras push)
+        if grep -q "name: use-trusted-artifact\|name: create-trusted-artifact\|oras push" "$task_file"; then
             trusted_artifacts_tasks+=("$item")
         else
             pvc_tasks+=("$item")
