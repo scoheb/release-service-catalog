@@ -202,27 +202,31 @@ spec:
           exit 0
         fi
 
-        # === Phase 4: Extract all purls from all advisories and track which advisory each came from ===
-        echo "Extracting purls from advisories and building purl-to-advisory mapping..."
-        PURL_TO_ADVISORY_MAP_FILE=/tmp/purl_to_advisory_map.json
-        echo "{}" > "$PURL_TO_ADVISORY_MAP_FILE"
+        # === Phase 4: Extract all purls from all advisories ===
+        echo "Extracting purls from advisories..."
+        PURL_MAPS_FILE=/tmp/purl_advisory_maps.jsonl
+        : > "$PURL_MAPS_FILE"
 
         for ADVISORY_SUBDIR in $EXISTING_ADVISORIES; do
           ADVISORY_FILE="${ADVISORY_BASE_DIR}/${ADVISORY_SUBDIR}/advisory.yaml"
           if [[ -f "$ADVISORY_FILE" ]]; then
-            ADVISORY_PURLS=$(yq -o=json \
+            yq -o=json \
               '.spec.content.artifacts // [] | [.[].purl] | map(select(. != null))' \
-              "$ADVISORY_FILE")
-
-            # Build map for all purls from this advisory at once (much faster than one-by-one)
-            ADVISORY_MAP=$(jq -n --arg advisory "$ADVISORY_FILE" --argjson purls "$ADVISORY_PURLS" \
-              '$purls | reduce .[] as $purl ({}; .[$purl] = $advisory)')
-
-            # Merge this advisory's map into the main map
-            UPDATED=$(jq -s '.[0] * .[1]' "$PURL_TO_ADVISORY_MAP_FILE" - <<< "$ADVISORY_MAP")
-            echo "$UPDATED" > "$PURL_TO_ADVISORY_MAP_FILE"
+              "$ADVISORY_FILE" \
+              | jq -c --arg adv "$ADVISORY_FILE" \
+                'reduce .[] as $p ({}; .[$p] = $adv)' \
+              >> "$PURL_MAPS_FILE"
           fi
         done
+
+        PURL_TO_ADVISORY_MAP_FILE=/tmp/purl_to_advisory_map.json
+        if [[ -s "$PURL_MAPS_FILE" ]]; then
+          jq -s 'reduce .[] as $m ({}; . * $m)' \
+            "$PURL_MAPS_FILE" > "$PURL_TO_ADVISORY_MAP_FILE"
+        else
+          echo "{}" > "$PURL_TO_ADVISORY_MAP_FILE"
+        fi
+        rm -f "$PURL_MAPS_FILE"
 
         echo "Total unique purls from advisories: $(jq 'keys | length' "$PURL_TO_ADVISORY_MAP_FILE")"
 
@@ -234,42 +238,29 @@ spec:
 
         UNRELEASED_FILE=/tmp/unreleased.json
         IN_ADVISORY_FILE=/tmp/in_advisory.json
-        echo "[]" > "$UNRELEASED_FILE"
-        echo "[]" > "$IN_ADVISORY_FILE"
-
-        # Track which advisories contain the in-advisory RPMs (for validation)
         ADVISORY_SET_FILE=/tmp/advisory_set.json
-        echo "[]" > "$ADVISORY_SET_FILE"
 
-        while IFS= read -r entry; do
-          entry_file=/tmp/current_entry.json
-          echo "$entry" > "$entry_file"
+        jq --slurpfile map "$PURL_TO_ADVISORY_MAP_FILE" '
+          . as $entries | $map[0] as $m |
+          reduce $entries[] as $e (
+            {unreleased: [], in_advisory: [], advisories: {}};
+            if $m[$e.purl] then
+              .in_advisory += [$e]
+              | .advisories[$m[$e.purl]] = true
+            else
+              .unreleased += [$e]
+            end
+          ) | {
+            unreleased,
+            in_advisory,
+            advisories: (.advisories | keys)
+          }
+        ' "$SNAPSHOT_FILE" > /tmp/categorized.json
 
-          purl=$(jq -r '.purl' "$entry_file")
-
-          # Check if purl exists in the map
-          advisory_path=$(jq -r --arg purl "$purl" '.[$purl] // ""' "$PURL_TO_ADVISORY_MAP_FILE")
-
-          if [[ -n "$advisory_path" ]]; then
-            # RPM found in advisory - add to in_advisory list for digest validation
-            UPDATED=$(jq --slurpfile e "$entry_file" '. + $e' "$IN_ADVISORY_FILE")
-            echo "$UPDATED" > "$IN_ADVISORY_FILE"
-
-            # Track which advisory this came from
-            advisory_already_tracked=$(jq --arg adv "$advisory_path" \
-              'map(select(. == $adv)) | length > 0' "$ADVISORY_SET_FILE")
-            if [[ "$advisory_already_tracked" == "false" ]]; then
-              UPDATED=$(jq --arg adv "$advisory_path" '. + [$adv]' "$ADVISORY_SET_FILE")
-              echo "$UPDATED" > "$ADVISORY_SET_FILE"
-            fi
-          else
-            # RPM not in any advisory - unreleased
-            UPDATED=$(jq --slurpfile e "$entry_file" '. + $e' "$UNRELEASED_FILE")
-            echo "$UPDATED" > "$UNRELEASED_FILE"
-          fi
-
-          rm -f "$entry_file"
-        done < <(jq -c '.[]' "$SNAPSHOT_FILE")
+        jq '.unreleased' /tmp/categorized.json > "$UNRELEASED_FILE"
+        jq '.in_advisory' /tmp/categorized.json > "$IN_ADVISORY_FILE"
+        jq '.advisories' /tmp/categorized.json > "$ADVISORY_SET_FILE"
+        rm -f /tmp/categorized.json
 
         # === Phase 6: Output results ===
         UNRELEASED_COUNT=$(jq 'length' "$UNRELEASED_FILE")
