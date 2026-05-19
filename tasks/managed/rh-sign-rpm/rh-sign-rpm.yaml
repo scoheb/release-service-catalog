@@ -538,8 +538,9 @@ spec:
         # Extract signing configuration from data file
         KERBEROS_PRINCIPAL=$(jq --exit-status -r '.signOptions.signKeytab.principal' "${DATA_FILE}")
         KERBEROS_KEYTAB=$(jq --exit-status -r '.signOptions.signKeytab.name // "keytab"' "${DATA_FILE}")
-        KERBEROS_KEYTAB_SECRET_NAME=$(jq --exit-status -r '.signOptions.signKeytab.secret' "${DATA_FILE}")
+        KERBEROS_KEYTAB_SECRET=$(jq --exit-status -r '.signOptions.signKeytab.secret' "${DATA_FILE}")
         SIGNING_ALIAS=$(jq --exit-status -r '.signOptions.signKeyAlias.key' "${DATA_FILE}")
+        PIPELINE_IMAGE=$(jq --exit-status -r '.signOptions.signPipelineImage' "${DATA_FILE}")
         SKIP_UPLOAD_TO_PULP=$(jq --exit-status -r '.signOptions.skipUploadToPulp // false' "${DATA_FILE}")
         SERVICE_ACCOUNT=$(jq --exit-status -r \
             '.signOptions.signPipelineServiceAccount // "release-service-account"' "${DATA_FILE}")

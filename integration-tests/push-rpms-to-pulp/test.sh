@@ -184,9 +184,9 @@ EOF
 
     export RELEASE_NAME=${release_name}
     export RELEASE_NAMESPACE=${tenant_namespace}
-    "${SUITE_DIR}/../scripts/wait-for-release.sh"
-
     export RELEASE_NAMES="${release_name}"
+
+    _wait_for_releases_internal
 }
 
 # --- Release Verification ---
