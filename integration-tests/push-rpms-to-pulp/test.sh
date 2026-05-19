@@ -185,6 +185,7 @@ EOF
     export RELEASE_NAME=${release_name}
     export RELEASE_NAMESPACE=${tenant_namespace}
     export RELEASE_NAMES="${release_name}"
+    release_names="${release_name}"
 
     _wait_for_releases_internal
 }
