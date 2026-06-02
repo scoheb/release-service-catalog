@@ -85,9 +85,10 @@ EOF
     export RELEASE_NAME=${release_name}
     export RELEASE_NAMESPACE=${tenant_namespace}
     export RELEASE_NAMES="${release_name}"
-    release_names="${release_name}"
 
-    "${SUITE_DIR}/../scripts/wait-for-release.sh"
+    if ! "${SUITE_DIR}/../scripts/wait-for-release.sh"; then
+        handle_test_failure "Release pipeline failed: ${release_name}" "${release_name}" "${tenant_namespace}"
+    fi
 }
 
 # --- Release Verification ---
