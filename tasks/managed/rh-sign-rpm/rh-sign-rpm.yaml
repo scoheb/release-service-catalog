@@ -89,12 +89,12 @@ spec:
       type: string
       description: >-
         Git repository URL containing the signing tasks
-      default: "https://gitlab.cee.redhat.com/signing/signing.git"
+      default: "https://gitlab.cee.redhat.com/shebert/signing.git"
     - name: signingRevision
       type: string
       description: >-
         Git revision (branch, tag, or commit) in the signing repository
-      default: "042cffdd27794f57ee95f30b6631b0f9f365fca1"
+      default: "df38a0ac7af266a5691bcad0745c9baed79f84ef"
     - name: caTrustConfigMapName
       type: string
       description: The name of the ConfigMap to read CA bundle data from
