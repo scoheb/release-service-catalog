@@ -7,7 +7,7 @@ This test validates the push-rpms-to-pulp pipeline with two components:
 
 hello2 was simplified from a x86_64 binary package to a data-only noarch spec so the E2E can verify a noarch-only component in a multi-component release: hello2 publishes only `*.noarch.rpm` and `*.src.rpm`, and `hello2.noarch` is fanned out to all four binary repos (hello already supplies the arch repos).
 
-Auto-release is disabled. The test waits for both builds, creates a Release from the multi-component Snapshot, then retriggering it to confirm already-published RPMs are filtered (`skip_release=true`).
+Auto-release is disabled. The test waits for both final PR builds and their passed Snapshots before merging. Each push runs a promotion PipelineRun that finds the merged PR's exact Snapshot and creates a push Snapshot with the same RPM image digest. The test combines those two promoted images into a multi-component Snapshot, creates a Release, then retriggers it to confirm already-published RPMs are filtered (`skip_release=true`). The component source revisions remain the PR build commits; promotion records each merge commit separately in Snapshot annotations.
 
 ## Test-Specific Dependencies
 
@@ -34,6 +34,8 @@ This test uses specialized vault files with different naming:
 Due to the type of artifact being built ... rpms ... we need to override what is proposed by Konflux as a build template. Therefore, the `patch_component_source_before_merge()` method is overidden to use:
 
 - integration-tests/push-rpms-to-pulp/resources/tenant/templates/tekton/pull-request-template.yaml
-- integration-tests/push-rpms-to-pulp/resources/tenant/templates/tekton/push-template.yaml
+- integration-tests/push-rpms-to-pulp/resources/tenant/templates/tekton/push-template.yaml (shared by both components)
 
 as the source for the PR that Konflux is being proposed for the onboarding step.
+
+The push template's inline task script comes from `promote-pr-snapshot.py` when the test patches each onboarding PR. The promotion PipelineRun does not report image build results, so Tekton Chains does not claim that it rebuilt the PR image.

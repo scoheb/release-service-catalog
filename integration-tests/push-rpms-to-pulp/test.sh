@@ -18,44 +18,159 @@ create_github_repository() {
         "${component2_repo_name}" "${component2_branch}"
 }
 
-# --- Snapshot and Release Management ---
+# --- PR build and Snapshot management ---
 
+# The shared runner merges onboarding PRs immediately after this test patches them.
+# Promotion needs the exact final PR head to have produced a passed image first.
+wait_for_pr_builds() {
+    local component repo pr_number component_name pr_sha response attempt plr_json plr_name plr_status
+    local snapshot_json snapshot_name snapshot_status
+
+    for component in $PTSV_COMPONENTS; do
+        local _v="${component}_repo_name"
+        repo="${!_v}"
+        _v="${component}_pr_number"
+        pr_number="${!_v}"
+        _v="${component}_name"
+        component_name="${!_v}"
+
+        response=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${repo}/pulls/${pr_number}")
+        pr_sha=$(jq -r '.head.sha // empty' <<< "${response}")
+        if [[ ! "$pr_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            log_error "Could not read the final head SHA for ${repo} PR #${pr_number}"
+        fi
+        declare -g "${component}_pr_sha=${pr_sha}"
+        echo "Waiting for ${component_name} PR #${pr_number} build at ${pr_sha}..."
+
+        plr_name=""
+        snapshot_name=""
+        for ((attempt=1; attempt<=540; attempt++)); do
+            plr_json=$(kubectl get pipelineruns -n "$tenant_namespace" \
+                -l "appstudio.openshift.io/application=${application_name},appstudio.openshift.io/component=${component_name},pipelinesascode.tekton.dev/event-type=pull_request,pipelinesascode.tekton.dev/pull-request=${pr_number},pipelinesascode.tekton.dev/sha=${pr_sha}" \
+                -o json)
+            plr_name=$(jq -r '.items | sort_by(.metadata.creationTimestamp) | last | .metadata.name // empty' <<< "$plr_json")
+            if [ -n "$plr_name" ]; then
+                plr_status=$(jq -r --arg name "$plr_name" \
+                    '.items[] | select(.metadata.name == $name) | .status.conditions[]? | select(.type == "Succeeded") | .status' \
+                    <<< "$plr_json")
+                if [ "$plr_status" = "False" ]; then
+                    log_error "PR build ${plr_name} failed for ${component_name} at ${pr_sha}"
+                fi
+                if [ "$plr_status" = "True" ]; then
+                    snapshot_json=$(kubectl get snapshots -n "$tenant_namespace" \
+                        -l "appstudio.openshift.io/application=${application_name},appstudio.openshift.io/component=${component_name},pac.test.appstudio.openshift.io/event-type=pull_request,pac.test.appstudio.openshift.io/pull-request=${pr_number},pac.test.appstudio.openshift.io/sha=${pr_sha}" \
+                        -o json)
+                    snapshot_name=$(jq -r --arg plr "$plr_name" --arg component "$component_name" --arg sha "$pr_sha" \
+                        '[.items[] | select(.metadata.labels["appstudio.openshift.io/build-pipelinerun"] == $plr) | \
+                          select(any(.spec.components[]; .name == $component and .source.git.revision == $sha and \
+                            (.containerImage | test("@sha256:[0-9a-f]{64}$"))))] | \
+                          sort_by(.metadata.creationTimestamp) | last | .metadata.name // empty' <<< "$snapshot_json")
+                    if [ -n "$snapshot_name" ]; then
+                        snapshot_status=$(jq -r --arg name "$snapshot_name" \
+                            '.items[] | select(.metadata.name == $name) | .status.conditions[]? | \
+                              select(.type == "AppStudioTestSucceeded") | .status' <<< "$snapshot_json")
+                        if [ "$snapshot_status" = "False" ]; then
+                            log_error "PR Snapshot ${snapshot_name} failed integration tests"
+                        fi
+                        if [ "$snapshot_status" = "True" ]; then
+                            declare -g "${component}_pr_snapshot=${snapshot_name}"
+                            echo "✅ PR build ${plr_name} and Snapshot ${snapshot_name} passed"
+                            break
+                        fi
+                    fi
+                fi
+            fi
+            if [ "$attempt" -eq 540 ]; then
+                log_error "Timed out waiting for ${component_name} PR build and Snapshot at ${pr_sha}"
+            fi
+            sleep 5
+        done
+    done
+}
+
+# The promotion runs each create a single-component push Snapshot. Combine the
+# exact two promoted PR images so the existing RPM Release exercises both.
 wait_for_multi_component_snapshot() {
-    local max_attempts=24
-    local attempt=1
-    local snapshot_name=""
+    local component component_name merge_sha pr_sha plr_name pr_snapshot push_snapshot
+    local pr_json push_json item_json components_json='[]' promotions_json='{}' snapshot_name="promoted-rpms-${uuid}"
+    local attempt status
 
-    while [ $attempt -le $max_attempts ] && [ -z "$snapshot_name" ]; do
-        local all_snapshots
-        all_snapshots=$(kubectl get snapshots -n "$tenant_namespace" \
-            -l "appstudio.openshift.io/application=${application_name}" \
-            --sort-by=.metadata.creationTimestamp \
-            -o json 2>/dev/null)
-
-        if [ $? -ne 0 ] || [ -z "$all_snapshots" ]; then
-            [ $attempt -lt $max_attempts ] && sleep 5
-            attempt=$((attempt + 1))
-            continue
+    for component in $PTSV_COMPONENTS; do
+        local _v="${component}_name"
+        component_name="${!_v}"
+        _v="${component}_SHA"
+        merge_sha="${!_v}"
+        _v="${component}_pr_sha"
+        pr_sha="${!_v}"
+        _v="${component}_push_plr_name"
+        plr_name="${!_v}"
+        _v="${component}_pr_snapshot"
+        pr_snapshot="${!_v}"
+        push_snapshot=$(kubectl get pipelinerun "$plr_name" -n "$tenant_namespace" -o json \
+            | jq -r '.status.results[]? | select(.name == "PUSH_SNAPSHOT") | .value')
+        if [ -z "$push_snapshot" ] || [ -z "$pr_snapshot" ]; then
+            log_error "Promotion ${plr_name} did not identify both PR and push Snapshots"
         fi
-
-        echo "$all_snapshots" | jq -r \
-          '.items[] | "  \(.metadata.name): \(.spec.components | length) components"' >&2
-
-        snapshot_name=$(echo "$all_snapshots" | jq -r \
-          '.items[] | select(.spec.components | length == 2) | .metadata.name' | tail -1)
-
-        if [ -z "$snapshot_name" ]; then
-            [ $attempt -lt $max_attempts ] && sleep 5
+        pr_json=$(kubectl get snapshot "$pr_snapshot" -n "$tenant_namespace" -o json)
+        push_json=$(kubectl get snapshot "$push_snapshot" -n "$tenant_namespace" -o json)
+        item_json=$(jq -c --arg component "$component_name" --arg sha "$merge_sha" --arg pr_sha "$pr_sha" \
+            --arg pr_snapshot "$pr_snapshot" --argjson pr "$pr_json" '
+              select(.metadata.labels["appstudio.openshift.io/application"] == $pr.spec.application) |
+              select(.metadata.labels["appstudio.openshift.io/component"] == $component) |
+              select(.metadata.labels["pac.test.appstudio.openshift.io/event-type"] == "push") |
+              select(.metadata.labels["pac.test.appstudio.openshift.io/sha"] == $sha) |
+              select(.metadata.annotations["test.appstudio.openshift.io/result-pr-snapshot"] == $pr_snapshot) |
+              .spec.components[] | select(.name == $component) |
+              select(.containerImage == ($pr.spec.components[] | select(.name == $component) | .containerImage)) |
+              select(.source.git.revision == $pr_sha) |
+              select(.source.git.revision == ($pr.spec.components[] | select(.name == $component) | .source.git.revision))
+            ' <<< "$push_json")
+        if [ -z "$item_json" ]; then
+            log_error "Promoted Snapshot ${push_snapshot} differs from PR Snapshot ${pr_snapshot}"
         fi
-
-        attempt=$((attempt + 1))
+        components_json=$(jq -cn --argjson current "$components_json" --argjson item "$item_json" '$current + [$item]')
+        promotions_json=$(jq -cn --argjson current "$promotions_json" --arg component "$component_name" \
+            --arg pr_snapshot "$pr_snapshot" --arg push_snapshot "$push_snapshot" \
+            --arg pr_sha "$pr_sha" --arg merge_sha "$merge_sha" \
+            '$current + {($component): {prSnapshot: $pr_snapshot, pushSnapshot: $push_snapshot,
+              prBuildCommit: $pr_sha, mergeCommit: $merge_sha}}')
+        echo "Using ${component_name} image from ${pr_snapshot} via ${push_snapshot}" >&2
     done
 
-    if [ -z "$snapshot_name" ]; then
-        echo "Failed to find multi-component snapshot after ${max_attempts} attempts" >&2
-    fi
+    jq -n --arg name "$snapshot_name" --arg namespace "$tenant_namespace" \
+        --arg app "$application_name" --arg component "$component_name" --arg sha "$merge_sha" \
+        --arg tool "$originating_tool" --arg uuid "$uuid" --arg promotions "$promotions_json" \
+        --argjson components "$components_json" '{
+          apiVersion: "appstudio.redhat.com/v1alpha1", kind: "Snapshot",
+          metadata: {name: $name, namespace: $namespace, labels: {
+            "appstudio.openshift.io/application": $app,
+            "appstudio.openshift.io/component": $component,
+            "pac.test.appstudio.openshift.io/event-type": "push",
+            "pac.test.appstudio.openshift.io/sha": $sha,
+            "release.appstudio.openshift.io/auto-release": "false",
+            "test.appstudio.openshift.io/type": "component",
+            "originating-tool": $tool, "test-run-uuid": $uuid
+          }, annotations: {"hum-5186.konflux-ci.dev/source": "promoted-pr-rpm-images",
+            "hum-5186.konflux-ci.dev/provenance": $promotions}},
+          spec: {application: $app, components: $components}
+        }' | kubectl create -f - >/dev/null
 
-    echo "$snapshot_name"
+    for ((attempt=1; attempt<=60; attempt++)); do
+        status=$(kubectl get snapshot "$snapshot_name" -n "$tenant_namespace" -o json \
+            | jq -r '.status.conditions[]? | select(.type == "AppStudioTestSucceeded") | .status')
+        if [ "$status" = "True" ]; then
+            echo "$snapshot_name"
+            return 0
+        fi
+        if [ "$status" = "False" ]; then
+            log_error "Promoted multi-component Snapshot ${snapshot_name} failed integration tests"
+        fi
+        sleep 5
+    done
+    log_error "Timed out waiting for promoted multi-component Snapshot ${snapshot_name}"
 }
 
 wait_for_releases() {
@@ -655,6 +770,44 @@ EOF
   fi
 }
 
+# Find the promotion PipelineRun even if it finishes before the first poll.
+_get_plr() {
+    local component="$1" _v component_name sha
+    _v="${component}_name"
+    component_name="${!_v}"
+    _v="${component}_SHA"
+    sha="${!_v}"
+    kubectl get pipelineruns -n "$tenant_namespace" \
+        -l "appstudio.openshift.io/application=${application_name},appstudio.openshift.io/component=${component_name},pipelinesascode.tekton.dev/event-type=push,pipelinesascode.tekton.dev/sha=${sha}" \
+        -o json | jq -r '[.items[] | select(.metadata.labels["pipelines.appstudio.openshift.io/type"] == "promotion")] | \
+          sort_by(.metadata.creationTimestamp) | last | .metadata.name // empty'
+}
+
+# A failed promotion must stop the test; the shared retry path requests a new build.
+wait_for_plrs_to_complete() {
+    local component plr_name status attempt
+    for component in $PTSV_COMPONENTS; do
+        local _v="${component}_push_plr_name"
+        plr_name="${!_v}"
+        echo "Waiting for promotion PipelineRun ${plr_name}..."
+        for ((attempt=1; attempt<=360; attempt++)); do
+            status=$(kubectl get pipelinerun "$plr_name" -n "$tenant_namespace" -o json \
+                | jq -r '.status.conditions[]? | select(.type == "Succeeded") | .status')
+            if [ "$status" = "True" ]; then
+                echo "✅ Promotion PipelineRun ${plr_name} completed"
+                break
+            fi
+            if [ "$status" = "False" ]; then
+                log_error "Promotion PipelineRun ${plr_name} failed"
+            fi
+            if [ "$attempt" -eq 360 ]; then
+                log_error "Timed out waiting for promotion PipelineRun ${plr_name}"
+            fi
+            sleep 5
+        done
+    done
+}
+
 # Relies on "${component}_name", "${component}_repo_name" and "${component}_pr_number" variables being set for each component.
 patch_components_source_before_merge() {
 
@@ -688,11 +841,13 @@ patch_components_source_before_merge() {
     echo "  Component: ${component_name}"
     echo "  Repository: ${component_repo_name}"
     echo "  PR Number: ${pr_number}"
-    local push_template_file="push-template-comp2.yaml"
+    local push_template_file="push-template.yaml"
     local pull_template_file="pull-request-template-comp2.yaml"
     local hello_index=2
 
     patch_component_source_before_merge
+
+    wait_for_pr_builds
 }
 
 # Relies on component_name, component_repo_name, pr_number, push_template_file, pull_template_file, and hello_index variables being set.
@@ -703,7 +858,7 @@ patch_component_source_before_merge() {
   export GH_TOKEN=${secret_value}
 
   _patch_tekton_templates() {
-    local repo=$1 pr_num=$2 comp_name=$3 pr_template=$4 push_template=$5
+    local repo=$1 pr_num=$2 comp_name=$3 pr_template=$4 push_template=$5 promotion_branch=$6
 
     local file_names=".tekton/${comp_name}-pull-request.yaml .tekton/${comp_name}-push.yaml"
     for file_name in ${file_names}; do
@@ -720,7 +875,16 @@ patch_component_source_before_merge() {
       fi
 
       local encoded_contents
-      encoded_contents=$(cat "$template_file" | envsubst | base64 -w 0)
+      if [[ "$file_name" == *-push.yaml ]]; then
+          encoded_contents=$(env promotion_component_name="$comp_name" \
+              promotion_component_branch="$promotion_branch" promotion_repo="$repo" \
+              envsubst < "$template_file" \
+              | PROMOTION_SCRIPT_FILE="${SUITE_DIR}/promote-pr-snapshot.py" \
+                  yq -P '.spec.pipelineSpec.tasks[0].taskSpec.steps[0].script = load_str(strenv(PROMOTION_SCRIPT_FILE))' - \
+              | base64 -w 0)
+      else
+          encoded_contents=$(envsubst < "$template_file" | base64 -w 0)
+      fi
 
       "${SCRIPT_DIR}/scripts/update-file-in-pull-request.sh" \
           "${repo}" "${pr_num}" "${file_name}" \
@@ -741,7 +905,8 @@ patch_component_source_before_merge() {
         "${encoded_contents}"
   }
 
+  local _v="${component}_branch"
   _patch_tekton_templates "${component_repo_name}" "${pr_number}" \
-    "${component_name}" "${pull_template_file}" "${push_template_file}"
+    "${component_name}" "${pull_template_file}" "${push_template_file}" "${!_v}"
   _patch_spec_file "${component_repo_name}" "${pr_number}" "hello${hello_index}.spec" "hello.spec"
 }

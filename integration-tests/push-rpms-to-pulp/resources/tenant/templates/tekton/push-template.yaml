@@ -3,48 +3,76 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
-    build.appstudio.openshift.io/repo: '{{ source_url }}/-/tree/{{ revision }}'
     build.appstudio.redhat.com/commit_sha: '{{ revision }}'
     build.appstudio.redhat.com/target_branch: '{{ target_branch }}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "${component_branch}"
-  creationTimestamp: null
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "${promotion_component_branch}"
   labels:
     appstudio.openshift.io/application: ${application_name}
-    appstudio.openshift.io/component: ${component_name}
-    pipelines.appstudio.openshift.io/type: build
-  name: ${component_name}-on-push
+    appstudio.openshift.io/component: ${promotion_component_name}
+    pipelines.appstudio.openshift.io/type: promotion
+  name: ${promotion_component_name}-on-push
   namespace: ${tenant_namespace}
 spec:
-  params:
-    - name: ociStorage
-      value: quay.io/redhat-user-workloads-stage/${tenant_namespace}/${component_name}:{{revision}}
-    - name: package-name
-      value: hello
-    - name: git-url
-      value: "{{ source_url }}"
-    - name: revision
-      value: "{{ revision }}"
-    - name: target-branch
-      value: "{{ target_branch }}"
-    - name: build-architectures
-      value: ["x86_64", "aarch64"]
-    - name: build-platforms
-      value: ["linux/amd64", "linux/arm64", "localhost"]
-    - name: mock-config-template-filename-in-sources
-      value: "mock.cfg"
-  pipelineRef:
-    resolver: git
-    params:
-      - name: url
-        value: "https://github.com/konflux-ci/rpmbuild-pipeline.git"
-      - name: revision
-        value: main
-      - name: pathInRepo
-        value: pipeline/build-rpm-package.yaml
   taskRunTemplate:
-    serviceAccountName: build-pipeline-${component_name}
-  workspaces:
-    - name: git-auth
-      secret:
-        secretName: '{{ git_auth_secret }}'
+    serviceAccountName: build-pipeline-${promotion_component_name}
+  pipelineSpec:
+    results:
+      - name: PR_SNAPSHOT
+        value: $(tasks.promote-pr-snapshot.results.PR_SNAPSHOT)
+      - name: PUSH_SNAPSHOT
+        value: $(tasks.promote-pr-snapshot.results.PUSH_SNAPSHOT)
+    tasks:
+      - name: promote-pr-snapshot
+        params:
+          - name: merge-sha
+            value: '{{ revision }}'
+          - name: github-repo
+            value: ${promotion_repo}
+          - name: target-branch
+            value: '{{ target_branch }}'
+          - name: application
+            value: ${application_name}
+          - name: component
+            value: ${promotion_component_name}
+          - name: namespace
+            value: ${tenant_namespace}
+        taskSpec:
+          params:
+            - name: merge-sha
+            - name: github-repo
+            - name: target-branch
+            - name: application
+            - name: component
+            - name: namespace
+          results:
+            - name: PR_SNAPSHOT
+            - name: PUSH_SNAPSHOT
+          steps:
+            - name: lookup-and-promote
+              image: registry.access.redhat.com/ubi9/python-311
+              env:
+                - name: MERGE_SHA
+                  value: $(params.merge-sha)
+                - name: GITHUB_REPO
+                  value: $(params.github-repo)
+                - name: TARGET_BRANCH
+                  value: $(params.target-branch)
+                - name: APPLICATION
+                  value: $(params.application)
+                - name: COMPONENT
+                  value: $(params.component)
+                - name: NAMESPACE
+                  value: $(params.namespace)
+                - name: RESULT_PR_SNAPSHOT_PATH
+                  value: $(results.PR_SNAPSHOT.path)
+                - name: RESULT_PUSH_SNAPSHOT_PATH
+                  value: $(results.PUSH_SNAPSHOT.path)
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: '{{ git_auth_secret }}'
+                      key: git-provider-token
+              script: |
+                # Replaced with promote-pr-snapshot.py when the test patches the onboarding PR.
+                exit 1
