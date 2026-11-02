@@ -18,6 +18,10 @@ spec:
         When provided, RPMs are extracted from this artifact instead of from the snapshot.
         Either SNAPSHOT_PATH or signedRpmsOciArtifact must be provided
       default: ""
+    - name: signedBy
+      type: string
+      description: Signing key alias used to label signed RPMs for retry detection
+      default: ""
     - name: PULP_DOMAIN
       type: string
       description: The domain to use for Pulp operations
@@ -125,6 +129,8 @@ spec:
         value: $(params.dataDir)
       - name: PULP_DOMAIN
         value: $(params.PULP_DOMAIN)
+      - name: SIGNED_BY
+        value: $(params.signedBy)
       - name: PULP_SECRET_NAME
         value: $(params.PULP_SECRET_NAME)
       - name: RESULTS_DIR_PATH
