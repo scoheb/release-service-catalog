@@ -9,8 +9,10 @@ This is a **managed Tekton task** that:
 - Triggers an internal task via InternalRequest to check advisories
 - Validates Pulp digests for RPMs in advisories (rebuild detection)
 - Keeps all RPMs for each component with at least one RPM missing from advisories
-- When signedPulpDomain is set, stops before signing if any retained RPM is already in signed Pulp
-  (including partial releases, which need a separate resume path)
+- Finds a retained signed artifact checkpoint for the exact RPM input set and signing alias
+- Accepts signOptions.resumeFromInternalRequest for an older signing request without a checkpoint
+- When signedPulpDomain is set, stops before signing if signed Pulp contains
+  an RPM but no reusable checkpoint exists
 - Removes components with an empty `.rpmsToPublish` list
 - Overwrites the snapshot file in-place
 

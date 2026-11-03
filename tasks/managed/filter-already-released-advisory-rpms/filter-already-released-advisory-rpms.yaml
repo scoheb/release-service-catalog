@@ -17,8 +17,10 @@ spec:
     - Triggers an internal task via InternalRequest to check advisories
     - Validates Pulp digests for RPMs in advisories (rebuild detection)
     - Keeps all RPMs for each component with at least one RPM missing from advisories
-    - When signedPulpDomain is set, stops before signing if any retained RPM is already in signed Pulp
-      (including partial releases, which need a separate resume path)
+    - Finds a retained signed artifact checkpoint for the exact RPM input set and signing alias
+    - Accepts signOptions.resumeFromInternalRequest for an older signing request without a checkpoint
+    - When signedPulpDomain is set, stops before signing if signed Pulp contains
+      an RPM but no reusable checkpoint exists
     - Removes components with an empty `.rpmsToPublish` list
     - Overwrites the snapshot file in-place
   params:
@@ -103,6 +105,9 @@ spec:
     - name: skip_release
       type: string
       description: "true when all components had no RPMs to publish; otherwise false"
+    - name: resumeSignedRpmsOciArtifact
+      type: string
+      description: A prior signed RPM artifact for the exact RPM input set and signing alias
     - description: Produced trusted data artifact
       name: sourceDataArtifact
       type: string
@@ -220,7 +225,7 @@ spec:
       command: ["python3", "-m", "filter_already_released_advisory_rpms"]
     - name: guard-signed-rpms
       image: >-
-        quay.io/konflux-ci/release-service-utils@sha256:e30436d3473f792353ba75724328c9b2f3b7c482e234ab6e7b8a46a5e3ef52ff
+        quay.io/scoheb/release-service-utils@sha256:8ec32bd4c9585ed715b1dd7a0fe6a30f221fc966da7dd26656e01f4087d99fa9
       computeResources:
         limits:
           memory: 256Mi
@@ -233,12 +238,18 @@ spec:
       env:
         - name: SNAPSHOT_FILE
           value: "$(params.dataDir)/$(params.snapshotPath)"
+        - name: DATA_FILE
+          value: "$(params.dataDir)/$(params.dataPath)"
         - name: PULP_CONFIG_FILE
           value: /etc/secrets/cli.toml
         - name: SIGNED_PULP_DOMAIN
           value: $(params.signedPulpDomain)
         - name: RESULT_SKIP_RELEASE
           value: $(results.skip_release.path)
+        - name: RESULT_RESUME_ARTIFACT
+          value: $(results.resumeSignedRpmsOciArtifact.path)
+        - name: OCI_STORAGE
+          value: $(params.ociStorage)
       script: |
         #!/usr/bin/env python3
         import json
@@ -247,6 +258,10 @@ spec:
         from urllib.parse import quote, urlencode
 
         from release_service_utils.helpers import http_client
+        from release_service_utils.helpers.rpm_resume import (
+            find_resume_checkpoint,
+            inputs_from_snapshot,
+        )
         from release_service_utils.helpers.pulp_client import (
             PulpAuth,
             PulpClient,
@@ -255,63 +270,78 @@ spec:
         )
 
         domain = os.environ["SIGNED_PULP_DOMAIN"]
+        resume_result = Path(os.environ["RESULT_RESUME_ARTIFACT"])
+        resume_result.write_text("")
         if domain and Path(os.environ["RESULT_SKIP_RELEASE"]).read_text().strip() == "false":
             snapshot = json.loads(Path(os.environ["SNAPSHOT_FILE"]).read_text())
-            config = parse_pulp_config(Path(os.environ["PULP_CONFIG_FILE"]))
-            session = http_client.get_retry_session(
-                total=3, connect=3, read=3, status=2, allowed_methods=frozenset({"GET"})
+            data = json.loads(Path(os.environ["DATA_FILE"]).read_text())
+            sign_options = data["signOptions"]
+            signing_alias = sign_options["signKeyAlias"]["key"]
+            prior = find_resume_checkpoint(
+                os.environ["OCI_STORAGE"],
+                inputs_from_snapshot(snapshot),
+                signing_alias,
+                sign_options.get("resumeFromInternalRequest", ""),
             )
-            session.auth = PulpAuth(config)
-            pulp = PulpClient(session, config["base_url"], domain)
-
-            def exists_in_latest_version(repo_name, rpm):
-                repo_url = (
-                    f"{config['base_url']}/api/pulp/{quote(domain, safe='')}"
-                    f"/api/v3/repositories/rpm/rpm/?name={quote(repo_name, safe='')}"
+            if prior:
+                resume_result.write_text(prior)
+                print(f"Found signed RPM checkpoint: {prior}")
+            else:
+                config = parse_pulp_config(Path(os.environ["PULP_CONFIG_FILE"]))
+                session = http_client.get_retry_session(
+                    total=3, connect=3, read=3, status=2, allowed_methods=frozenset({"GET"})
                 )
-                repos = pulp.get_json(repo_url).get("results", [])
-                if len(repos) != 1 or repos[0].get("name") != repo_name:
-                    raise RuntimeError(f"Cannot identify signed Pulp repository {domain}/{repo_name}")
-                repo_href = repos[0].get("pulp_href")
-                if not repo_href:
-                    raise RuntimeError(f"Missing Pulp href for signed repository {domain}/{repo_name}")
-                version = pulp.get_json(f"{config['base_url']}{repo_href}").get("latest_version_href")
-                if not version:
-                    return False
-                query = urlencode({
-                    "repository_version": version,
-                    "name": rpm["rpmname"],
-                    "epoch": str(rpm["epoch"]),
-                    "version": rpm["version"],
-                    "release": rpm["release"],
-                    "arch": rpm["arch"],
-                })
-                content_url = (
-                    f"{config['base_url']}/api/pulp/{quote(domain, safe='')}"
-                    f"/api/v3/content/rpm/packages/?{query}"
-                )
-                count = pulp.get_json(content_url).get("count")
-                if not isinstance(count, int):
-                    raise RuntimeError(f"Invalid signed Pulp package response for {rpm['rpm']}")
-                return count > 0
+                session.auth = PulpAuth(config)
+                pulp = PulpClient(session, config["base_url"], domain)
 
-            for component in snapshot["components"]:
-                for rpm in component.get("rpmsToPublish", []):
-                    for repo in rpm["targetRepos"]:
-                        repo_name = repo["repository_name"]
-                        # Signed RPMs have a different SHA from the unsigned snapshot RPMs.
-                        # Any match in either the published or latest version must stop a new signing run.
-                        status = pulp.check_digest(
-                            repo_name, rpm["rpmname"], str(rpm["epoch"]),
-                            rpm["version"], rpm["release"], rpm["arch"], rpm["sha256"],
-                        )
-                        if status != PulpDigestStatus.NOT_FOUND or exists_in_latest_version(repo_name, rpm):
-                            raise RuntimeError(
-                                f"{rpm['rpm']} is already in signed Pulp domain {domain}/{repo_name} "
-                                "while this release still needs an advisory. Stop before re-signing. "
-                                "Use the original signed RPMs to finish missing advisories; "
-                                "this pipeline cannot resume a partial release."
+                def exists_in_latest_version(repo_name, rpm):
+                    repo_url = (
+                        f"{config['base_url']}/api/pulp/{quote(domain, safe='')}"
+                        f"/api/v3/repositories/rpm/rpm/?name={quote(repo_name, safe='')}"
+                    )
+                    repos = pulp.get_json(repo_url).get("results", [])
+                    if len(repos) != 1 or repos[0].get("name") != repo_name:
+                        raise RuntimeError(f"Cannot identify signed Pulp repository {domain}/{repo_name}")
+                    repo_href = repos[0].get("pulp_href")
+                    if not repo_href:
+                        raise RuntimeError(f"Missing Pulp href for signed repository {domain}/{repo_name}")
+                    version = pulp.get_json(f"{config['base_url']}{repo_href}").get("latest_version_href")
+                    if not version:
+                        return False
+                    query = urlencode({
+                        "repository_version": version,
+                        "name": rpm["rpmname"],
+                        "epoch": str(rpm["epoch"]),
+                        "version": rpm["version"],
+                        "release": rpm["release"],
+                        "arch": rpm["arch"],
+                    })
+                    content_url = (
+                        f"{config['base_url']}/api/pulp/{quote(domain, safe='')}"
+                        f"/api/v3/content/rpm/packages/?{query}"
+                    )
+                    count = pulp.get_json(content_url).get("count")
+                    if not isinstance(count, int):
+                        raise RuntimeError(f"Invalid signed Pulp package response for {rpm['rpm']}")
+                    return count > 0
+
+                for component in snapshot["components"]:
+                    for rpm in component.get("rpmsToPublish", []):
+                        for repo in rpm["targetRepos"]:
+                            repo_name = repo["repository_name"]
+                            # Signed RPMs have a different SHA from the unsigned snapshot RPMs.
+                            # Any match in either the published or latest version must stop a new signing run.
+                            status = pulp.check_digest(
+                                repo_name, rpm["rpmname"], str(rpm["epoch"]),
+                                rpm["version"], rpm["release"], rpm["arch"], rpm["sha256"],
                             )
+                            if status != PulpDigestStatus.NOT_FOUND or exists_in_latest_version(repo_name, rpm):
+                                raise RuntimeError(
+                                    f"{rpm['rpm']} is already in signed Pulp domain {domain}/{repo_name} "
+                                    "while this release still needs an advisory. Stop before re-signing. "
+                                    "No validated signed RPM checkpoint was found. "
+                                    "Resume from the original signing InternalRequest or artifact."
+                                )
     - name: create-trusted-artifact
       computeResources:
         limits:

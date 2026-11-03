@@ -18,6 +18,10 @@ spec:
         When provided, RPMs are extracted from this artifact instead of from the snapshot.
         Either SNAPSHOT_PATH or signedRpmsOciArtifact must be provided
       default: ""
+    - name: signedBy
+      type: string
+      description: Signing key alias used to label signed RPMs for retry detection
+      default: ""
     - name: PULP_DOMAIN
       type: string
       description: The domain to use for Pulp operations
@@ -125,6 +129,8 @@ spec:
         value: $(params.dataDir)
       - name: PULP_DOMAIN
         value: $(params.PULP_DOMAIN)
+      - name: SIGNED_BY
+        value: $(params.signedBy)
       - name: PULP_SECRET_NAME
         value: $(params.PULP_SECRET_NAME)
       - name: RESULTS_DIR_PATH
@@ -185,7 +191,7 @@ spec:
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: push-rpms-to-pulp
-      image: quay.io/konflux-ci/release-service-utils@sha256:3e3b9f5ce4b4575997573ff2728c95b671b9902847934b64f6bc8f979bf01cde
+      image: quay.io/scoheb/release-service-utils@sha256:8ec32bd4c9585ed715b1dd7a0fe6a30f221fc966da7dd26656e01f4087d99fa9
       computeResources:
         limits:
           memory: 4Gi

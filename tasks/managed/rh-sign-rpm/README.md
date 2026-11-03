@@ -1,6 +1,7 @@
 # rh-sign-rpm
 
-Tekton task to create internalrequests to sign RPMs
+Create an InternalRequest to sign RPMs and retain its artifact checkpoint,
+or validate and reuse a prior signed artifact for a retry.
 
 ## Parameters
 
@@ -9,6 +10,7 @@ Tekton task to create internalrequests to sign RPMs
 | dataPath                         | Path to the JSON file of the merged data to use in the data workspace                                                                                         | No       | -                                                 |
 | artifactsJsonPath                | Path to the artifacts.json file in the data workspace (pulp-tool format with RPM metadata)                                                                    | Yes      | artifacts.json                                    |
 | requester                        | Name of the user that requested the signing, for auditing purposes                                                                                            | No       | -                                                 |
+| resumeSignedRpmsOciArtifact      | Prior signed RPM artifact validated against the current unsigned RPM input                                                                                    | Yes      | ""                                                |
 | requestTimeout                   | InternalRequest timeout in seconds                                                                                                                            | Yes      | 11700                                             |
 | pipelineTimeout                  | Pipeline timeout for the signing InternalRequest                                                                                                              | Yes      | 3h10m0s                                           |
 | taskTimeout                      | Task timeout for the signing InternalRequest                                                                                                                  | Yes      | 3h0m0s                                            |

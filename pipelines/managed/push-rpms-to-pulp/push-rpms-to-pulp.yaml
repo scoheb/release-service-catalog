@@ -51,6 +51,10 @@ spec:
       type: string
       description: The OCI repository where the Trusted Artifacts are stored
       default: "quay.io/konflux-ci/release-service-trusted-artifacts"
+    - name: signedRpmArtifactExpiresAfter
+      type: string
+      description: Retention period for signed RPM artifacts used to resume a partial upload
+      default: "7d"
     - name: orasOptions
       description: oras options to pass to Trusted Artifacts calls
       type: string
@@ -173,7 +177,8 @@ spec:
               {"resultIndex": 5, "key": ".intention", "default": "staging"},
               {"resultIndex": 6, "key": ".signOptions.unsignedRpmsDomain"},
               {"resultIndex": 7, "key": ".signOptions.signedRpmsDomain"},
-              {"resultIndex": 8, "key": ".pulp.taskTimeout", "default": "7200"}
+              {"resultIndex": 8, "key": ".pulp.taskTimeout", "default": "7200"},
+              {"resultIndex": 9, "key": ".signOptions.signKeyAlias.key", "default": ""}
             ]
         - name: taskGitUrl
           value: "$(params.taskGitUrl)"
@@ -555,6 +560,7 @@ spec:
       runAfter:
         - check-data-keys
     - name: push-signed-rpms-to-pulp
+      retries: 5
       timeout: "4h0m0s"
       when:
         - input: "$(tasks.filter-already-released-advisory-rpms.results.skip_release)"
@@ -572,6 +578,8 @@ spec:
       params:
         - name: signedRpmsOciArtifact
           value: "$(tasks.rh-sign-rpm.results.signedRpmsOciArtifacts)"
+        - name: signedBy
+          value: "$(tasks.collect-task-params.results.extractedValues[9])"
         - name: PULP_DOMAIN
           value: "$(tasks.collect-task-params.results.extractedValues[7])"
         - name: PULP_SECRET_NAME
@@ -757,6 +765,8 @@ spec:
           value: "$(tasks.collect-data.results.subdirectory)/artifacts/artifacts.json"
         - name: requester
           value: "$(tasks.extract-requester-from-release.results.output-result)"
+        - name: resumeSignedRpmsOciArtifact
+          value: "$(tasks.filter-already-released-advisory-rpms.results.resumeSignedRpmsOciArtifact)"
         - name: pipelineRunUid
           value: $(context.pipelineRun.uid)
         - name: destinationArtifactStorageDomain
@@ -765,6 +775,8 @@ spec:
           value: "false"
         - name: createOciArtifact
           value: "true"
+        - name: ociArtifactExpiresAfter
+          value: $(params.signedRpmArtifactExpiresAfter)
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact

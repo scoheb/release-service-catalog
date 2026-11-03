@@ -8,7 +8,8 @@ metadata:
     tekton.dev/tags: sign-rpm
 spec:
   description: |-
-    Tekton task to create internalrequests to sign RPMs
+    Create an InternalRequest to sign RPMs and retain its artifact checkpoint,
+    or validate and reuse a prior signed artifact for a retry.
   params:
     - name: dataPath
       type: string
@@ -22,6 +23,10 @@ spec:
     - name: requester
       type: string
       description: Name of the user that requested the signing, for auditing purposes
+    - name: resumeSignedRpmsOciArtifact
+      type: string
+      description: Prior signed RPM artifact validated against the current unsigned RPM input
+      default: ""
     - name: requestTimeout
       type: string
       default: "11700"
@@ -160,7 +165,7 @@ spec:
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: rh-sign-rpm
-      image: quay.io/konflux-ci/release-service-utils@sha256:da48275d90ecd65e2aec9c71f74b86314ce6ceb81dc3045d5c7546c9548273e8
+      image: quay.io/scoheb/release-service-utils@sha256:8ec32bd4c9585ed715b1dd7a0fe6a30f221fc966da7dd26656e01f4087d99fa9
       computeResources:
         limits:
           memory: 512Mi
@@ -197,11 +202,38 @@ spec:
         KERBEROS_KEYTAB=$(jq --exit-status -r '.signOptions.signKeytab.name // "keytab"' "${DATA_FILE}")
         KERBEROS_KEYTAB_SECRET=$(jq --exit-status -r '.signOptions.signKeytab.secret' "${DATA_FILE}")
         SIGNING_ALIAS=$(jq --exit-status -r '.signOptions.signKeyAlias.key' "${DATA_FILE}")
+        RESUME_FROM_IR=$(jq -r '.signOptions.resumeFromInternalRequest // ""' "${DATA_FILE}")
         SKIP_UPLOAD_TO_PULP=$(jq --exit-status -r '.signOptions.skipUploadToPulp // "false"' "${DATA_FILE}")
         SERVICE_ACCOUNT=$(jq --exit-status -r \
             '.signOptions.signPipelineServiceAccount // "release-service-account"' "${DATA_FILE}")
         ARTIFACT_STORAGE_SECRET=$(jq --exit-status -r \
             '.signOptions.artifactStorageSecret // "signing-artifact-storage-preprod"' "${DATA_FILE}")
+
+        if [[ "$(params.createOciArtifact)" == "true" ]]; then
+          RESUME_REF="$(params.resumeSignedRpmsOciArtifact)"
+          if [[ -z "${RESUME_REF}" ]]; then
+            RESUME_REF=$(python3 -m release_service_utils.helpers.rpm_resume find \
+              --artifact-json "${ARTIFACTS_JSON_FILE}" \
+              --signing-alias "${SIGNING_ALIAS}" \
+              --oci-storage "$(params.ociStorage)" \
+              --internal-request "${RESUME_FROM_IR}")
+          fi
+
+          if [[ -n "${RESUME_REF}" ]]; then
+            python3 -m release_service_utils.helpers.rpm_resume validate \
+              --artifact-json "${ARTIFACTS_JSON_FILE}" \
+              --signing-alias "${SIGNING_ALIAS}" \
+              --oci-storage "$(params.ociStorage)" \
+              --internal-request "${RESUME_FROM_IR}" \
+              --signed-artifact "${RESUME_REF}" \
+              --expires-after "$(params.ociArtifactExpiresAfter)" \
+              --result-file "$(results.signedRpmsOciArtifacts.path)"
+            exit 0
+          fi
+        fi
+
+        INPUT_FINGERPRINT=$(python3 -m release_service_utils.helpers.rpm_resume fingerprint \
+          --artifact-json "${ARTIFACTS_JSON_FILE}" --signing-alias "${SIGNING_ALIAS}")
 
         SIGNING_PIPELINE_GIT_URL="$(params.signingRepo)"
         SIGNING_PIPELINE_GIT_REVISION="$(params.signingRevision)"
@@ -231,6 +263,7 @@ spec:
           -p taskGitUrl="${SIGNING_PIPELINE_GIT_URL}" \
           -p taskGitRevision="${SIGNING_PIPELINE_GIT_REVISION}" \
           -l "${PIPELINERUN_LABEL}=$(params.pipelineRunUid)" \
+          -l "internal-services.appstudio.openshift.io/rpm-input-fingerprint=${INPUT_FINGERPRINT}" \
           -t "$(params.requestTimeout)" \
           --service-account "${SERVICE_ACCOUNT}" \
           --pipeline-timeout "$(params.pipelineTimeout)" \
@@ -250,6 +283,16 @@ spec:
             exit 1
         fi
         echo "Signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
+
+        if [[ "$(params.createOciArtifact)" == "true" ]]; then
+          python3 -m release_service_utils.helpers.rpm_resume record \
+            --artifact-json "${ARTIFACTS_JSON_FILE}" \
+            --signing-alias "${SIGNING_ALIAS}" \
+            --oci-storage "$(params.ociStorage)" \
+            --internal-request "${internalRequest}" \
+            --signed-artifact "${signedRpmsOciArtifact}" \
+            --expires-after "$(params.ociArtifactExpiresAfter)"
+        fi
 
         # Write signed RPMs OCI artifact to result
         echo -n "${signedRpmsOciArtifact}" > "$(results.signedRpmsOciArtifacts.path)"
