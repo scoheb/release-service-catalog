@@ -209,25 +209,27 @@ spec:
         ARTIFACT_STORAGE_SECRET=$(jq --exit-status -r \
             '.signOptions.artifactStorageSecret // "signing-artifact-storage-preprod"' "${DATA_FILE}")
 
-        RESUME_REF="$(params.resumeSignedRpmsOciArtifact)"
-        if [[ -z "${RESUME_REF}" ]]; then
-          RESUME_REF=$(python3 -m release_service_utils.helpers.rpm_resume find \
-            --artifact-json "${ARTIFACTS_JSON_FILE}" \
-            --signing-alias "${SIGNING_ALIAS}" \
-            --oci-storage "$(params.ociStorage)" \
-            --internal-request "${RESUME_FROM_IR}")
-        fi
+        if [[ "$(params.createOciArtifact)" == "true" ]]; then
+          RESUME_REF="$(params.resumeSignedRpmsOciArtifact)"
+          if [[ -z "${RESUME_REF}" ]]; then
+            RESUME_REF=$(python3 -m release_service_utils.helpers.rpm_resume find \
+              --artifact-json "${ARTIFACTS_JSON_FILE}" \
+              --signing-alias "${SIGNING_ALIAS}" \
+              --oci-storage "$(params.ociStorage)" \
+              --internal-request "${RESUME_FROM_IR}")
+          fi
 
-        if [[ -n "${RESUME_REF}" ]]; then
-          python3 -m release_service_utils.helpers.rpm_resume validate \
-            --artifact-json "${ARTIFACTS_JSON_FILE}" \
-            --signing-alias "${SIGNING_ALIAS}" \
-            --oci-storage "$(params.ociStorage)" \
-            --internal-request "${RESUME_FROM_IR}" \
-            --signed-artifact "${RESUME_REF}" \
-            --expires-after "$(params.ociArtifactExpiresAfter)" \
-            --result-file "$(results.signedRpmsOciArtifacts.path)"
-          exit 0
+          if [[ -n "${RESUME_REF}" ]]; then
+            python3 -m release_service_utils.helpers.rpm_resume validate \
+              --artifact-json "${ARTIFACTS_JSON_FILE}" \
+              --signing-alias "${SIGNING_ALIAS}" \
+              --oci-storage "$(params.ociStorage)" \
+              --internal-request "${RESUME_FROM_IR}" \
+              --signed-artifact "${RESUME_REF}" \
+              --expires-after "$(params.ociArtifactExpiresAfter)" \
+              --result-file "$(results.signedRpmsOciArtifacts.path)"
+            exit 0
+          fi
         fi
 
         INPUT_FINGERPRINT=$(python3 -m release_service_utils.helpers.rpm_resume fingerprint \
@@ -282,13 +284,15 @@ spec:
         fi
         echo "Signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
 
-        python3 -m release_service_utils.helpers.rpm_resume record \
-          --artifact-json "${ARTIFACTS_JSON_FILE}" \
-          --signing-alias "${SIGNING_ALIAS}" \
-          --oci-storage "$(params.ociStorage)" \
-          --internal-request "${internalRequest}" \
-          --signed-artifact "${signedRpmsOciArtifact}" \
-          --expires-after "$(params.ociArtifactExpiresAfter)"
+        if [[ "$(params.createOciArtifact)" == "true" ]]; then
+          python3 -m release_service_utils.helpers.rpm_resume record \
+            --artifact-json "${ARTIFACTS_JSON_FILE}" \
+            --signing-alias "${SIGNING_ALIAS}" \
+            --oci-storage "$(params.ociStorage)" \
+            --internal-request "${internalRequest}" \
+            --signed-artifact "${signedRpmsOciArtifact}" \
+            --expires-after "$(params.ociArtifactExpiresAfter)"
+        fi
 
         # Write signed RPMs OCI artifact to result
         echo -n "${signedRpmsOciArtifact}" > "$(results.signedRpmsOciArtifacts.path)"
