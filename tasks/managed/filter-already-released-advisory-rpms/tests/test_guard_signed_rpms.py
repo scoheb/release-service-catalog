@@ -73,6 +73,16 @@ class FakePulp:
         raise AssertionError(f"Unexpected Pulp request: {url}")
 
 
+class FakeResume:
+    candidate: ClassVar[str | None] = None
+    calls: ClassVar[list] = []
+
+    @classmethod
+    def find(cls, storage, inputs, alias, explicit):
+        cls.calls.append((storage, inputs, alias, explicit))
+        return cls.candidate
+
+
 def rpm(name, repo="x86_64"):
     return {
         "rpm": f"{name}-1-1.x86_64.rpm",
@@ -94,15 +104,20 @@ class TestSignedPulpGuard(unittest.TestCase):
         self.snapshot = root / "snapshot.json"
         self.skip = root / "skip"
         self.config = root / "cli.toml"
+        self.data = root / "data.json"
+        self.resume = root / "resume"
         self.snapshot.write_text(
             json.dumps({"components": [{"rpmsToPublish": [rpm("new")]}]})
         )
         self.skip.write_text("false")
         self.config.write_text("")
+        self.data.write_text(json.dumps({"signOptions": {"signKeyAlias": {"key": "release4"}}}))
         FakePulp.published = {}
         FakePulp.latest = set()
         FakePulp.repository_exists = True
         FakePulp.calls = []
+        FakeResume.candidate = None
+        FakeResume.calls = []
 
     def run_guard(self, domain="signed"):
         root_module = types.ModuleType("release_service_utils")
@@ -120,18 +135,25 @@ class TestSignedPulpGuard(unittest.TestCase):
         pulp_client.parse_pulp_config = lambda _path: {
             "base_url": "https://pulp.example"
         }
+        rpm_resume = types.ModuleType("release_service_utils.helpers.rpm_resume")
+        rpm_resume.find_resume_checkpoint = FakeResume.find
+        rpm_resume.inputs_from_snapshot = lambda _snapshot: {"new-1-1.x86_64.rpm": "unsigned-sha"}
         helpers.http_client = http_client
         modules = {
             "release_service_utils": root_module,
             "release_service_utils.helpers": helpers,
             "release_service_utils.helpers.http_client": http_client,
             "release_service_utils.helpers.pulp_client": pulp_client,
+            "release_service_utils.helpers.rpm_resume": rpm_resume,
         }
         env = {
             "SIGNED_PULP_DOMAIN": domain,
             "RESULT_SKIP_RELEASE": str(self.skip),
             "SNAPSHOT_FILE": str(self.snapshot),
             "PULP_CONFIG_FILE": str(self.config),
+            "DATA_FILE": str(self.data),
+            "RESULT_RESUME_ARTIFACT": str(self.resume),
+            "OCI_STORAGE": "quay.io/konflux-ci/release-service-trusted-artifacts",
         }
         with patch.dict(sys.modules, modules), patch.dict(os.environ, env):
             # Execute the Task's actual embedded script with fake Pulp modules.
@@ -139,6 +161,7 @@ class TestSignedPulpGuard(unittest.TestCase):
 
     def test_absent_from_published_and_latest_allows_retry(self):
         self.run_guard()
+        self.assertEqual(self.resume.read_text(), "")
         self.assertIn(("published", "x86_64", "new", "x86_64"), FakePulp.calls)
         self.assertIn(
             ("latest", "x86_64", "new", "0", "1", "1", "x86_64"), FakePulp.calls
@@ -176,9 +199,16 @@ class TestSignedPulpGuard(unittest.TestCase):
             )
         )
         FakePulp.published[("x86_64", "released", "x86_64")] = DigestStatus.MISMATCH
-        with self.assertRaisesRegex(RuntimeError, "partial release"):
+        with self.assertRaisesRegex(RuntimeError, "No validated signed RPM checkpoint"):
             self.run_guard()
         self.assertNotIn(("published", "x86_64", "new", "x86_64"), FakePulp.calls)
+
+    def test_matching_prior_signing_request_allows_partial_upload_retry(self):
+        FakeResume.candidate = "oci:quay.io/signed@sha256:abcd"
+        self.run_guard()
+        self.assertEqual(self.resume.read_text(), FakeResume.candidate)
+        self.assertEqual(FakePulp.calls, [])
+        self.assertEqual(FakeResume.calls[0][2], "release4")
 
     def test_missing_signed_repository_fails_closed(self):
         FakePulp.repository_exists = False

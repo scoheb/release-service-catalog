@@ -191,7 +191,7 @@ spec:
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: push-rpms-to-pulp
-      image: quay.io/redhat-user-workloads-stage/konflux-release-service-tenant/release-service-utils@sha256:e10ed8cca71675158c7731197ee6e6181c614bd35538af94602935785ae1577f
+      image: quay.io/scoheb/release-service-utils@sha256:8ec32bd4c9585ed715b1dd7a0fe6a30f221fc966da7dd26656e01f4087d99fa9
       computeResources:
         limits:
           memory: 4Gi
