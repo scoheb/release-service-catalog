@@ -219,7 +219,7 @@ spec:
           value: "$(results.latest_advisory_internal_url.path)"
       command: ["python3", "-m", "filter_already_released_advisory_rpms"]
     - name: guard-signed-rpms
-      image: quay.io/redhat-user-workloads-stage/konflux-release-service-tenant/release-service-utils@sha256:f63d494a1f85b9b31904ea761529e2b40fe84555e435fd81e3553d7b3639a890
+      image: quay.io/redhat-user-workloads-stage/konflux-release-service-tenant/release-service-utils@sha256:e2154952d52505351307895167eebd051d1b3833db2674f4027871032eeec734
       computeResources:
         limits:
           memory: 256Mi
