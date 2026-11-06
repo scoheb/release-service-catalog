@@ -20,7 +20,9 @@ The first Release publishes signed RPMs, then fails at advisory creation. The su
 the signing and signed Pulp tasks succeeded and `create-advisory` failed. It changes its
 ReleasePlanAdmission back to the fixed revision, creates a second Release from the same Snapshot,
 and verifies that the original signed OCI artifact was reused without another signing request.
-The existing advisory content checks and final retrigger check run on the successful release.
+The successful release is checked for signed Pulp upload, advisory creation, advisory URLs,
+RPM fanout, and release artifacts. The regular suite's private GitLab advisory YAML fetch and
+final retrigger check are outside this focused retry mode.
 
 The failure branch is a test fixture: its `create-advisory` Task prints a GitLab access error and
 exits before creating an advisory. Keep that branch separate from the production fix.
