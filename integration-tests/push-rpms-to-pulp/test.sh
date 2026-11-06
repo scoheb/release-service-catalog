@@ -115,6 +115,11 @@ rpm_retry_expected_advisory_failure() {
 
     first_run="$(kubectl get release "${first_name}" -n "${tenant_namespace}" -o json |
         jq -er '.status.managedProcessing.pipelineRun | split("/")[-1]')"
+    if [ -n "$(kubectl get release "${first_name}" -n "${tenant_namespace}" -o json |
+        jq -r '.status.artifacts.advisory.url // empty')" ]; then
+        echo "The failed release unexpectedly has an advisory" >&2
+        return 1
+    fi
     rpm_retry_assert_task_status "${first_run}" "rh-sign-rpm" "True"
     rpm_retry_assert_task_status "${first_run}" "push-signed-rpms-to-pulp" "True"
     rpm_retry_assert_task_status "${first_run}" "create-advisory" "False"
