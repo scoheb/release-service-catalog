@@ -765,6 +765,8 @@ spec:
           value: "false"
         - name: createOciArtifact
           value: "true"
+        - name: ociArtifactExpiresAfter
+          value: "7d"
         - name: ociStorage
           value: $(params.ociStorage)
         - name: sourceDataArtifact
