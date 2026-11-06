@@ -212,19 +212,14 @@ spec:
         FINGERPRINT=$(python3 -m release_service_utils.helpers.rpm_resume fingerprint \
           "${RESUME_ARGS[@]}")
         RESUME_FILE="$(params.dataDir)/signed-rpm-resume.txt"
-        python3 -m release_service_utils.helpers.rpm_resume validate \
-          "${RESUME_ARGS[@]}" --result-file "${RESUME_FILE}" || resume_rc=$?
-        if [ -z "${resume_rc:-}" ]; then
+        RESUME_REF=$(python3 -m release_service_utils.helpers.rpm_resume find "${RESUME_ARGS[@]}")
+        if [ -n "${RESUME_REF}" ]; then
+            python3 -m release_service_utils.helpers.rpm_resume validate \
+              "${RESUME_ARGS[@]}" --signed-artifact "${RESUME_REF}" --result-file "${RESUME_FILE}"
             signedRpmsOciArtifact=$(cat "${RESUME_FILE}")
             echo "Reusing signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
             echo -n "${signedRpmsOciArtifact}" > "$(results.signedRpmsOciArtifacts.path)"
             exit 0
-        fi
-        # A missing checkpoint is normal on a first release. Other validation failures must stop.
-        RESUME_REF=$(python3 -m release_service_utils.helpers.rpm_resume find "${RESUME_ARGS[@]}")
-        if [ -n "${RESUME_REF}" ]; then
-            echo "Existing signed RPM artifact failed validation; refusing to re-sign" >&2
-            exit 1
         fi
 
         # Prepare artifacts.json for signing pipeline
