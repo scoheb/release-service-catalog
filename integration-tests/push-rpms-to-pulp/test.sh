@@ -135,11 +135,17 @@ rpm_retry_expected_advisory_failure() {
 }
 
 rpm_retry_verify_reuse() {
-    local release_name="$1" second_run second_ref signing_taskrun signing_pod
-    second_run="$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json |
-        jq -er '.status.managedProcessing.pipelineRun | split("/")[-1]')"
+    local release_name="$1" release_json second_run second_ref signing_taskrun signing_pod
+    release_json="$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json)"
+    second_run="$(jq -er '.status.managedProcessing.pipelineRun | split("/")[-1]' \
+        <<< "${release_json}")"
     rpm_retry_assert_task_status "${second_run}" "rh-sign-rpm" "True"
+    rpm_retry_assert_task_status "${second_run}" "push-signed-rpms-to-pulp" "True"
     rpm_retry_assert_task_status "${second_run}" "create-advisory" "True"
+    jq -e '.status.artifacts.advisory |
+        (.url | type == "string" and length > 0) and
+        (.internal_url | type == "string" and length > 0)' \
+        <<< "${release_json}" >/dev/null
     second_ref="$("${SUITE_DIR}/../scripts/get-taskrun-result.sh" "${second_run}" \
         "rh-sign-rpm" "signedRpmsOciArtifacts" "${managed_namespace}")"
     if [ "${second_ref}" != "${RPM_RETRY_FIRST_SIGNED_ARTIFACT}" ]; then
@@ -289,7 +295,9 @@ verify_release_contents() {
         "hello2-[0-9].*\\.noarch" "${repo_prefix}/${arch}"
     done
 
-    if [ -z "$advisory_internal_url" ]; then
+    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
+        echo "Advisory retry mode: advisory creation and URLs verified; skipping private GitLab YAML fetch."
+    elif [ -z "$advisory_internal_url" ]; then
         echo "Warning: advisory_internal_url is empty. Skipping advisory content check."
     else
         # advisory_yaml_dir is made global by not declaring it local
@@ -658,6 +666,8 @@ verify_release_contents() {
     if [ "${failures}" -gt 0 ]; then
       echo "🔴 Test has FAILED with ${failures} failure(s)!"
       failed_releases="${RELEASE_NAME} ${failed_releases}"
+    elif [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
+      echo "✅️ Advisory retry release checks passed."
     else
       # Create and validate a retriggered Release using the same releasePlan/snapshot.
       # This verifies idempotency: the second run should detect that RPMs are already published
