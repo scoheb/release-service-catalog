@@ -58,12 +58,107 @@ wait_for_multi_component_snapshot() {
     echo "$snapshot_name"
 }
 
+rpm_retry_taskrun() {
+    local pipeline_run="$1" task="$2"
+    kubectl get taskruns -n "${managed_namespace}" \
+        -l "tekton.dev/pipelineRun=${pipeline_run}" -o json |
+        jq -er --arg task "${task}" \
+            '[.items[] | select(.metadata.labels."tekton.dev/pipelineTask" == $task)] |
+             sort_by(.metadata.creationTimestamp) | last | .metadata.name'
+}
+
+rpm_retry_assert_task_status() {
+    local pipeline_run="$1" task="$2" expected="$3" taskrun
+    taskrun="$(rpm_retry_taskrun "${pipeline_run}" "${task}")"
+    kubectl get taskrun "${taskrun}" -n "${managed_namespace}" -o json |
+        jq -e --arg expected "${expected}" \
+            'any(.status.conditions[]?; .type == "Succeeded" and .status == $expected)' >/dev/null
+}
+
+rpm_retry_set_catalog_revision() {
+    local revision="$1" index
+    index="$(kubectl get releaseplanadmission "${release_plan_admission_name}" \
+        -n "${managed_namespace}" -o json |
+        jq -er '.spec.pipeline.pipelineRef.params | to_entries[] |
+            select(.value.name == "revision") | .key')"
+    kubectl patch releaseplanadmission "${release_plan_admission_name}" \
+        -n "${managed_namespace}" --type=json \
+        -p "$(jq -cn --arg revision "${revision}" --argjson index "${index}" \
+            '[{op: "replace", path: ("/spec/pipeline/pipelineRef/params/" + ($index | tostring) + "/value"),
+               value: $revision}]')"
+}
+
+rpm_retry_release_json() {
+    local name="$1" snapshot="$2"
+    jq -n --arg name "${name}" --arg namespace "${tenant_namespace}" \
+        --arg tool "${originating_tool}" --arg uuid "${uuid}" \
+        --arg snapshot "${snapshot}" --arg plan "${release_plan_name}" \
+        '{apiVersion: "appstudio.redhat.com/v1alpha1", kind: "Release",
+          metadata: {name: $name, namespace: $namespace,
+                     labels: {"originating-tool": $tool, "test-run-uuid": $uuid}},
+          spec: {snapshot: $snapshot, releasePlan: $plan}}'
+}
+
+rpm_retry_expected_advisory_failure() {
+    local snapshot="$1" first_name="push-rpms-fault-${uuid}" first_run first_ref
+    local wait_status=0
+    : "${RPM_ADVISORY_FAILURE_GIT_REVISION:?Set the catalog revision with the create-advisory failure fixture}"
+    rpm_retry_set_catalog_revision "${RPM_ADVISORY_FAILURE_GIT_REVISION}"
+    rpm_retry_release_json "${first_name}" "${snapshot}" | kubectl create -f -
+
+    RELEASE_NAME="${first_name}" RELEASE_NAMESPACE="${tenant_namespace}" \
+        "${SUITE_DIR}/../scripts/wait-for-release.sh" || wait_status=$?
+    if [ "${wait_status}" -eq 0 ]; then
+        echo "Expected the first advisory creation to fail" >&2
+        return 1
+    fi
+
+    first_run="$(kubectl get release "${first_name}" -n "${tenant_namespace}" -o json |
+        jq -er '.status.managedProcessing.pipelineRun | split("/")[-1]')"
+    rpm_retry_assert_task_status "${first_run}" "rh-sign-rpm" "True"
+    rpm_retry_assert_task_status "${first_run}" "push-signed-rpms-to-pulp" "True"
+    rpm_retry_assert_task_status "${first_run}" "create-advisory" "False"
+    first_ref="$("${SUITE_DIR}/../scripts/get-taskrun-result.sh" "${first_run}" \
+        "rh-sign-rpm" "signedRpmsOciArtifacts" "${managed_namespace}")"
+    if [ -z "${first_ref}" ]; then
+        echo "First signing run did not produce a signed RPM artifact" >&2
+        return 1
+    fi
+    RPM_RETRY_FIRST_SIGNED_ARTIFACT="${first_ref}"
+    echo "First release published signed RPMs and failed at advisory creation"
+    rpm_retry_set_catalog_revision "${RELEASE_CATALOG_GIT_REVISION}"
+}
+
+rpm_retry_verify_reuse() {
+    local release_name="$1" second_run second_ref signing_taskrun signing_pod
+    second_run="$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json |
+        jq -er '.status.managedProcessing.pipelineRun | split("/")[-1]')"
+    rpm_retry_assert_task_status "${second_run}" "rh-sign-rpm" "True"
+    rpm_retry_assert_task_status "${second_run}" "create-advisory" "True"
+    second_ref="$("${SUITE_DIR}/../scripts/get-taskrun-result.sh" "${second_run}" \
+        "rh-sign-rpm" "signedRpmsOciArtifacts" "${managed_namespace}")"
+    if [ "${second_ref}" != "${RPM_RETRY_FIRST_SIGNED_ARTIFACT}" ]; then
+        echo "Retry did not use the original signed RPM artifact" >&2
+        return 1
+    fi
+    signing_taskrun="$(rpm_retry_taskrun "${second_run}" "rh-sign-rpm")"
+    signing_pod="$(kubectl get taskrun "${signing_taskrun}" -n "${managed_namespace}" \
+        -o jsonpath='{.status.podName}')"
+    kubectl logs "pod/${signing_pod}" -n "${managed_namespace}" \
+        -c step-rh-sign-rpm | grep -Fq 'Reusing signed RPMs OCI artifact:'
+    echo "Retry reused the original signed RPMs without a new signing request"
+}
+
 wait_for_releases() {
     local snapshot_name
     snapshot_name=$(wait_for_multi_component_snapshot)
     if [ -z "$snapshot_name" ]; then
         echo "Could not find multi-component snapshot"
         exit 1
+    fi
+
+    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
+        rpm_retry_expected_advisory_failure "${snapshot_name}"
     fi
 
     local release_name="push-rpms-multi-${uuid}"
@@ -88,6 +183,10 @@ EOF
     release_names="${release_name}"
 
     "${SUITE_DIR}/../scripts/wait-for-release.sh"
+
+    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
+        rpm_retry_verify_reuse "${release_name}"
+    fi
 }
 
 # --- Release Verification ---

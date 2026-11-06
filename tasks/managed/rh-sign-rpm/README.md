@@ -1,6 +1,7 @@
 # rh-sign-rpm
 
-Tekton task to create internalrequests to sign RPMs
+Signs RPMs through an InternalRequest and records the signed OCI artifact for retry.
+A release retry reuses a validated artifact for the exact unsigned RPM set and signing alias.
 
 ## Parameters
 

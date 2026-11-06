@@ -94,11 +94,16 @@ class TestSignedPulpGuard(unittest.TestCase):
         self.snapshot = root / "snapshot.json"
         self.skip = root / "skip"
         self.config = root / "cli.toml"
+        self.data = root / "data.json"
         self.snapshot.write_text(
             json.dumps({"components": [{"rpmsToPublish": [rpm("new")]}]})
         )
         self.skip.write_text("false")
         self.config.write_text("")
+        self.data.write_text(json.dumps({"signOptions": {"signKeyAlias": {"key": "release4"}}}))
+        self.checkpoint_ref = None
+        self.validated = []
+        self.artifact_error = None
         FakePulp.published = {}
         FakePulp.latest = set()
         FakePulp.repository_exists = True
@@ -121,21 +126,50 @@ class TestSignedPulpGuard(unittest.TestCase):
             "base_url": "https://pulp.example"
         }
         helpers.http_client = http_client
+        rpm_resume = types.ModuleType("release_service_utils.helpers.rpm_resume")
+        rpm_resume.inputs_from_snapshot = lambda snapshot: {
+            item["rpm"]: item["sha256"]
+            for component in snapshot["components"]
+            for item in component["rpmsToPublish"]
+        }
+        rpm_resume.find_resume_checkpoint = (
+            lambda storage, inputs, alias: self._find_checkpoint(storage, inputs, alias)
+        )
+        rpm_resume.validate_signed_artifact = self._validate_artifact
+        helpers.rpm_resume = rpm_resume
         modules = {
             "release_service_utils": root_module,
             "release_service_utils.helpers": helpers,
             "release_service_utils.helpers.http_client": http_client,
             "release_service_utils.helpers.pulp_client": pulp_client,
+            "release_service_utils.helpers.rpm_resume": rpm_resume,
         }
         env = {
             "SIGNED_PULP_DOMAIN": domain,
             "RESULT_SKIP_RELEASE": str(self.skip),
             "SNAPSHOT_FILE": str(self.snapshot),
             "PULP_CONFIG_FILE": str(self.config),
+            "DATA_FILE": str(self.data),
+            "OCI_STORAGE": "quay.io/test/storage",
         }
         with patch.dict(sys.modules, modules), patch.dict(os.environ, env):
             # Execute the Task's actual embedded script with fake Pulp modules.
             exec(compile(GUARD_SCRIPT, str(TASK_FILE), "exec"), {})  # noqa: S102
+
+    def _find_checkpoint(self, storage, inputs, alias):
+        self.assertEqual(storage, "quay.io/test/storage")
+        self.assertEqual(alias, "release4")
+        self.assertEqual(inputs, {
+            item["rpm"]: item["sha256"]
+            for component in json.loads(self.snapshot.read_text())["components"]
+            for item in component["rpmsToPublish"]
+        })
+        return self.checkpoint_ref
+
+    def _validate_artifact(self, ref, inputs):
+        self.validated.append((ref, inputs))
+        if self.artifact_error:
+            raise self.artifact_error
 
     def test_absent_from_published_and_latest_allows_retry(self):
         self.run_guard()
@@ -144,7 +178,7 @@ class TestSignedPulpGuard(unittest.TestCase):
             ("latest", "x86_64", "new", "0", "1", "1", "x86_64"), FakePulp.calls
         )
 
-    def test_stale_publication_still_blocks_retry(self):
+    def test_stale_publication_without_checkpoint_blocks_retry(self):
         FakePulp.latest.add(("x86_64", "new", "0", "1", "1", "x86_64"))
         with self.assertRaisesRegex(RuntimeError, "Stop before re-signing"):
             self.run_guard()
@@ -152,7 +186,7 @@ class TestSignedPulpGuard(unittest.TestCase):
             ("latest", "x86_64", "new", "0", "1", "1", "x86_64"), FakePulp.calls
         )
 
-    def test_published_rpm_blocks_retry(self):
+    def test_published_rpm_without_checkpoint_blocks_retry(self):
         FakePulp.published[("x86_64", "new", "x86_64")] = DigestStatus.MISMATCH
         with self.assertRaisesRegex(RuntimeError, "Stop before re-signing"):
             self.run_guard()
@@ -160,7 +194,7 @@ class TestSignedPulpGuard(unittest.TestCase):
             ("latest", "x86_64", "new", "0", "1", "1", "x86_64"), FakePulp.calls
         )
 
-    def test_partial_release_stops_before_resigning_completed_rpm(self):
+    def test_partial_release_reuses_exact_signed_artifact(self):
         self.snapshot.write_text(
             json.dumps(
                 {
@@ -176,9 +210,18 @@ class TestSignedPulpGuard(unittest.TestCase):
             )
         )
         FakePulp.published[("x86_64", "released", "x86_64")] = DigestStatus.MISMATCH
-        with self.assertRaisesRegex(RuntimeError, "partial release"):
-            self.run_guard()
+        self.checkpoint_ref = "oci:quay.io/test/storage@sha256:" + "a" * 64
+        self.run_guard()
+        self.assertEqual(self.validated[0][0], self.checkpoint_ref)
+        self.assertEqual(len(self.validated[0][1]), 2)
         self.assertNotIn(("published", "x86_64", "new", "x86_64"), FakePulp.calls)
+
+    def test_invalid_retained_artifact_blocks_retry(self):
+        FakePulp.published[("x86_64", "new", "x86_64")] = DigestStatus.MISMATCH
+        self.checkpoint_ref = "oci:quay.io/test/storage@sha256:" + "a" * 64
+        self.artifact_error = RuntimeError("signed artifact does not match")
+        with self.assertRaisesRegex(RuntimeError, "signed artifact does not match"):
+            self.run_guard()
 
     def test_missing_signed_repository_fails_closed(self):
         FakePulp.repository_exists = False

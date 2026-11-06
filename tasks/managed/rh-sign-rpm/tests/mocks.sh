@@ -3,6 +3,19 @@ set -eux
 
 # mocks to be injected into task step scripts for rh-sign-rpm testing
 
+function python3() {
+  if [[ "${1:-}" == "-m" && "${2:-}" == "release_service_utils.helpers.rpm_resume" ]]; then
+    case "${3:-}" in
+      fingerprint) echo "$(printf 'a%.0s' {1..63})" ;;
+      validate) return 1 ;;  # No checkpoint in the signing-request unit tests.
+      find|record) return 0 ;;
+      *) return 1 ;;
+    esac
+    return
+  fi
+  command python3 "$@"
+}
+
 function internal-request() {
   TIMEOUT=30
   END_TIME=$(date -ud "$TIMEOUT seconds" +%s)

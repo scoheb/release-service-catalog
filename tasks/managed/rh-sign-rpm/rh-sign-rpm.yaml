@@ -8,7 +8,8 @@ metadata:
     tekton.dev/tags: sign-rpm
 spec:
   description: |-
-    Tekton task to create internalrequests to sign RPMs
+    Signs RPMs through an InternalRequest and records the signed OCI artifact for retry.
+    A release retry reuses a validated artifact for the exact unsigned RPM set and signing alias.
   params:
     - name: dataPath
       type: string
@@ -160,7 +161,7 @@ spec:
         - name: sourceDataArtifact
           value: $(params.sourceDataArtifact)
     - name: rh-sign-rpm
-      image: quay.io/konflux-ci/release-service-utils@sha256:6d4dee971855fe55724c16b049e21a396287b53766ffd3fa984ee91895e9f099
+      image: quay.io/redhat-user-workloads-stage/konflux-release-service-tenant/release-service-utils@sha256:f63d494a1f85b9b31904ea761529e2b40fe84555e435fd81e3553d7b3639a890
       computeResources:
         limits:
           memory: 512Mi
@@ -206,6 +207,26 @@ spec:
         SIGNING_PIPELINE_GIT_URL="$(params.signingRepo)"
         SIGNING_PIPELINE_GIT_REVISION="$(params.signingRevision)"
 
+        RESUME_ARGS=(--artifact-json "${ARTIFACTS_JSON_FILE}" --signing-alias "${SIGNING_ALIAS}"
+          --oci-storage "$(params.ociStorage)")
+        FINGERPRINT=$(python3 -m release_service_utils.helpers.rpm_resume fingerprint \
+          "${RESUME_ARGS[@]}")
+        RESUME_FILE="$(params.dataDir)/signed-rpm-resume.txt"
+        python3 -m release_service_utils.helpers.rpm_resume validate \
+          "${RESUME_ARGS[@]}" --result-file "${RESUME_FILE}" || resume_rc=$?
+        if [ -z "${resume_rc:-}" ]; then
+            signedRpmsOciArtifact=$(cat "${RESUME_FILE}")
+            echo "Reusing signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
+            echo -n "${signedRpmsOciArtifact}" > "$(results.signedRpmsOciArtifacts.path)"
+            exit 0
+        fi
+        # A missing checkpoint is normal on a first release. Other validation failures must stop.
+        RESUME_REF=$(python3 -m release_service_utils.helpers.rpm_resume find "${RESUME_ARGS[@]}")
+        if [ -n "${RESUME_REF}" ]; then
+            echo "Existing signed RPM artifact failed validation; refusing to re-sign" >&2
+            exit 1
+        fi
+
         # Prepare artifacts.json for signing pipeline
         echo "Preparing artifacts.json for signing pipeline..."
         # Use gzip compression to avoid ARG_MAX limit for large artifact lists
@@ -231,6 +252,7 @@ spec:
           -p taskGitUrl="${SIGNING_PIPELINE_GIT_URL}" \
           -p taskGitRevision="${SIGNING_PIPELINE_GIT_REVISION}" \
           -l "${PIPELINERUN_LABEL}=$(params.pipelineRunUid)" \
+          -l "internal-services.appstudio.openshift.io/rpm-input-fingerprint=${FINGERPRINT}" \
           -t "$(params.requestTimeout)" \
           --service-account "${SERVICE_ACCOUNT}" \
           --pipeline-timeout "$(params.pipelineTimeout)" \
@@ -250,6 +272,10 @@ spec:
             exit 1
         fi
         echo "Signed RPMs OCI artifact: ${signedRpmsOciArtifact}"
+
+        python3 -m release_service_utils.helpers.rpm_resume record \
+          "${RESUME_ARGS[@]}" --internal-request "${internalRequest}" \
+          --signed-artifact "${signedRpmsOciArtifact}" --expires-after "$(params.ociArtifactExpiresAfter)"
 
         # Write signed RPMs OCI artifact to result
         echo -n "${signedRpmsOciArtifact}" > "$(results.signedRpmsOciArtifacts.path)"
