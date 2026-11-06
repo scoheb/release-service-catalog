@@ -173,7 +173,8 @@ spec:
               {"resultIndex": 5, "key": ".intention", "default": "staging"},
               {"resultIndex": 6, "key": ".signOptions.unsignedRpmsDomain"},
               {"resultIndex": 7, "key": ".signOptions.signedRpmsDomain"},
-              {"resultIndex": 8, "key": ".pulp.taskTimeout", "default": "7200"}
+              {"resultIndex": 8, "key": ".pulp.taskTimeout", "default": "7200"},
+              {"resultIndex": 9, "key": ".signOptions.signKeyAlias.key", "default": ""}
             ]
         - name: taskGitUrl
           value: "$(params.taskGitUrl)"
@@ -572,6 +573,8 @@ spec:
       params:
         - name: signedRpmsOciArtifact
           value: "$(tasks.rh-sign-rpm.results.signedRpmsOciArtifacts)"
+        - name: signedBy
+          value: "$(tasks.collect-task-params.results.extractedValues[9])"
         - name: PULP_DOMAIN
           value: "$(tasks.collect-task-params.results.extractedValues[7])"
         - name: PULP_SECRET_NAME

@@ -18,6 +18,10 @@ spec:
         When provided, RPMs are extracted from this artifact instead of from the snapshot.
         Either SNAPSHOT_PATH or signedRpmsOciArtifact must be provided
       default: ""
+    - name: signedBy
+      type: string
+      description: Signing key alias to record on signed RPMs in Pulp
+      default: ""
     - name: PULP_DOMAIN
       type: string
       description: The domain to use for Pulp operations
@@ -143,6 +147,8 @@ spec:
         value: /var/workdir/rpm-extract
       - name: SIGNED_RPMS_OCI_ARTIFACT
         value: $(params.signedRpmsOciArtifact)
+      - name: SIGNED_BY
+        value: $(params.signedBy)
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.ociArtifactExpiresAfter)
       - name: ORAS_OPTIONS
