@@ -94,7 +94,7 @@ spec:
       type: string
       description: >-
         Git revision (branch, tag, or commit) in the signing repository
-      default: "feat/rpm-signing-progress"
+      default: "fix/HUM-11602-rpm-signing-cpu-600m"
     - name: caTrustConfigMapName
       type: string
       description: The name of the ConfigMap to read CA bundle data from
