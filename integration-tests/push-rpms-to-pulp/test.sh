@@ -75,6 +75,29 @@ rpm_retry_assert_task_status() {
             'any(.status.conditions[]?; .type == "Succeeded" and .status == $expected)' >/dev/null
 }
 
+rpm_retry_assert_task_missing() {
+    local pipeline_run="$1" task="$2"
+    kubectl get taskruns -n "${managed_namespace}" \
+        -l "tekton.dev/pipelineRun=${pipeline_run}" -o json |
+        jq -e --arg task "${task}" \
+            'all(.items[]; .metadata.labels."tekton.dev/pipelineTask" != $task)' >/dev/null
+}
+
+rpm_retry_pulp_count() (
+    { set +x; } 2>/dev/null
+    umask 077
+    local repo="$1" config version
+    config="$(mktemp)"
+    trap 'rm -f "${config}"' EXIT
+    kubectl get secret "pulp-credentials-${component_name}" -n "${managed_namespace}" \
+        -o jsonpath='{.data.cli\.toml}' | base64 -d > "${config}"
+    version="$(pulp --config "${config}" --domain konflux-release-integration-tests \
+        rpm repository show --name "${repo}" | jq -er '.latest_version_href')"
+    pulp --config "${config}" --domain konflux-release-integration-tests \
+        rpm content list --repository-version "${version}" --name hello2 \
+        --release "${uuid}" --arch noarch | jq -er 'length'
+)
+
 rpm_retry_set_catalog_revision() {
     local revision="$1" index
     index="$(kubectl get releaseplanadmission "${release_plan_admission_name}" \
@@ -134,6 +157,61 @@ rpm_retry_expected_advisory_failure() {
     rpm_retry_set_catalog_revision "${RELEASE_CATALOG_GIT_REVISION}"
 }
 
+rpm_retry_expected_signed_push_failure() {
+    local snapshot="$1" first_name="push-rpms-partial-${uuid}" first_run first_ref taskrun pod
+    local wait_status=0 first_count later_count
+    : "${RPM_SIGNED_PUSH_FAILURE_GIT_REVISION:?Set the catalog revision with the signed push failure fixture}"
+    rpm_retry_set_catalog_revision "${RPM_SIGNED_PUSH_FAILURE_GIT_REVISION}"
+    rpm_retry_release_json "${first_name}" "${snapshot}" | kubectl create -f -
+
+    RELEASE_NAME="${first_name}" RELEASE_NAMESPACE="${tenant_namespace}" \
+        "${SUITE_DIR}/../scripts/wait-for-release.sh" || wait_status=$?
+    if [ "${wait_status}" -eq 0 ]; then
+        echo "Expected the first signed Pulp push to fail" >&2
+        return 1
+    fi
+
+    first_run="$(kubectl get release "${first_name}" -n "${tenant_namespace}" -o json |
+        jq -er '.status.managedProcessing.pipelineRun | split("/")[-1]')"
+    rpm_retry_assert_task_status "${first_run}" "rh-sign-rpm" "True"
+    rpm_retry_assert_task_status "${first_run}" "push-signed-rpms-to-pulp" "False"
+    rpm_retry_assert_task_missing "${first_run}" "create-advisory"
+    taskrun="$(rpm_retry_taskrun "${first_run}" "push-signed-rpms-to-pulp")"
+    pod="$(kubectl get taskrun "${taskrun}" -n "${managed_namespace}" \
+        -o jsonpath='{.status.podName}')"
+    kubectl logs "pod/${pod}" -n "${managed_namespace}" \
+        -c step-push-rpms-to-pulp |
+        grep -Fq 'Injected signed Pulp failure after completed repository update: aarch64'
+
+    first_ref="$("${SUITE_DIR}/../scripts/get-taskrun-result.sh" "${first_run}" \
+        "rh-sign-rpm" "signedRpmsOciArtifacts" "${managed_namespace}")"
+    if [ -z "${first_ref}" ]; then
+        echo "First signing run did not produce a signed RPM artifact" >&2
+        return 1
+    fi
+    RPM_RETRY_FIRST_SIGNED_ARTIFACT="${first_ref}"
+
+    first_count="$(rpm_retry_pulp_count aarch64)"
+    later_count="$(rpm_retry_pulp_count x86_64)"
+    if [ "${first_count}" -lt 1 ] || [ "${later_count}" -ne 0 ]; then
+        echo "Expected hello2 signed RPMs only in the first updated repository; aarch64=${first_count}, x86_64=${later_count}" >&2
+        return 1
+    fi
+    echo "First signed Pulp push left aarch64 updated and x86_64 pending"
+    rpm_retry_set_catalog_revision "${RELEASE_CATALOG_GIT_REVISION}"
+}
+
+rpm_retry_verify_signed_push_completion() {
+    local first_count later_count
+    first_count="$(rpm_retry_pulp_count aarch64)"
+    later_count="$(rpm_retry_pulp_count x86_64)"
+    if [ "${first_count}" -lt 1 ] || [ "${later_count}" -lt 1 ]; then
+        echo "Retry did not complete signed Pulp fanout; aarch64=${first_count}, x86_64=${later_count}" >&2
+        return 1
+    fi
+    echo "Retry completed signed Pulp fanout across both repositories"
+}
+
 rpm_retry_verify_reuse() {
     local release_name="$1" release_json second_run second_ref signing_taskrun signing_pod
     release_json="$(kubectl get release "${release_name}" -n "${tenant_namespace}" -o json)"
@@ -168,7 +246,14 @@ wait_for_releases() {
         exit 1
     fi
 
-    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
+    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ] &&
+        [ "${RPM_SIGNED_PUSH_RETRY_TEST:-false}" = "true" ]; then
+        echo "Select only one RPM retry fault mode" >&2
+        return 1
+    fi
+    if [ "${RPM_SIGNED_PUSH_RETRY_TEST:-false}" = "true" ]; then
+        rpm_retry_expected_signed_push_failure "${snapshot_name}"
+    elif [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
         rpm_retry_expected_advisory_failure "${snapshot_name}"
     fi
 
@@ -195,8 +280,12 @@ EOF
 
     "${SUITE_DIR}/../scripts/wait-for-release.sh"
 
-    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
+    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ] ||
+        [ "${RPM_SIGNED_PUSH_RETRY_TEST:-false}" = "true" ]; then
         rpm_retry_verify_reuse "${release_name}"
+    fi
+    if [ "${RPM_SIGNED_PUSH_RETRY_TEST:-false}" = "true" ]; then
+        rpm_retry_verify_signed_push_completion
     fi
 }
 
@@ -295,8 +384,9 @@ verify_release_contents() {
         "hello2-[0-9].*\\.noarch" "${repo_prefix}/${arch}"
     done
 
-    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
-        echo "Advisory retry mode: advisory creation and URLs verified; skipping private GitLab YAML fetch."
+    if [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ] ||
+        [ "${RPM_SIGNED_PUSH_RETRY_TEST:-false}" = "true" ]; then
+        echo "RPM retry mode: advisory creation and URLs verified; skipping private GitLab YAML fetch."
     elif [ -z "$advisory_internal_url" ]; then
         echo "Warning: advisory_internal_url is empty. Skipping advisory content check."
     else
@@ -666,8 +756,9 @@ verify_release_contents() {
     if [ "${failures}" -gt 0 ]; then
       echo "🔴 Test has FAILED with ${failures} failure(s)!"
       failed_releases="${RELEASE_NAME} ${failed_releases}"
-    elif [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ]; then
-      echo "✅️ Advisory retry release checks passed."
+    elif [ "${RPM_ADVISORY_RETRY_TEST:-false}" = "true" ] ||
+         [ "${RPM_SIGNED_PUSH_RETRY_TEST:-false}" = "true" ]; then
+      echo "✅️ RPM retry release checks passed."
     else
       # Create and validate a retriggered Release using the same releasePlan/snapshot.
       # This verifies idempotency: the second run should detect that RPMs are already published

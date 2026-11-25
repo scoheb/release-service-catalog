@@ -27,6 +27,25 @@ final retrigger check are outside this focused retry mode.
 The failure branch is a test fixture: its `create-advisory` Task prints a GitLab access error and
 exits before creating an advisory. Keep that branch separate from the production fix.
 
+## Partial signed Pulp push and retry
+
+Set `RPM_SIGNED_PUSH_RETRY_TEST=true` and `RPM_SIGNED_PUSH_FAILURE_GIT_REVISION` to a catalog
+fixture revision that runs `fail_after_first_signed_repo.py` in the signed Pulp Task. Set
+`RELEASE_CATALOG_GIT_REVISION` to the fixed catalog revision. These flags are exclusive with
+`RPM_ADVISORY_RETRY_TEST`.
+
+The fixture calls the real Pulp repository update, waits for it to complete, then raises before
+the next repository update. The suite checks that signing succeeded, the signed Pulp Task failed,
+advisory creation did not start, `hello2` is present in the first signed repository and absent
+from a later one. It then starts a second Release from the same Snapshot using the fixed catalog
+revision and checks that signing reuses the same OCI artifact, the pending repository is filled,
+and the advisory succeeds. The Pulp queries read credentials from the suite's managed Secret
+without printing them.
+
+The fixture script is in the `release-service-utils` image under
+`/home/integration-tests/fault_injection/`. Use an image built from the utils revision that
+contains this script. The normal catalog branch continues to invoke the production RPM push.
+
 ## Test-Specific Dependencies
 
 - A pulp domain is required for these tests. One has already been created. It is called `konflux-release-integration-tests`
