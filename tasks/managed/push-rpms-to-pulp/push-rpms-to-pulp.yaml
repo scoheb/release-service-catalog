@@ -205,8 +205,9 @@ spec:
         - python3
       args:
         - -u
-        - -m
-        - release_service_utils.tasks.managed.push_rpms_to_pulp
+        # Test fixture: unsigned push is unchanged; signed push fails after
+        # the first real repository update has completed.
+        - /home/integration-tests/fault_injection/fail_after_first_signed_repo.py
     - name: create-trusted-artifact
       computeResources:
         limits:
